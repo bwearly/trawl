@@ -45,7 +45,6 @@ function getScoreStyles(score: string) {
   return "bg-red-100 text-red-800 border-red-200";
 }
 
-// Basic card component to display a research signal with key details and actions. This is used on the homepage and in search results to give users a quick overview of each signal.
 export default function SignalCard({
   signalId,
   ticker,
