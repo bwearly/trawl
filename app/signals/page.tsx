@@ -4,28 +4,45 @@ import SignalCard from "@/components/signals/SignalCard";
 import { db } from "@/lib/db";
 import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
 
-type SignalsPageProps = {
-  searchParams: Promise<{
-    minScore?: string;
-    tradeType?: string;
-    party?: string;
-    sort?: string;
-  }>;
+type SearchParams = {
+  minScore?: string | string[];
+  tradeType?: string | string[];
+  party?: string | string[];
+  sort?: string | string[];
 };
 
-export default async function SignalsPage({
-  searchParams,
-}: SignalsPageProps) {
+type SignalsPageProps = {
+  searchParams: Promise<SearchParams>;
+};
+
+const MIN_SCORE_OPTIONS = new Set(["0", "50", "70", "80"]);
+const TRADE_TYPE_OPTIONS = new Set(["all", "purchase", "sale", "exchange"]);
+const PARTY_OPTIONS = new Set(["all", "Democrat", "Republican", "Independent"]);
+const SORT_OPTIONS = new Set(["score", "newest"]);
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function SignalsPage({ searchParams }: SignalsPageProps) {
   const params = await searchParams;
 
-  const minScore = Number(params.minScore ?? "0");
-  const tradeType = params.tradeType ?? "all";
-  const party = params.party ?? "all";
-  const sort = params.sort ?? "score";
+  const rawMinScore = firstParam(params.minScore) ?? "0";
+  const minScoreValue = MIN_SCORE_OPTIONS.has(rawMinScore) ? rawMinScore : "0";
+  const minScore = Number(minScoreValue);
+
+  const rawTradeType = firstParam(params.tradeType) ?? "all";
+  const tradeType = TRADE_TYPE_OPTIONS.has(rawTradeType) ? rawTradeType : "all";
+
+  const rawParty = firstParam(params.party) ?? "all";
+  const party = PARTY_OPTIONS.has(rawParty) ? rawParty : "all";
+
+  const rawSort = firstParam(params.sort) ?? "score";
+  const sort = SORT_OPTIONS.has(rawSort) ? rawSort : "score";
 
   const filters = [];
 
-  if (!Number.isNaN(minScore) && minScore > 0) {
+  if (minScore > 0) {
     filters.push(gte(researchSignals.score, String(minScore)));
   }
 
@@ -85,7 +102,11 @@ export default async function SignalsPage({
           </Link>
         </div>
 
-        <form className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <form
+          method="get"
+          action="/signals"
+          className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+        >
           <div className="grid gap-4 md:grid-cols-4">
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-700">
@@ -93,7 +114,7 @@ export default async function SignalsPage({
               </span>
               <select
                 name="minScore"
-                defaultValue={String(minScore)}
+                defaultValue={minScoreValue}
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm"
               >
                 <option value="0">All</option>

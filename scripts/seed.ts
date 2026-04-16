@@ -3,52 +3,54 @@ import { db } from "../lib/db";
 import { disclosures, politicians, researchSignals } from "../lib/db/schema";
 
 async function main() {
-  console.log("Resetting demo data...");
+  console.log("🌱 Starting Trawl seed...");
+  console.log("🧹 Clearing existing demo records...");
 
   await db.delete(researchSignals);
   await db.delete(disclosures);
   await db.delete(politicians);
 
-  const [pelosi] = await db
+  console.log("👤 Inserting politicians...");
+  const politicianRows = await db
     .insert(politicians)
-    .values({
-      fullName: "Nancy Pelosi",
-      chamber: "house",
-      party: "Democrat",
-      state: "CA",
-    })
+    .values([
+      {
+        fullName: "Nancy Pelosi",
+        chamber: "house",
+        party: "Democrat",
+        state: "CA",
+      },
+      {
+        fullName: "Dan Crenshaw",
+        chamber: "house",
+        party: "Republican",
+        state: "TX",
+      },
+      {
+        fullName: "Tommy Tuberville",
+        chamber: "senate",
+        party: "Republican",
+        state: "AL",
+      },
+      {
+        fullName: "Ron Wyden",
+        chamber: "senate",
+        party: "Democrat",
+        state: "OR",
+      },
+      {
+        fullName: "Angus King",
+        chamber: "senate",
+        party: "Independent",
+        state: "ME",
+      },
+    ])
     .returning();
 
-  const [crenshaw] = await db
-    .insert(politicians)
-    .values({
-      fullName: "Dan Crenshaw",
-      chamber: "house",
-      party: "Republican",
-      state: "TX",
-    })
-    .returning();
+  const [pelosi, crenshaw, tuberville, wyden, king] = politicianRows;
+  console.log(`✅ Inserted ${politicianRows.length} politicians.`);
 
-  const [tuberville] = await db
-    .insert(politicians)
-    .values({
-      fullName: "Tommy Tuberville",
-      chamber: "senate",
-      party: "Republican",
-      state: "AL",
-    })
-    .returning();
-
-  const [wyden] = await db
-    .insert(politicians)
-    .values({
-      fullName: "Ron Wyden",
-      chamber: "senate",
-      party: "Democrat",
-      state: "OR",
-    })
-    .returning();
-
+  console.log("📄 Inserting disclosures...");
   const disclosureRows = await db
     .insert(disclosures)
     .values([
@@ -132,108 +134,150 @@ async function main() {
         sourceUrl: "https://example.com/filing/amzn",
         sourceLabel: "Official Filing",
       },
+      {
+        politicianId: king.id,
+        ticker: "GOOGL",
+        assetName: "Alphabet Inc.",
+        assetType: "stock",
+        tradeType: "exchange",
+        ownerType: "self",
+        amountMin: 15001,
+        amountMax: 50000,
+        amountRangeLabel: "$15,001 - $50,000",
+        tradeDate: new Date("2026-04-06T00:00:00Z"),
+        filingDate: new Date("2026-04-13T00:00:00Z"),
+        filingLagDays: 7,
+        sourceUrl: "https://example.com/filing/googl",
+        sourceLabel: "Official Filing",
+      },
     ])
     .returning();
 
-  await db.insert(researchSignals).values([
-    {
-      disclosureId: disclosureRows[0].id,
-      politicianId: pelosi.id,
-      ticker: "NVDA",
-      score: "84.00",
-      signalStatus: "active",
-      primaryReason: "Historically strong performer",
-      reasonSummary:
-        "Historically strong performer, relevant sector overlap, and positive short-term momentum.",
-      tradeTypeScore: "18.00",
-      tradeSizeScore: "12.00",
-      filingFreshnessScore: "10.00",
-      historicalPoliticianScore: "17.00",
-      momentumScore: "9.00",
-      committeeRelevanceScore: "8.00",
-      clusterScore: "6.00",
-      userRelevanceScore: "4.00",
-      signalDate: new Date("2026-04-16T00:00:00Z"),
-    },
-    {
-      disclosureId: disclosureRows[1].id,
-      politicianId: crenshaw.id,
-      ticker: "PLTR",
-      score: "78.00",
-      signalStatus: "active",
-      primaryReason: "Fast filing and strong theme alignment",
-      reasonSummary:
-        "Quick filing lag, strong defense-tech narrative, and strong recent momentum.",
-      tradeTypeScore: "18.00",
-      tradeSizeScore: "8.00",
-      filingFreshnessScore: "15.00",
-      historicalPoliticianScore: "10.00",
-      momentumScore: "11.00",
-      committeeRelevanceScore: "9.00",
-      clusterScore: "4.00",
-      userRelevanceScore: "3.00",
-      signalDate: new Date("2026-04-17T00:00:00Z"),
-    },
-    {
-      disclosureId: disclosureRows[2].id,
-      politicianId: tuberville.id,
-      ticker: "TSLA",
-      score: "52.00",
-      signalStatus: "active",
-      primaryReason: "Large sale worth reviewing",
-      reasonSummary:
-        "Large reported sale and recognizable ticker, but weaker signal quality than recent purchases.",
-      tradeTypeScore: "8.00",
-      tradeSizeScore: "14.00",
-      filingFreshnessScore: "9.00",
-      historicalPoliticianScore: "6.00",
-      momentumScore: "5.00",
-      committeeRelevanceScore: "3.00",
-      clusterScore: "4.00",
-      userRelevanceScore: "3.00",
-      signalDate: new Date("2026-04-18T00:00:00Z"),
-    },
-    {
-      disclosureId: disclosureRows[3].id,
-      politicianId: wyden.id,
-      ticker: "MSFT",
-      score: "73.00",
-      signalStatus: "active",
-      primaryReason: "Fresh purchase with strong quality profile",
-      reasonSummary:
-        "Fresh purchase with respectable filing lag and strong large-cap quality backdrop.",
-      tradeTypeScore: "18.00",
-      tradeSizeScore: "11.00",
-      filingFreshnessScore: "13.00",
-      historicalPoliticianScore: "9.00",
-      momentumScore: "8.00",
-      committeeRelevanceScore: "7.00",
-      clusterScore: "4.00",
-      userRelevanceScore: "3.00",
-      signalDate: new Date("2026-04-19T00:00:00Z"),
-    },
-    {
-      disclosureId: disclosureRows[4].id,
-      politicianId: pelosi.id,
-      ticker: "AMZN",
-      score: "88.00",
-      signalStatus: "active",
-      primaryReason: "Large purchase with strong context",
-      reasonSummary:
-        "Large purchase, strong historical attention, and attractive short-term research setup.",
-      tradeTypeScore: "18.00",
-      tradeSizeScore: "15.00",
-      filingFreshnessScore: "12.00",
-      historicalPoliticianScore: "18.00",
-      momentumScore: "9.00",
-      committeeRelevanceScore: "8.00",
-      clusterScore: "5.00",
-      userRelevanceScore: "3.00",
-      signalDate: new Date("2026-04-20T00:00:00Z"),
-    },
-  ]);
+  console.log(`✅ Inserted ${disclosureRows.length} disclosures.`);
 
-  console.log("Seed complete.");
+  console.log("📈 Inserting research signals...");
+  const signalRows = await db
+    .insert(researchSignals)
+    .values([
+      {
+        disclosureId: disclosureRows[0].id,
+        politicianId: pelosi.id,
+        ticker: "NVDA",
+        score: "84.00",
+        signalStatus: "active",
+        primaryReason: "Historically strong performer",
+        reasonSummary:
+          "Historically strong performer, relevant sector overlap, and positive short-term momentum.",
+        tradeTypeScore: "18.00",
+        tradeSizeScore: "12.00",
+        filingFreshnessScore: "10.00",
+        historicalPoliticianScore: "17.00",
+        momentumScore: "9.00",
+        committeeRelevanceScore: "8.00",
+        clusterScore: "6.00",
+        userRelevanceScore: "4.00",
+        signalDate: new Date("2026-04-16T00:00:00Z"),
+      },
+      {
+        disclosureId: disclosureRows[1].id,
+        politicianId: crenshaw.id,
+        ticker: "PLTR",
+        score: "78.00",
+        signalStatus: "active",
+        primaryReason: "Fast filing and strong theme alignment",
+        reasonSummary:
+          "Quick filing lag, strong defense-tech narrative, and strong recent momentum.",
+        tradeTypeScore: "18.00",
+        tradeSizeScore: "8.00",
+        filingFreshnessScore: "15.00",
+        historicalPoliticianScore: "10.00",
+        momentumScore: "11.00",
+        committeeRelevanceScore: "9.00",
+        clusterScore: "4.00",
+        userRelevanceScore: "3.00",
+        signalDate: new Date("2026-04-17T00:00:00Z"),
+      },
+      {
+        disclosureId: disclosureRows[2].id,
+        politicianId: tuberville.id,
+        ticker: "TSLA",
+        score: "52.00",
+        signalStatus: "active",
+        primaryReason: "Large sale worth reviewing",
+        reasonSummary:
+          "Large reported sale and recognizable ticker, but weaker signal quality than recent purchases.",
+        tradeTypeScore: "8.00",
+        tradeSizeScore: "14.00",
+        filingFreshnessScore: "9.00",
+        historicalPoliticianScore: "6.00",
+        momentumScore: "5.00",
+        committeeRelevanceScore: "3.00",
+        clusterScore: "4.00",
+        userRelevanceScore: "3.00",
+        signalDate: new Date("2026-04-18T00:00:00Z"),
+      },
+      {
+        disclosureId: disclosureRows[3].id,
+        politicianId: wyden.id,
+        ticker: "MSFT",
+        score: "73.00",
+        signalStatus: "active",
+        primaryReason: "Fresh purchase with strong quality profile",
+        reasonSummary:
+          "Fresh purchase with respectable filing lag and strong large-cap quality backdrop.",
+        tradeTypeScore: "18.00",
+        tradeSizeScore: "11.00",
+        filingFreshnessScore: "13.00",
+        historicalPoliticianScore: "9.00",
+        momentumScore: "8.00",
+        committeeRelevanceScore: "7.00",
+        clusterScore: "4.00",
+        userRelevanceScore: "3.00",
+        signalDate: new Date("2026-04-19T00:00:00Z"),
+      },
+      {
+        disclosureId: disclosureRows[4].id,
+        politicianId: pelosi.id,
+        ticker: "AMZN",
+        score: "88.00",
+        signalStatus: "active",
+        primaryReason: "Large purchase with strong context",
+        reasonSummary:
+          "Large purchase, strong historical attention, and attractive short-term research setup.",
+        tradeTypeScore: "18.00",
+        tradeSizeScore: "15.00",
+        filingFreshnessScore: "12.00",
+        historicalPoliticianScore: "18.00",
+        momentumScore: "9.00",
+        committeeRelevanceScore: "8.00",
+        clusterScore: "5.00",
+        userRelevanceScore: "3.00",
+        signalDate: new Date("2026-04-20T00:00:00Z"),
+      },
+      {
+        disclosureId: disclosureRows[5].id,
+        politicianId: king.id,
+        ticker: "GOOGL",
+        score: "66.00",
+        signalStatus: "active",
+        primaryReason: "Portfolio rotation into megacap tech",
+        reasonSummary:
+          "Recent exchange into a large-cap technology name with moderate filing freshness and committee relevance.",
+        tradeTypeScore: "12.00",
+        tradeSizeScore: "10.00",
+        filingFreshnessScore: "12.00",
+        historicalPoliticianScore: "8.00",
+        momentumScore: "7.00",
+        committeeRelevanceScore: "8.00",
+        clusterScore: "5.00",
+        userRelevanceScore: "4.00",
+        signalDate: new Date("2026-04-21T00:00:00Z"),
+      },
+    ])
+    .returning();
+
+  console.log(`✅ Inserted ${signalRows.length} research signals.`);
+  console.log("🎉 Seed complete.");
 }
 
 main().catch((err) => {
