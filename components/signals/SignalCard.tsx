@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type SignalCardProps = {
   signalId: number;
   ticker: string;
@@ -34,14 +36,8 @@ function formatOwnerType(ownerType: string) {
 function getScoreStyles(score: string) {
   const value = Number(score);
 
-  if (value >= 75) {
-    return "bg-green-100 text-green-800 border-green-200";
-  }
-
-  if (value >= 50) {
-    return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  }
-
+  if (value >= 75) return "bg-green-100 text-green-800 border-green-200";
+  if (value >= 50) return "bg-yellow-100 text-yellow-800 border-yellow-200";
   return "bg-red-100 text-red-800 border-red-200";
 }
 
@@ -120,12 +116,12 @@ export default function SignalCard({
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <a
+        <Link
           href={`/signals/${signalId}`}
           className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
         >
           View details
-        </a>
+        </Link>
 
         {sourceUrl ? (
           <a

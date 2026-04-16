@@ -23,14 +23,8 @@ function formatOwnerType(ownerType: string) {
 function getScoreStyles(score: string) {
   const value = Number(score);
 
-  if (value >= 75) {
-    return "bg-green-100 text-green-800 border-green-200";
-  }
-
-  if (value >= 50) {
-    return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  }
-
+  if (value >= 75) return "bg-green-100 text-green-800 border-green-200";
+  if (value >= 50) return "bg-yellow-100 text-yellow-800 border-yellow-200";
   return "bg-red-100 text-red-800 border-red-200";
 }
 
@@ -105,7 +99,7 @@ export default async function SignalDetailPage({
             We could not find a research signal with that ID.
           </p>
           <Link
-            href="/"
+            href="/signals"
             className="mt-6 inline-block rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
           >
             Back to signals
@@ -120,7 +114,7 @@ export default async function SignalDetailPage({
       <div className="mx-auto max-w-5xl space-y-6">
         <div>
           <Link
-            href="/"
+            href="/signals"
             className="text-sm font-medium text-gray-600 hover:text-gray-900"
           >
             ← Back to signals
@@ -151,64 +145,25 @@ export default async function SignalDetailPage({
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
                 Disclosure Details
               </h2>
-              <p>
-                <span className="font-semibold text-gray-900">Reported by:</span>{" "}
-                {signal.politicianName}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Trade type:</span>{" "}
-                {formatTradeType(signal.tradeType)}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Amount:</span>{" "}
-                {signal.amountRangeLabel ?? "Unknown"}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Owner:</span>{" "}
-                {formatOwnerType(signal.ownerType)}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Asset type:</span>{" "}
-                {signal.assetType}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Trade date:</span>{" "}
-                {formatDate(signal.tradeDate)}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Filed:</span>{" "}
-                {formatDate(signal.filingDate)}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Filing lag:</span>{" "}
-                {signal.filingLagDays ?? "Unknown"} days
-              </p>
+              <p><span className="font-semibold text-gray-900">Reported by:</span> {signal.politicianName}</p>
+              <p><span className="font-semibold text-gray-900">Trade type:</span> {formatTradeType(signal.tradeType)}</p>
+              <p><span className="font-semibold text-gray-900">Amount:</span> {signal.amountRangeLabel ?? "Unknown"}</p>
+              <p><span className="font-semibold text-gray-900">Owner:</span> {formatOwnerType(signal.ownerType)}</p>
+              <p><span className="font-semibold text-gray-900">Asset type:</span> {signal.assetType}</p>
+              <p><span className="font-semibold text-gray-900">Trade date:</span> {formatDate(signal.tradeDate)}</p>
+              <p><span className="font-semibold text-gray-900">Filed:</span> {formatDate(signal.filingDate)}</p>
+              <p><span className="font-semibold text-gray-900">Filing lag:</span> {signal.filingLagDays ?? "Unknown"} days</p>
             </div>
 
             <div className="space-y-3 rounded-xl bg-gray-50 p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
                 Politician Context
               </h2>
-              <p>
-                <span className="font-semibold text-gray-900">Name:</span>{" "}
-                {signal.politicianName}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Chamber:</span>{" "}
-                {signal.chamber}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Party:</span>{" "}
-                {signal.party ?? "Unknown"}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">State:</span>{" "}
-                {signal.state ?? "Unknown"}
-              </p>
-              <p>
-                <span className="font-semibold text-gray-900">Signal status:</span>{" "}
-                {signal.signalStatus}
-              </p>
+              <p><span className="font-semibold text-gray-900">Name:</span> {signal.politicianName}</p>
+              <p><span className="font-semibold text-gray-900">Chamber:</span> {signal.chamber}</p>
+              <p><span className="font-semibold text-gray-900">Party:</span> {signal.party ?? "Unknown"}</p>
+              <p><span className="font-semibold text-gray-900">State:</span> {signal.state ?? "Unknown"}</p>
+              <p><span className="font-semibold text-gray-900">Signal status:</span> {signal.signalStatus}</p>
             </div>
           </div>
 
@@ -230,61 +185,14 @@ export default async function SignalDetailPage({
           </h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Trade Type</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.tradeTypeScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Trade Size</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.tradeSizeScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Filing Freshness</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.filingFreshnessScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Historical Politician Score</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.historicalPoliticianScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Momentum</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.momentumScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Committee Relevance</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.committeeRelevanceScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">Cluster Activity</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.clusterScore ?? "—"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-sm text-gray-500">User Relevance</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {signal.userRelevanceScore ?? "—"}
-              </p>
-            </div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Trade Type</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.tradeTypeScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Trade Size</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.tradeSizeScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Filing Freshness</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.filingFreshnessScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Historical Politician Score</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.historicalPoliticianScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Momentum</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.momentumScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Committee Relevance</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.committeeRelevanceScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Cluster Activity</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.clusterScore ?? "—"}</p></div>
+            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">User Relevance</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.userRelevanceScore ?? "—"}</p></div>
           </div>
         </section>
 

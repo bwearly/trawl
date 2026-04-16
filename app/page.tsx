@@ -1,62 +1,40 @@
-import { desc, eq } from "drizzle-orm";
-import SignalCard from "@/components/signals/SignalCard";
-import { db } from "@/lib/db";
-import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
+import Link from "next/link";
 
-export default async function Home() {
-  const rows = await db
-    .select({
-      signalId: researchSignals.id,
-      ticker: researchSignals.ticker,
-      score: researchSignals.score,
-      primaryReason: researchSignals.primaryReason,
-      reasonSummary: researchSignals.reasonSummary,
-      politicianName: politicians.fullName,
-      tradeType: disclosures.tradeType,
-      ownerType: disclosures.ownerType,
-      amountRangeLabel: disclosures.amountRangeLabel,
-      tradeDate: disclosures.tradeDate,
-      filingDate: disclosures.filingDate,
-      filingLagDays: disclosures.filingLagDays,
-      sourceUrl: disclosures.sourceUrl,
-    })
-    .from(researchSignals)
-    .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
-    .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
-    .orderBy(desc(researchSignals.score));
-
+export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen bg-gray-50 px-6 py-16">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-950">
-          Research Signals
-        </h1>
+        <div className="rounded-3xl border border-gray-200 bg-white p-10 shadow-sm">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
+              Trawl
+            </p>
 
-        <div className="space-y-5">
-          {rows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
-              No signals yet.
+            <h1 className="mt-4 text-5xl font-bold tracking-tight text-gray-950">
+              Public-disclosure stock research signals
+            </h1>
+
+            <p className="mt-6 text-lg leading-8 text-gray-600">
+              Monitor congressional trade disclosures, score them as research
+              signals, and review the context before doing any deeper work.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/signals"
+                className="rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-black"
+              >
+                View signals
+              </Link>
+
+              <Link
+                href="/signals?minScore=70&sort=score"
+                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                View high-score signals
+              </Link>
             </div>
-          ) : (
-            rows.map((row) => (
-              <SignalCard
-                key={row.signalId}
-                signalId={row.signalId}
-                ticker={row.ticker}
-                score={row.score}
-                politicianName={row.politicianName}
-                tradeType={row.tradeType}
-                ownerType={row.ownerType}
-                amountRangeLabel={row.amountRangeLabel}
-                tradeDate={row.tradeDate}
-                filingDate={row.filingDate}
-                filingLagDays={row.filingLagDays}
-                sourceUrl={row.sourceUrl}
-                primaryReason={row.primaryReason}
-                reasonSummary={row.reasonSummary}
-              />
-            ))
-          )}
+          </div>
         </div>
       </div>
     </main>
