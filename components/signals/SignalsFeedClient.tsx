@@ -31,11 +31,11 @@ export default function SignalsFeedClient({
           onLoadingChange={setIsLoading}
         />
 
-        {/* <div className="mt-3 min-h-5">
+        <div className="mt-3 min-h-5">
           {isLoading ? (
             <p className="text-sm font-medium text-gray-500">Updating results...</p>
           ) : null}
-        </div> */}
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -50,6 +50,7 @@ export default function SignalsFeedClient({
               signalId={signal.signalId}
               ticker={signal.ticker}
               score={signal.score}
+              politicianId={signal.politicianId}
               politicianName={signal.politicianName}
               tradeType={signal.tradeType}
               ownerType={signal.ownerType}

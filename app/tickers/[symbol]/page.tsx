@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTickerDetail } from "@/lib/domain/tickers/get-ticker-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
+import { isTickerWatched } from "@/lib/domain/watchlists/watchlists";
 
 type PageProps = {
   params: Promise<{
@@ -92,12 +93,14 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function TickerDetailPage({ params }: PageProps) {
+  const DEMO_USER_ID = "demo-user";
   const { symbol } = await params;
   const data = await getTickerDetail(symbol);
 
   if (!data) {
     notFound();
   }
+  const initialIsWatching = await isTickerWatched(DEMO_USER_ID, data.ticker);
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
 
@@ -112,14 +115,14 @@ export default async function TickerDetailPage({ params }: PageProps) {
                 ← Back to signals
             </Link>
 
-            <div className="sm:ml-auto">
-                <WatchButton
-                itemType="politician"
-                ticker={data.ticker}
-                initialIsWatching={false}
-                />
-            </div>
-            </div>
+          <div className="sm:ml-auto">
+            <WatchButton
+              itemType="ticker"
+              ticker={data.ticker}
+              initialIsWatching={initialIsWatching}
+            />
+          </div>
+        </div>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">

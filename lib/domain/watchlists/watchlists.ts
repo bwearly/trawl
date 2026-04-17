@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { politicians, politicianStats, watchlistItems, watchlists } from "@/lib/db/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
-type WatchlistPolitician = {
+export type WatchlistPolitician = {
   id: number;
   fullName: string;
   chamber: string;
@@ -12,13 +12,20 @@ type WatchlistPolitician = {
   avgAlpha30d: number | null;
   winRate30d: number | null;
   lastTradeDate: Date | null;
-};
+}
 
-type WatchlistTicker = {
+export type WatchlistTicker = {
   ticker: string;
   assetName: string;
   disclosureCount: number;
   lastTradeDate: Date | null;
+};
+
+type WatchlistTickerRow = {
+  ticker: string;
+  asset_name: string | null;
+  disclosure_count: number | string | null;
+  last_trade_date: Date | null;
 };
 
 export async function getOrCreateDefaultWatchlist(userId: string) {
@@ -195,7 +202,7 @@ export async function getWatchlist(userId: string) {
           group by d.ticker
           order by max(d.trade_date) desc nulls last
         `)
-      : { rows: [] as any[] };
+      : { rows: [] as WatchlistTickerRow[] };
 
   const politicianMap = new Map<number, WatchlistPolitician>(
     politicianRows.map((row) => [
@@ -221,7 +228,7 @@ export async function getWatchlist(userId: string) {
   );
 
   const tickerMap = new Map<string, WatchlistTicker>(
-    (tickerRows.rows ?? []).map((row: any) => [
+    (tickerRows.rows as WatchlistTickerRow[]).map((row) => [
       row.ticker,
       {
         ticker: String(row.ticker),

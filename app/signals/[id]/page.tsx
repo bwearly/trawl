@@ -194,9 +194,12 @@ export default async function SignalDetailPage({
         <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-950">
+              <Link
+                href={`/tickers/${signal.ticker}`}
+                className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition hover:bg-gray-200"
+              >
                 {signal.ticker}
-              </h1>
+              </Link>
               <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
                 Signal #{signal.id}
               </span>

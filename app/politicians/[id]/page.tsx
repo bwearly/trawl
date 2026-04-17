@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPoliticianDetail } from "@/lib/domain/politicians/get-politicians-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
+import { isPoliticianWatched } from "@/lib/domain/watchlists/watchlists";
 
 type PageProps = {
   params: Promise<{
@@ -97,6 +98,7 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function PoliticianDetailPage({ params }: PageProps) {
+  const DEMO_USER_ID = "demo-user";
   const { id } = await params;
   const politicianId = Number(id);
 
@@ -109,6 +111,10 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
   if (!data) {
     notFound();
   }
+  const initialIsWatching = await isPoliticianWatched(
+    DEMO_USER_ID,
+    data.politician.id
+  );
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
 
@@ -127,7 +133,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             <WatchButton
               itemType="politician"
               politicianId={data.politician.id}
-              initialIsWatching={false}
+              initialIsWatching={initialIsWatching}
             />
           </div>
         </div>
@@ -279,9 +285,12 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                     >
                       <td className="px-4 py-4">
                         {row.ticker ? (
-                          <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800">
+                          <Link
+                            href={`/tickers/${row.ticker}`}
+                            className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 transition hover:bg-gray-200"
+                          >
                             {row.ticker}
-                          </span>
+                          </Link>
                         ) : (
                           "—"
                         )}
