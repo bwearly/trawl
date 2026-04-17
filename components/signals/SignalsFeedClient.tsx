@@ -3,7 +3,7 @@
 import { useState } from "react";
 import SignalCard from "@/components/signals/SignalCard";
 import SignalFilters from "@/components/signals/SignalFilters";
-import type { SignalFilters as SignalFiltersType, SignalRow } from "@/lib/signals";
+import type { SignalFilters as SignalFiltersType, SignalRow } from "@/lib/domain/signals/signals";
 
 type SignalsFeedClientProps = {
   initialSignals: SignalRow[];

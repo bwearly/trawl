@@ -1,4 +1,4 @@
-import { getSignals, parseSignalFilters } from "@/lib/signals";
+import { getSignals, parseSignalFilters } from "@/lib/domain/signals/signals";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

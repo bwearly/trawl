@@ -29,6 +29,20 @@
       "when": 1776388061180,
       "tag": "0003_colossal_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776437733024,
+      "tag": "0004_lowly_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776444310299,
+      "tag": "0005_married_chamber",
+      "breakpoints": true
     }
   ]
 }

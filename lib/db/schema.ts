@@ -1,10 +1,13 @@
 import {
   integer,
   numeric,
+  boolean,
+  index,
   pgTable,
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const politicians = pgTable("politicians", {
@@ -15,6 +18,44 @@ export const politicians = pgTable("politicians", {
   state: text("state"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const politicianStats = pgTable(
+  "politician_stats",
+  {
+    id: serial("id").primaryKey(),
+
+    politicianId: integer("politician_id")
+      .notNull()
+      .references(() => politicians.id),
+
+    totalDisclosures: integer("total_disclosures").default(0).notNull(),
+    purchaseCount: integer("purchase_count").default(0).notNull(),
+    saleCount: integer("sale_count").default(0).notNull(),
+
+    avgReturn7d: numeric("avg_return_7d", { precision: 8, scale: 2 }),
+    avgReturn30d: numeric("avg_return_30d", { precision: 8, scale: 2 }),
+    avgReturn90d: numeric("avg_return_90d", { precision: 8, scale: 2 }),
+
+    avgAlpha7d: numeric("avg_alpha_7d", { precision: 8, scale: 2 }),
+    avgAlpha30d: numeric("avg_alpha_30d", { precision: 8, scale: 2 }),
+    avgAlpha90d: numeric("avg_alpha_90d", { precision: 8, scale: 2 }),
+
+    winRate7d: numeric("win_rate_7d", { precision: 5, scale: 2 }),
+    winRate30d: numeric("win_rate_30d", { precision: 5, scale: 2 }),
+    winRate90d: numeric("win_rate_90d", { precision: 5, scale: 2 }),
+
+    avgFilingLagDays: numeric("avg_filing_lag_days", { precision: 8, scale: 2 }),
+
+    lastTradeDate: timestamp("last_trade_date"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    politicianIdUnique: uniqueIndex("politician_stats_politician_id_idx").on(
+      table.politicianId
+    ),
+  })
+);
 
 export const disclosures = pgTable("disclosures", {
   id: serial("id").primaryKey(),
@@ -130,3 +171,55 @@ export const priceHistory = pgTable("price_history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const watchlists = pgTable(
+  "watchlists",
+  {
+    id: serial("id").primaryKey(),
+
+    userId: text("user_id").notNull(),
+
+    name: text("name").notNull().default("My Watchlist"),
+    isDefault: boolean("is_default").notNull().default(true),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("watchlists_user_id_idx").on(table.userId),
+    userDefaultIdx: index("watchlists_user_default_idx").on(
+      table.userId,
+      table.isDefault
+    ),
+  })
+);
+
+export const watchlistItems = pgTable(
+  "watchlist_items",
+  {
+    id: serial("id").primaryKey(),
+
+    watchlistId: integer("watchlist_id")
+      .notNull()
+      .references(() => watchlists.id),
+
+    itemType: text("item_type").notNull(), // politician | ticker
+    politicianId: integer("politician_id").references(() => politicians.id),
+    ticker: text("ticker"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    watchlistIdIdx: index("watchlist_items_watchlist_id_idx").on(table.watchlistId),
+    politicianIdIdx: index("watchlist_items_politician_id_idx").on(table.politicianId),
+    tickerIdx: index("watchlist_items_ticker_idx").on(table.ticker),
+
+    uniquePoliticianPerWatchlist: uniqueIndex(
+      "watchlist_items_unique_politician_per_watchlist_idx"
+    ).on(table.watchlistId, table.itemType, table.politicianId),
+
+    uniqueTickerPerWatchlist: uniqueIndex(
+      "watchlist_items_unique_ticker_per_watchlist_idx"
+    ).on(table.watchlistId, table.itemType, table.ticker),
+  })
+);

@@ -6,6 +6,7 @@ type SignalCardProps = {
   signalId: number;
   ticker: string;
   score: string;
+  politicianId: number;
   politicianName: string;
   tradeType: string;
   ownerType: string;
@@ -47,6 +48,7 @@ export default function SignalCard({
   signalId,
   ticker,
   score,
+  politicianId,
   politicianName,
   tradeType,
   ownerType,
@@ -80,7 +82,9 @@ export default function SignalCard({
       <div className="mt-6 grid gap-3 text-sm text-gray-800 md:grid-cols-2">
         <p>
           <span className="font-semibold text-gray-900">Reported by:</span>{" "}
-          {politicianName}
+            <Link href={`/politicians/${politicianId}`} className="hover:underline cursor-pointer">
+              {politicianName}
+            </Link>
         </p>
         <p>
           <span className="font-semibold text-gray-900">Trade type:</span>{" "}

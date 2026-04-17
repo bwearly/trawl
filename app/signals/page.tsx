@@ -3,7 +3,7 @@ import SignalsFeedClient from "@/components/signals/SignalsFeedClient";
 import {
   getSignals,
   parseSignalFilters,
-} from "@/lib/signals";
+} from "@/lib/domain/signals/signals";
 
 type SearchParams = {
   minScore?: string | string[];

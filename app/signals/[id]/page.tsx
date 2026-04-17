@@ -69,6 +69,7 @@ export default async function SignalDetailPage({
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       politicianName: politicians.fullName,
+      politicianId: politicians.id,
 
       tradeDatePrice: disclosurePerformanceWindows.tradeDatePrice,
       filingDatePrice: disclosurePerformanceWindows.filingDatePrice,
@@ -202,7 +203,11 @@ export default async function SignalDetailPage({
             </div>
 
             <p className="text-base text-gray-600">
-              Trade linked to {signal.politicianName}
+              Trade linked to <Link href={`/politicians/${signal.politicianId}`}>
+              <span className="font-medium hover:underline">
+                {signal.politicianName}
+              </span>
+            </Link>
             </p>
 
             <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
