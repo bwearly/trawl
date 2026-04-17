@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import WatchButton from "@/components/watchlist/WatchButton";
 
 type SignalCardProps = {
   signalId: number;
@@ -64,9 +65,12 @@ export default function SignalCard({
     <article className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+          <Link
+            href={`/tickers/${ticker}`}
+            className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-lg font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
+          >
             {ticker}
-          </h2>
+          </Link>
           <p className="mt-1 text-sm text-gray-500">Research Signal</p>
         </div>
 
@@ -82,7 +86,10 @@ export default function SignalCard({
       <div className="mt-6 grid gap-3 text-sm text-gray-800 md:grid-cols-2">
         <p>
           <span className="font-semibold text-gray-900">Reported by:</span>{" "}
-            <Link href={`/politicians/${politicianId}`} className="hover:underline cursor-pointer">
+            <Link
+              href={`/politicians/${politicianId}`}
+              className="cursor-pointer hover:underline"
+            >
               {politicianName}
             </Link>
         </p>
@@ -154,12 +161,7 @@ export default function SignalCard({
           View news
         </button>
 
-        <button
-          type="button"
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Add to watchlist
-        </button>
+        <WatchButton itemType="ticker" ticker={ticker} />
       </div>
     </article>
   );
