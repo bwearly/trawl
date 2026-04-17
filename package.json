@@ -13,7 +13,8 @@
     "signals:recalculate": "tsx scripts/recalculate-signals.ts",
     "performance:backfill": "tsx scripts/backfill-performance.ts",
     "prices:import": "tsx scripts/import-price-history.ts",
-    "politicians:backfill": "tsx scripts/backfill-politician-stats.ts"
+    "politicians:backfill": "tsx scripts/backfill-politician-stats.ts",
+    "alerts:backfill": "tsx scripts/backfill-alerts.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

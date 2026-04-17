@@ -223,3 +223,65 @@ export const watchlistItems = pgTable(
     ).on(table.watchlistId, table.itemType, table.ticker),
   })
 );
+
+export const alerts = pgTable(
+  "alerts",
+  {
+    id: serial("id").primaryKey(),
+
+    userId: text("user_id").notNull(),
+
+    type: text("type").notNull(), // watched_ticker_signal | watched_politician_signal
+
+    ticker: text("ticker"),
+    politicianId: integer("politician_id").references(() => politicians.id),
+    disclosureId: integer("disclosure_id").references(() => disclosures.id),
+    researchSignalId: integer("research_signal_id").references(() => researchSignals.id),
+
+    title: text("title").notNull(),
+    message: text("message"),
+
+    isRead: boolean("is_read").notNull().default(false),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("alerts_user_id_idx").on(table.userId),
+    createdAtIdx: index("alerts_created_at_idx").on(table.createdAt),
+    politicianIdIdx: index("alerts_politician_id_idx").on(table.politicianId),
+    tickerIdx: index("alerts_ticker_idx").on(table.ticker),
+
+    uniqueSignalAlertPerUser: uniqueIndex("alerts_unique_signal_per_user_idx").on(
+      table.userId,
+      table.type,
+      table.researchSignalId
+    ),
+  })
+);
+
+export const alertPreferences = pgTable(
+  "alert_preferences",
+  {
+    id: serial("id").primaryKey(),
+
+    userId: text("user_id").notNull(),
+
+    minScore: numeric("min_score", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+
+    enableWatchedTickerAlerts: boolean("enable_watched_ticker_alerts")
+      .notNull()
+      .default(true),
+
+    enableWatchedPoliticianAlerts: boolean("enable_watched_politician_alerts")
+      .notNull()
+      .default(true),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdUnique: uniqueIndex("alert_preferences_user_id_idx").on(table.userId),
+  })
+);

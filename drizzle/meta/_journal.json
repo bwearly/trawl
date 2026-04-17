@@ -43,6 +43,20 @@
       "when": 1776444310299,
       "tag": "0005_married_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776447179747,
+      "tag": "0006_faithful_namora",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776449778739,
+      "tag": "0007_classy_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

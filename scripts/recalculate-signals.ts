@@ -7,6 +7,7 @@ import {
   researchSignals,
 } from "../lib/db/schema";
 import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { generateAlertsForSignal } from "../lib/domain/alerts/alerts";
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
@@ -128,7 +129,7 @@ async function main() {
       .where(eq(researchSignals.disclosureId, disclosure.id));
 
     if (existing.length > 0) {
-      await db
+      const updatedRows = await db
         .update(researchSignals)
         .set({
           ticker: disclosure.ticker ?? "UNKNOWN",
@@ -148,32 +149,48 @@ async function main() {
           userRelevanceScore: scored.breakdown.userRelevanceScore.toFixed(2),
           updatedAt: new Date(),
         })
-        .where(eq(researchSignals.disclosureId, disclosure.id));
+        .where(eq(researchSignals.disclosureId, disclosure.id))
+        .returning({ id: researchSignals.id });
+
+      const updatedSignal = updatedRows[0];
+
+      if (updatedSignal) {
+        await generateAlertsForSignal(updatedSignal.id);
+      }
 
       console.log(
         `Updated signal for disclosure ${disclosure.id} (${disclosure.ticker ?? "UNKNOWN"})`
       );
     } else {
-      await db.insert(researchSignals).values({
-        disclosureId: disclosure.id,
-        politicianId: disclosure.politicianId,
-        ticker: disclosure.ticker ?? "UNKNOWN",
-        score: scored.totalScore.toFixed(2),
-        signalStatus: "active",
-        primaryReason: scored.primaryReason,
-        reasonSummary: scored.reasonSummary,
-        tradeTypeScore: scored.breakdown.tradeTypeScore.toFixed(2),
-        tradeSizeScore: scored.breakdown.tradeSizeScore.toFixed(2),
-        filingFreshnessScore: scored.breakdown.filingFreshnessScore.toFixed(2),
-        historicalPoliticianScore:
-          scored.breakdown.historicalPoliticianScore.toFixed(2),
-        momentumScore: scored.breakdown.momentumScore.toFixed(2),
-        committeeRelevanceScore:
-          scored.breakdown.committeeRelevanceScore.toFixed(2),
-        clusterScore: scored.breakdown.clusterScore.toFixed(2),
-        userRelevanceScore: scored.breakdown.userRelevanceScore.toFixed(2),
-        signalDate: new Date(),
-      });
+      const insertedRows = await db
+        .insert(researchSignals)
+        .values({
+          disclosureId: disclosure.id,
+          politicianId: disclosure.politicianId,
+          ticker: disclosure.ticker ?? "UNKNOWN",
+          score: scored.totalScore.toFixed(2),
+          signalStatus: "active",
+          primaryReason: scored.primaryReason,
+          reasonSummary: scored.reasonSummary,
+          tradeTypeScore: scored.breakdown.tradeTypeScore.toFixed(2),
+          tradeSizeScore: scored.breakdown.tradeSizeScore.toFixed(2),
+          filingFreshnessScore: scored.breakdown.filingFreshnessScore.toFixed(2),
+          historicalPoliticianScore:
+            scored.breakdown.historicalPoliticianScore.toFixed(2),
+          momentumScore: scored.breakdown.momentumScore.toFixed(2),
+          committeeRelevanceScore:
+            scored.breakdown.committeeRelevanceScore.toFixed(2),
+          clusterScore: scored.breakdown.clusterScore.toFixed(2),
+          userRelevanceScore: scored.breakdown.userRelevanceScore.toFixed(2),
+          signalDate: new Date(),
+        })
+        .returning({ id: researchSignals.id });
+
+      const insertedSignal = insertedRows[0];
+
+      if (insertedSignal) {
+        await generateAlertsForSignal(insertedSignal.id);
+      }
 
       console.log(
         `Created signal for disclosure ${disclosure.id} (${disclosure.ticker ?? "UNKNOWN"})`

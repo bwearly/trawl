@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import { politicians, politicianStats, watchlistItems, watchlists } from "@/lib/db/schema";
+import {
+  disclosures,
+  politicians,
+  politicianStats,
+  watchlistItems,
+  watchlists,
+} from "@/lib/db/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 export type WatchlistPolitician = {
@@ -12,20 +18,13 @@ export type WatchlistPolitician = {
   avgAlpha30d: number | null;
   winRate30d: number | null;
   lastTradeDate: Date | null;
-}
+};
 
 export type WatchlistTicker = {
   ticker: string;
   assetName: string;
   disclosureCount: number;
   lastTradeDate: Date | null;
-};
-
-type WatchlistTickerRow = {
-  ticker: string;
-  asset_name: string | null;
-  disclosure_count: number | string | null;
-  last_trade_date: Date | null;
 };
 
 export async function getOrCreateDefaultWatchlist(userId: string) {
@@ -72,7 +71,10 @@ export async function addTickerToWatchlist(userId: string, ticker: string) {
   return watchlist;
 }
 
-export async function addPoliticianToWatchlist(userId: string, politicianId: number) {
+export async function addPoliticianToWatchlist(
+  userId: string,
+  politicianId: number
+) {
   const watchlist = await getOrCreateDefaultWatchlist(userId);
 
   await db
@@ -102,7 +104,10 @@ export async function removeTickerFromWatchlist(userId: string, ticker: string) 
     );
 }
 
-export async function removePoliticianFromWatchlist(userId: string, politicianId: number) {
+export async function removePoliticianFromWatchlist(
+  userId: string,
+  politicianId: number
+) {
   const watchlist = await getOrCreateDefaultWatchlist(userId);
 
   await db
@@ -135,7 +140,10 @@ export async function isTickerWatched(userId: string, ticker: string) {
   return Boolean(rows[0]);
 }
 
-export async function isPoliticianWatched(userId: string, politicianId: number) {
+export async function isPoliticianWatched(
+  userId: string,
+  politicianId: number
+) {
   const watchlist = await getOrCreateDefaultWatchlist(userId);
 
   const rows = await db
@@ -163,7 +171,10 @@ export async function getWatchlist(userId: string) {
     .orderBy(desc(watchlistItems.createdAt), desc(watchlistItems.id));
 
   const politicianIds = items
-    .filter((item) => item.itemType === "politician" && item.politicianId !== null)
+    .filter(
+      (item) =>
+        item.itemType === "politician" && item.politicianId !== null
+    )
     .map((item) => item.politicianId as number);
 
   const tickerSymbols = items
@@ -185,24 +196,33 @@ export async function getWatchlist(userId: string) {
             lastTradeDate: politicianStats.lastTradeDate,
           })
           .from(politicians)
-          .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
+          .leftJoin(
+            politicianStats,
+            eq(politicianStats.politicianId, politicians.id)
+          )
           .where(inArray(politicians.id, politicianIds))
       : [];
 
   const tickerRows =
     tickerSymbols.length > 0
-      ? await db.execute(sql`
-          select
-            d.ticker,
-            min(d.asset_name) as asset_name,
-            count(*)::int as disclosure_count,
-            max(d.trade_date) as last_trade_date
-          from disclosures d
-          where d.ticker = any(${tickerSymbols})
-          group by d.ticker
-          order by max(d.trade_date) desc nulls last
-        `)
-      : { rows: [] as WatchlistTickerRow[] };
+      ? await db
+          .select({
+            ticker: disclosures.ticker,
+            assetName: sql<string>`min(${disclosures.assetName})`.as(
+              "asset_name"
+            ),
+            disclosureCount: sql<number>`count(*)::int`.as(
+              "disclosure_count"
+            ),
+            lastTradeDate: sql<Date | null>`max(${disclosures.tradeDate})`.as(
+              "last_trade_date"
+            ),
+          })
+          .from(disclosures)
+          .where(inArray(disclosures.ticker, tickerSymbols))
+          .groupBy(disclosures.ticker)
+          .orderBy(desc(sql`max(${disclosures.tradeDate})`))
+      : [];
 
   const politicianMap = new Map<number, WatchlistPolitician>(
     politicianRows.map((row) => [
@@ -228,19 +248,22 @@ export async function getWatchlist(userId: string) {
   );
 
   const tickerMap = new Map<string, WatchlistTicker>(
-    (tickerRows.rows as WatchlistTickerRow[]).map((row) => [
-      row.ticker,
+    tickerRows.map((row) => [
+      String(row.ticker),
       {
         ticker: String(row.ticker),
-        assetName: String(row.asset_name ?? ""),
-        disclosureCount: Number(row.disclosure_count ?? 0),
-        lastTradeDate: row.last_trade_date ?? null,
+        assetName: String(row.assetName ?? ""),
+        disclosureCount: Number(row.disclosureCount ?? 0),
+        lastTradeDate: row.lastTradeDate ?? null,
       },
     ])
   );
 
   const politiciansResult: WatchlistPolitician[] = items
-    .filter((item) => item.itemType === "politician" && item.politicianId !== null)
+    .filter(
+      (item) =>
+        item.itemType === "politician" && item.politicianId !== null
+    )
     .flatMap((item) => {
       const politician = politicianMap.get(item.politicianId as number);
       return politician ? [politician] : [];

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SignalsFeedClient from "@/components/signals/SignalsFeedClient";
+import { getUnreadAlertsCount } from "@/lib/domain/alerts/alerts";
 import {
   getSignals,
   parseSignalFilters,
@@ -16,6 +17,8 @@ type SignalsPageProps = {
   searchParams: Promise<SearchParams>;
 };
 
+const DEMO_USER_ID = "demo-user";
+
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -30,7 +33,10 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     sort: firstParam(params.sort),
   });
 
-  const rows = await getSignals(initialFilters);
+  const [rows, unreadAlertsCount] = await Promise.all([
+    getSignals(initialFilters),
+    getUnreadAlertsCount(DEMO_USER_ID),
+  ]);
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -43,12 +49,39 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             </h1>
           </div>
 
-          <Link href="/" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-            ← Back home
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/watchlist"
+              className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+            >
+              Watchlist
+            </Link>
+
+            <Link
+              href="/alerts"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+            >
+              <span>Alerts</span>
+              {unreadAlertsCount > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-gray-900 px-1.5 py-0.5 text-xs font-semibold text-white">
+                  {unreadAlertsCount}
+                </span>
+              )}
+            </Link>
+
+            <Link
+              href="/"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+            >
+              ← Back home
+            </Link>
+          </div>
         </div>
 
-        <SignalsFeedClient initialSignals={rows} initialFilters={initialFilters} />
+        <SignalsFeedClient
+          initialSignals={rows}
+          initialFilters={initialFilters}
+        />
       </div>
     </main>
   );
