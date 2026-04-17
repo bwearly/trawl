@@ -18,8 +18,8 @@ export default function SignalFilters({
   const [tradeType, setTradeType] = useState(initialFilters.tradeType);
   const [party, setParty] = useState(initialFilters.party);
   const [sort, setSort] = useState(initialFilters.sort);
-  const hasMounted = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
+  const hasMounted = useRef(false);
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -34,7 +34,13 @@ export default function SignalFilters({
       onLoadingChange(true);
 
       try {
-        const params = new URLSearchParams({ minScore, tradeType, party, sort });
+        const params = new URLSearchParams({
+          minScore,
+          tradeType,
+          party,
+          sort,
+        });
+
         const response = await fetch(`/api/signals?${params.toString()}`, {
           signal: controller.signal,
         });
@@ -63,13 +69,17 @@ export default function SignalFilters({
   }, [minScore, tradeType, party, sort, onResultsChange, onLoadingChange]);
 
   return (
-    <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="grid gap-4 md:grid-cols-4">
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-gray-700">Minimum score</span>
+          <span className="mb-2 block text-sm font-medium text-gray-700">
+            Minimum score
+          </span>
           <select
             value={minScore}
-            onChange={(event) => setMinScore(event.target.value as SignalFiltersType["minScore"])}
+            onChange={(event) =>
+              setMinScore(event.target.value as SignalFiltersType["minScore"])
+            }
             disabled={isLoading}
             className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
           >
@@ -81,7 +91,9 @@ export default function SignalFilters({
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-gray-700">Trade type</span>
+          <span className="mb-2 block text-sm font-medium text-gray-700">
+            Trade type
+          </span>
           <select
             value={tradeType}
             onChange={(event) =>
@@ -98,10 +110,14 @@ export default function SignalFilters({
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-gray-700">Party</span>
+          <span className="mb-2 block text-sm font-medium text-gray-700">
+            Party
+          </span>
           <select
             value={party}
-            onChange={(event) => setParty(event.target.value as SignalFiltersType["party"])}
+            onChange={(event) =>
+              setParty(event.target.value as SignalFiltersType["party"])
+            }
             disabled={isLoading}
             className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
           >
@@ -113,10 +129,14 @@ export default function SignalFilters({
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-gray-700">Sort</span>
+          <span className="mb-2 block text-sm font-medium text-gray-700">
+            Sort
+          </span>
           <select
             value={sort}
-            onChange={(event) => setSort(event.target.value as SignalFiltersType["sort"])}
+            onChange={(event) =>
+              setSort(event.target.value as SignalFiltersType["sort"])
+            }
             disabled={isLoading}
             className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
           >

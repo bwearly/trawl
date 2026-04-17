@@ -89,3 +89,44 @@ export const researchSignals = pgTable("research_signals", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const disclosurePerformanceWindows = pgTable("disclosure_performance_windows", {
+  id: serial("id").primaryKey(),
+
+  disclosureId: integer("disclosure_id")
+    .notNull()
+    .references(() => disclosures.id),
+
+  ticker: text("ticker").notNull(),
+
+  tradeDatePrice: numeric("trade_date_price", { precision: 12, scale: 2 }),
+  filingDatePrice: numeric("filing_date_price", { precision: 12, scale: 2 }),
+
+  return7d: numeric("return_7d", { precision: 8, scale: 2 }),
+  return30d: numeric("return_30d", { precision: 8, scale: 2 }),
+  return90d: numeric("return_90d", { precision: 8, scale: 2 }),
+
+  spyReturn7d: numeric("spy_return_7d", { precision: 8, scale: 2 }),
+  spyReturn30d: numeric("spy_return_30d", { precision: 8, scale: 2 }),
+  spyReturn90d: numeric("spy_return_90d", { precision: 8, scale: 2 }),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const priceHistory = pgTable("price_history", {
+  id: serial("id").primaryKey(),
+
+  ticker: text("ticker").notNull(),
+  date: timestamp("date").notNull(),
+
+  open: numeric("open", { precision: 12, scale: 2 }),
+  high: numeric("high", { precision: 12, scale: 2 }),
+  low: numeric("low", { precision: 12, scale: 2 }),
+  close: numeric("close", { precision: 12, scale: 2 }),
+  adjustedClose: numeric("adjusted_close", { precision: 12, scale: 2 }),
+  volume: numeric("volume", { mode: "number" }),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

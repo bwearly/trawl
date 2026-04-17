@@ -76,8 +76,9 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
 export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
   const whereFilters = [];
 
-  if (Number(filters.minScore) > 0) {
-    whereFilters.push(gte(researchSignals.score, filters.minScore));
+  const minScoreNumber = Number(filters.minScore);
+  if (minScoreNumber > 0) {
+    whereFilters.push(gte(researchSignals.score, String(minScoreNumber)));
   }
 
   if (filters.tradeType !== "all") {

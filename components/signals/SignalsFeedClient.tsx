@@ -24,17 +24,19 @@ export default function SignalsFeedClient({
 
   return (
     <>
-      <SignalFilters
-        initialFilters={initialFilters}
-        onResultsChange={setSignals}
-        onLoadingChange={setIsLoading}
-      />
+      <div className="mb-5">
+        <SignalFilters
+          initialFilters={initialFilters}
+          onResultsChange={setSignals}
+          onLoadingChange={setIsLoading}
+        />
 
-      {isLoading ? (
-        <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-          Loading signals...
-        </div>
-      ) : null}
+        {/* <div className="mt-3 min-h-5">
+          {isLoading ? (
+            <p className="text-sm font-medium text-gray-500">Updating results...</p>
+          ) : null}
+        </div> */}
+      </div>
 
       <div className="space-y-5">
         {signals.length === 0 ? (

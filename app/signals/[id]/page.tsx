@@ -1,118 +1,187 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
+import {
+  disclosurePerformanceWindows,
+  disclosures,
+  politicians,
+  priceHistory,
+  researchSignals,
+} from "@/lib/db/schema";
+import SignalPriceChart from "./SignalPriceChart";
 
-function formatDate(date: Date | null) {
-  if (!date) return "Unknown";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+function formatCurrency(value: string | null) {
+  if (value == null) return "—";
+  return `$${Number(value).toFixed(2)}`;
 }
 
-function formatTradeType(tradeType: string) {
-  return tradeType.charAt(0).toUpperCase() + tradeType.slice(1);
+function formatPercent(value: string | null) {
+  if (value == null) return "—";
+
+  const numericValue = Number(value);
+
+  const colorClass =
+    numericValue > 0
+      ? "text-green-700"
+      : numericValue < 0
+      ? "text-red-700"
+      : "text-gray-900";
+
+  return (
+    <span className={colorClass}>
+      {numericValue > 0 ? "+" : ""}
+      {numericValue.toFixed(2)}%
+    </span>
+  );
 }
 
-function formatOwnerType(ownerType: string) {
-  return ownerType.charAt(0).toUpperCase() + ownerType.slice(1);
+function calcRelativeReturn(
+  stockValue: string | null,
+  benchmarkValue: string | null
+) {
+  if (stockValue == null || benchmarkValue == null) return null;
+  return (Number(stockValue) - Number(benchmarkValue)).toFixed(2);
 }
 
-function getScoreStyles(score: string) {
-  const value = Number(score);
-
-  if (value >= 75) return "bg-green-100 text-green-800 border-green-200";
-  if (value >= 50) return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  return "bg-red-100 text-red-800 border-red-200";
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
-
-type SignalDetailPageProps = {
-  params: Promise<{ id: string }>;
-};
 
 export default async function SignalDetailPage({
   params,
-}: SignalDetailPageProps) {
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const signalId = Number(id);
 
-  if (Number.isNaN(signalId)) {
-    return (
-      <main className="min-h-screen bg-gray-50 p-6">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-red-200 bg-white p-8">
-          <h1 className="text-2xl font-bold text-red-700">Invalid signal ID</h1>
-        </div>
-      </main>
-    );
+  if (!Number.isFinite(signalId)) {
+    return <div className="p-6">Invalid signal ID.</div>;
   }
 
-  const rows = await db
+  const result = await db
     .select({
-      signalId: researchSignals.id,
-      ticker: researchSignals.ticker,
+      id: researchSignals.id,
       score: researchSignals.score,
-      signalStatus: researchSignals.signalStatus,
-      primaryReason: researchSignals.primaryReason,
-      reasonSummary: researchSignals.reasonSummary,
-      tradeTypeScore: researchSignals.tradeTypeScore,
-      tradeSizeScore: researchSignals.tradeSizeScore,
-      filingFreshnessScore: researchSignals.filingFreshnessScore,
-      historicalPoliticianScore: researchSignals.historicalPoliticianScore,
-      momentumScore: researchSignals.momentumScore,
-      committeeRelevanceScore: researchSignals.committeeRelevanceScore,
-      clusterScore: researchSignals.clusterScore,
-      userRelevanceScore: researchSignals.userRelevanceScore,
-
-      politicianName: politicians.fullName,
-      chamber: politicians.chamber,
-      party: politicians.party,
-      state: politicians.state,
-
-      tradeType: disclosures.tradeType,
-      ownerType: disclosures.ownerType,
-      amountRangeLabel: disclosures.amountRangeLabel,
-      assetName: disclosures.assetName,
-      assetType: disclosures.assetType,
+      ticker: disclosures.ticker,
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
-      filingLagDays: disclosures.filingLagDays,
-      sourceUrl: disclosures.sourceUrl,
-      sourceLabel: disclosures.sourceLabel,
+      politicianName: politicians.fullName,
+
+      tradeDatePrice: disclosurePerformanceWindows.tradeDatePrice,
+      filingDatePrice: disclosurePerformanceWindows.filingDatePrice,
+      return7d: disclosurePerformanceWindows.return7d,
+      return30d: disclosurePerformanceWindows.return30d,
+      return90d: disclosurePerformanceWindows.return90d,
+      spyReturn7d: disclosurePerformanceWindows.spyReturn7d,
+      spyReturn30d: disclosurePerformanceWindows.spyReturn30d,
+      spyReturn90d: disclosurePerformanceWindows.spyReturn90d,
     })
     .from(researchSignals)
-    .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
-    .where(eq(researchSignals.id, signalId));
+    .innerJoin(politicians, eq(disclosures.politicianId, politicians.id))
+    .leftJoin(
+      disclosurePerformanceWindows,
+      eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
+    )
+    .where(eq(researchSignals.id, signalId))
+    .limit(1);
 
-  const signal = rows[0];
+  const signal = result[0];
 
   if (!signal) {
-    return (
-      <main className="min-h-screen bg-gray-50 p-6">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white p-8">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Signal not found
-          </h1>
-          <p className="mt-2 text-gray-600">
-            We could not find a research signal with that ID.
-          </p>
-          <Link
-            href="/signals"
-            className="mt-6 inline-block rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
-          >
-            Back to signals
-          </Link>
-        </div>
-      </main>
-    );
+    return <div className="p-6">Signal not found.</div>;
   }
 
+  if (!signal.ticker) {
+    return <div className="p-6">Ticker not found for this signal.</div>;
+  }
+
+  const anchorDate = signal.tradeDate || signal.filingDate || new Date();
+  const chartStartDate = addDays(anchorDate, -30);
+
+    const chartRows = await db
+    .select({
+      ticker: priceHistory.ticker,
+      date: priceHistory.date,
+      close: priceHistory.close,
+    })
+    .from(priceHistory)
+    .where(
+      and(
+        gte(priceHistory.date, chartStartDate),
+        eq(priceHistory.ticker, signal.ticker)
+      )
+    )
+    .orderBy(asc(priceHistory.date));
+
+  const spyRows = await db
+    .select({
+      date: priceHistory.date,
+      close: priceHistory.close,
+    })
+    .from(priceHistory)
+    .where(
+      and(gte(priceHistory.date, chartStartDate), eq(priceHistory.ticker, "SPY"))
+    )
+    .orderBy(asc(priceHistory.date));
+
+  const spyMap = new Map(
+    spyRows.map((row) => [
+      row.date.toISOString().slice(0, 10),
+      Number(row.close),
+    ])
+  );
+
+  const tradeDateString = signal.tradeDate
+    ? signal.tradeDate.toISOString().slice(0, 10)
+    : null;
+
+  const filingDateString = signal.filingDate
+    ? signal.filingDate.toISOString().slice(0, 10)
+    : null;
+
+  const stockBase = chartRows.length > 0 ? Number(chartRows[0].close) : null;
+
+  const firstSpyRowForRange = spyRows.find((row) => row.close != null);
+  const spyBase = firstSpyRowForRange ? Number(firstSpyRowForRange.close) : null;
+
+  const chartData = chartRows.map((row) => {
+    const rowDateString = row.date.toISOString().slice(0, 10);
+    const stockClose = Number(row.close);
+    const spyClose = spyMap.get(rowDateString) ?? null;
+
+    const normalizedClose =
+      stockBase != null && stockBase !== 0
+        ? Number(((stockClose / stockBase) * 100).toFixed(2))
+        : 100;
+
+    const normalizedSpyClose =
+      spyClose != null && spyBase != null && spyBase !== 0
+        ? Number(((spyClose / spyBase) * 100).toFixed(2))
+        : null;
+
+    return {
+      date: rowDateString,
+      close: stockClose,
+      spyClose,
+      normalizedClose,
+      normalizedSpyClose,
+      isTradeDate: tradeDateString === rowDateString,
+      isFilingDate: filingDateString === rowDateString,
+    };
+  });
+
+  const alpha7d = calcRelativeReturn(signal.return7d, signal.spyReturn7d);
+  const alpha30d = calcRelativeReturn(signal.return30d, signal.spyReturn30d);
+  const alpha90d = calcRelativeReturn(signal.return90d, signal.spyReturn90d);
+
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6">
           <Link
             href="/signals"
             className="text-sm font-medium text-gray-600 hover:text-gray-900"
@@ -121,119 +190,238 @@ export default async function SignalDetailPage({
           </Link>
         </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight text-gray-950">
+        <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-gray-950">
                 {signal.ticker}
               </h1>
-              <p className="mt-1 text-lg text-gray-600">{signal.assetName}</p>
-              <p className="mt-2 text-sm text-gray-500">Research Signal</p>
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                Signal #{signal.id}
+              </span>
             </div>
 
-            <div
-              className={`rounded-full border px-5 py-2 text-base font-semibold ${getScoreStyles(
-                signal.score
-              )}`}
-            >
-              {Math.round(Number(signal.score))}/100
-            </div>
-          </div>
+            <p className="text-base text-gray-600">
+              Trade linked to {signal.politicianName}
+            </p>
 
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="space-y-3 rounded-xl bg-gray-50 p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Disclosure Details
-              </h2>
-              <p><span className="font-semibold text-gray-900">Reported by:</span> {signal.politicianName}</p>
-              <p><span className="font-semibold text-gray-900">Trade type:</span> {formatTradeType(signal.tradeType)}</p>
-              <p><span className="font-semibold text-gray-900">Amount:</span> {signal.amountRangeLabel ?? "Unknown"}</p>
-              <p><span className="font-semibold text-gray-900">Owner:</span> {formatOwnerType(signal.ownerType)}</p>
-              <p><span className="font-semibold text-gray-900">Asset type:</span> {signal.assetType}</p>
-              <p><span className="font-semibold text-gray-900">Trade date:</span> {formatDate(signal.tradeDate)}</p>
-              <p><span className="font-semibold text-gray-900">Filed:</span> {formatDate(signal.filingDate)}</p>
-              <p><span className="font-semibold text-gray-900">Filing lag:</span> {signal.filingLagDays ?? "Unknown"} days</p>
-            </div>
-
-            <div className="space-y-3 rounded-xl bg-gray-50 p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Politician Context
-              </h2>
-              <p><span className="font-semibold text-gray-900">Name:</span> {signal.politicianName}</p>
-              <p><span className="font-semibold text-gray-900">Chamber:</span> {signal.chamber}</p>
-              <p><span className="font-semibold text-gray-900">Party:</span> {signal.party ?? "Unknown"}</p>
-              <p><span className="font-semibold text-gray-900">State:</span> {signal.state ?? "Unknown"}</p>
-              <p><span className="font-semibold text-gray-900">Signal status:</span> {signal.signalStatus}</p>
+            <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
+              <span>
+                Trade date:{" "}
+                {signal.tradeDate
+                  ? signal.tradeDate.toLocaleDateString()
+                  : "—"}
+              </span>
+              <span>
+                Filing date:{" "}
+                {signal.filingDate
+                  ? signal.filingDate.toLocaleDateString()
+                  : "—"}
+              </span>
             </div>
           </div>
 
-          <div className="mt-6 rounded-xl bg-blue-50 p-5">
-            <h2 className="text-lg font-semibold text-blue-950">
-              Why this is worth researching
-            </h2>
-            <p className="mt-3 leading-7 text-blue-900">
-              {signal.reasonSummary ||
-                signal.primaryReason ||
-                "No explanation available yet."}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
+            <p className="text-sm font-medium text-gray-500">Signal Score</p>
+            <p className="mt-1 text-3xl font-semibold text-gray-950">
+              {signal.score}
             </p>
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-950">
-            Score Breakdown
-          </h2>
+        <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-8">
+            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-5">
+                <h2 className="text-xl font-semibold text-gray-950">
+                  Performance After Disclosure
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Based on market close prices after the trade date.
+                </p>
+              </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Trade Type</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.tradeTypeScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Trade Size</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.tradeSizeScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Filing Freshness</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.filingFreshnessScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Historical Politician Score</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.historicalPoliticianScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Momentum</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.momentumScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Committee Relevance</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.committeeRelevanceScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">Cluster Activity</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.clusterScore ?? "—"}</p></div>
-            <div className="rounded-xl border border-gray-200 p-4"><p className="text-sm text-gray-500">User Relevance</p><p className="mt-1 text-2xl font-bold text-gray-900">{signal.userRelevanceScore ?? "—"}</p></div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Trade Date Price</p>
+                  <p className="mt-2 text-lg font-semibold text-gray-950">
+                    {formatCurrency(signal.tradeDatePrice)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Filing Date Price</p>
+                  <p className="mt-2 text-lg font-semibold text-gray-950">
+                    {formatCurrency(signal.filingDatePrice)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">7 Day Return</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Stock</span>
+                      <span className="font-semibold">
+                        {formatPercent(signal.return7d)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">SPY</span>
+                      <span className="font-semibold">
+                        {formatPercent(signal.spyReturn7d)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span className="font-semibold">
+                        {alpha7d != null
+                          ? formatPercent(alpha7d)
+                          : "Data not available yet"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">30 Day Return</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Stock</span>
+                      <span className="font-semibold">
+                        {signal.return30d != null
+                          ? formatPercent(signal.return30d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">SPY</span>
+                      <span className="font-semibold">
+                        {signal.spyReturn30d != null
+                          ? formatPercent(signal.spyReturn30d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span className="font-semibold">
+                        {alpha30d != null
+                          ? formatPercent(alpha30d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">90 Day Return</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Stock</span>
+                      <span className="font-semibold">
+                        {signal.return90d != null
+                          ? formatPercent(signal.return90d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">SPY</span>
+                      <span className="font-semibold">
+                        {signal.spyReturn90d != null
+                          ? formatPercent(signal.spyReturn90d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span className="font-semibold">
+                        {alpha90d != null
+                          ? formatPercent(alpha90d)
+                          : <span className="text-gray-400">Data not available yet</span>}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Benchmark</p>
+                  <p className="mt-2 text-lg font-semibold text-gray-950">SPY</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Relative performance is measured against SPDR S&amp;P 500
+                    ETF.
+                  </p>
+                </div>
+              </div>
+
+              <div id="price-chart" className="mt-8">
+                <div className="mb-3">
+                  <h3 className="text-lg font-semibold text-gray-950">
+                    Recent Price Action
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Relative performance vs SPY, indexed to 100 at the first visible date.
+                  </p>
+                </div>
+
+                <SignalPriceChart data={chartData} />
+              </div>
+            </section>
           </div>
-        </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-950">Next Steps</h2>
+          <div className="space-y-8">
+            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-gray-950">
+                Score Breakdown
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                This section can become more detailed as your scoring model gets
+                smarter.
+              </p>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            {signal.sourceUrl ? (
-              <a
-                href={signal.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
-              >
-                View filing
-              </a>
-            ) : null}
+              <div className="mt-5 space-y-4">
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <p className="text-sm text-gray-500">Current Signal Score</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-950">
+                    {signal.score}
+                  </p>
+                </div>
 
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              View chart
-            </button>
+                <div className="rounded-xl border border-dashed border-gray-200 p-4 text-sm text-gray-500">
+                  Add score drivers here next:
+                  <ul className="mt-2 space-y-1">
+                    <li>• Politician historical hit rate</li>
+                    <li>• Trade size / conviction weighting</li>
+                    <li>• Cluster activity on the ticker</li>
+                    <li>• Recent post-disclosure performance</li>
+                    <li>• Outperformance vs SPY</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
 
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              View news
-            </button>
+            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-gray-950">
+                Quick Actions
+              </h2>
 
-            <button
-              type="button"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Add to watchlist
-            </button>
+              <div className="mt-5 flex flex-col gap-3">
+                <a
+                  href="#price-chart"
+                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                >
+                  View chart
+                </a>
+
+                <Link
+                  href="/signals"
+                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                >
+                  Back to signal list
+                </Link>
+              </div>
+            </section>
           </div>
-        </section>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
