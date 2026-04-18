@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import WatchButton from "@/components/watchlist/WatchButton";
+import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
+import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 
 type SignalCardProps = {
   signalId: number;
   ticker: string;
   score: string;
+  signalStatus: string;
   politicianId: number;
   politicianName: string;
   tradeType: string;
@@ -49,6 +52,7 @@ export default function SignalCard({
   signalId,
   ticker,
   score,
+  signalStatus,
   politicianId,
   politicianName,
   tradeType,
@@ -61,6 +65,13 @@ export default function SignalCard({
   primaryReason,
   reasonSummary,
 }: SignalCardProps) {
+  const alertTier = getSignalAlertTier({
+    score,
+    signalStatus,
+    tradeType,
+    filingLagDays,
+  });
+
   return (
     <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -71,7 +82,10 @@ export default function SignalCard({
           >
             {ticker}
           </Link>
-          <p className="text-sm text-gray-500">Research signal</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-gray-500">Research signal</p>
+            <SignalStrengthBadge tier={alertTier} />
+          </div>
         </div>
 
         <div
