@@ -56,6 +56,8 @@ type YearFetchResult = {
   zipEntries: string[];
   selectedFile: string | null;
   selectedHeaders: string[];
+  xmlFile: string | null;
+  xmlPreview: string | null;
 };
 
 type NormalizedDisclosure = {
@@ -274,6 +276,93 @@ function buildSourceUrl(year: number, row: HouseRow): string | null {
   return `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${year}/${numericDocId}.pdf`;
 }
 
+function getRowDocId(row: HouseRow): string | null {
+  return getValue(row, ["document id", "docid", "filing id", "report id"]);
+}
+
+function getRowFilingType(row: HouseRow): string | null {
+  return getValue(row, ["filing type", "filingtype", "type"]);
+}
+
+function buildDocumentUrlGuesses(year: number, docIdRaw: string): string[] {
+  const docId = docIdRaw.replace(/[^0-9]/g, "");
+  if (!docId) return [];
+
+  const base = "https://disclosures-clerk.house.gov/public_disc";
+  return [
+    `${base}/financial-pdfs/${year}/${docId}.pdf`,
+    `${base}/ptr-pdfs/${year}/${docId}.pdf`,
+    `${base}/financial-xml/${year}/${docId}.xml`,
+    `${base}/financial-pdfs/${docId}.pdf`,
+    `${base}/ptr-pdfs/${docId}.pdf`,
+  ];
+}
+
+function analyzeTransactionSignals(text: string): { matchedKeywords: string[]; appearsTransactionLike: boolean } {
+  const keywords = ["asset", "purchase", "sale", "date", "amount", "owner", "transaction", "ticker"];
+  const lower = text.toLowerCase();
+  const matchedKeywords = keywords.filter((keyword) => lower.includes(keyword));
+  return { matchedKeywords, appearsTransactionLike: matchedKeywords.length >= 3 };
+}
+
+async function inspectDocumentFromGuesses(urls: string[]): Promise<{
+  finalUrl: string | null;
+  status: number | null;
+  contentType: string | null;
+  kind: "text_like" | "binary_like" | "unavailable";
+  preview: string | null;
+  matchedKeywords: string[];
+}> {
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+
+      const contentType = response.headers.get("content-type");
+      const normalizedContentType = (contentType ?? "").toLowerCase();
+      const isTextLike =
+        normalizedContentType.includes("text/") ||
+        normalizedContentType.includes("html") ||
+        normalizedContentType.includes("xml") ||
+        normalizedContentType.includes("json");
+
+      if (isTextLike) {
+        const text = await response.text();
+        const preview = text.slice(0, 1000).replace(/\s+/g, " ").trim();
+        const signal = analyzeTransactionSignals(text);
+        return {
+          finalUrl: url,
+          status: response.status,
+          contentType,
+          kind: "text_like",
+          preview,
+          matchedKeywords: signal.matchedKeywords,
+        };
+      }
+
+      return {
+        finalUrl: url,
+        status: response.status,
+        contentType,
+        kind: "binary_like",
+        preview: null,
+        matchedKeywords: [],
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    finalUrl: null,
+    status: null,
+    contentType: null,
+    kind: "unavailable",
+    preview: null,
+    matchedKeywords: [],
+  };
+}
+
 function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null {
   const politicianName = getValue(row, ["filer", "name", "member", "full name"]);
   const assetName = getValue(row, ["asset", "asset name", "description", "issuer"]);
@@ -398,6 +487,7 @@ async function fetchYearRows(year: number): Promise<YearFetchResult> {
 
     const entries = await listZipEntries(zipPath);
     const candidates = entries.filter((entry) => /\.(txt|csv|tsv)$/i.test(entry));
+    const xmlCandidates = entries.filter((entry) => /\.xml$/i.test(entry));
 
     if (candidates.length === 0) {
       throw new Error(`No delimited text files found in ${year} zip archive.`);
@@ -423,7 +513,25 @@ async function fetchYearRows(year: number): Promise<YearFetchResult> {
       }
     }
 
-    return { rows: bestRows, zipEntries: entries, selectedFile, selectedHeaders: bestHeaders };
+    let xmlFile: string | null = null;
+    let xmlPreview: string | null = null;
+
+    if (xmlCandidates.length > 0) {
+      xmlFile = xmlCandidates[0] ?? null;
+      if (xmlFile) {
+        const xmlContent = await readZipEntry(zipPath, xmlFile);
+        xmlPreview = xmlContent.slice(0, 800).replace(/\s+/g, " ").trim();
+      }
+    }
+
+    return {
+      rows: bestRows,
+      zipEntries: entries,
+      selectedFile,
+      selectedHeaders: bestHeaders,
+      xmlFile,
+      xmlPreview,
+    };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -537,10 +645,75 @@ async function main() {
     }
     console.log(`🧪 ${year}: selected file for parsing: ${fetchResult.selectedFile ?? "(none)"}`);
     console.log(`🧪 ${year}: parsed headers: ${fetchResult.selectedHeaders.join(" | ")}`);
+    if (fetchResult.xmlFile) {
+      const preview = fetchResult.xmlPreview ?? "";
+      const hasDocId = /docid/i.test(preview);
+      const hasFilingType = /filingtype/i.test(preview);
+      console.log(`🧪 ${year}: xml file available for lightweight inspection: ${fetchResult.xmlFile}`);
+      console.log(`🧪 ${year}: xml preview contains DocID=${hasDocId}, FilingType=${hasFilingType}`);
+    } else {
+      console.log(`🧪 ${year}: no xml file found in archive.`);
+    }
     console.log(`🧪 ${year}: first ${Math.min(10, sourceRows.length)} source rows:`);
     sourceRows.slice(0, 10).forEach((row, index) => {
       console.log(`   [${index + 1}] ${JSON.stringify(row)}`);
     });
+
+    const rowsWithDocId = sourceRows.filter((row) => Boolean(getRowDocId(row)));
+    const filingTypeP = sourceRows.filter(
+      (row) => (getRowFilingType(row) ?? "").trim().toUpperCase() === "P"
+    );
+    const ptrCandidates = [...filingTypeP, ...rowsWithDocId.filter((row) => !filingTypeP.includes(row))]
+      .slice(0, 5);
+
+    console.log(`🧪 ${year}: FilingType=P rows: ${filingTypeP.length}`);
+    console.log(`🧪 ${year}: PTR candidate sample count: ${ptrCandidates.length}`);
+    ptrCandidates.forEach((row, index) => {
+      const summary = {
+        Prefix: row.Prefix ?? row.prefix ?? "",
+        Last: row.Last ?? row.last ?? "",
+        First: row.First ?? row.first ?? "",
+        FilingType: getRowFilingType(row),
+        FilingDate: getValue(row, ["filing date", "filingdate", "filed"]),
+        DocID: getRowDocId(row),
+      };
+      console.log(`   🔎 Candidate[${index + 1}] ${JSON.stringify(summary)}`);
+    });
+
+    for (const [index, row] of ptrCandidates.entries()) {
+      const docId = getRowDocId(row);
+      if (!docId) {
+        console.log(`   📄 Candidate[${index + 1}] has no DocID; skipping document inspection.`);
+        continue;
+      }
+
+      const guessedUrls = buildDocumentUrlGuesses(year, docId);
+      console.log(`   📄 Candidate[${index + 1}] DocID=${docId}`);
+      guessedUrls.forEach((url) => {
+        console.log(`      guessed URL: ${url}`);
+      });
+
+      const inspection = await inspectDocumentFromGuesses(guessedUrls);
+      if (inspection.kind === "unavailable") {
+        console.log("      fetch result: unavailable / fetch failed");
+        continue;
+      }
+
+      console.log(
+        `      fetch result: status=${inspection.status} content-type=${inspection.contentType ?? "(unknown)"}`
+      );
+
+      if (inspection.kind === "binary_like") {
+        console.log("      classification: PDF/binary only (no OCR attempted in debug pass)");
+        continue;
+      }
+
+      const signal = analyzeTransactionSignals(inspection.preview ?? "");
+      console.log(
+        `      classification: HTML/text/XML; transaction-like keywords found=${signal.matchedKeywords.join(", ") || "(none)"}`
+      );
+      console.log(`      content preview: ${(inspection.preview ?? "").slice(0, 400)}`);
+    }
 
     for (const sourceRow of sourceRows) {
       const normalized = normalizeRow(sourceRow, year);
