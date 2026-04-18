@@ -14,7 +14,7 @@ export type ScoreSignalInput = {
 
   // Optional direct component overrides
   historicalPoliticianScore?: number | null; // 0-20
-  momentumScore?: number | null; // 0-15
+  momentumScore?: number | null; // 0-22
   committeeRelevanceScore?: number | null; // 0-10
   clusterScore?: number | null; // 0-5
   userRelevanceScore?: number | null; // 0-5
@@ -79,10 +79,10 @@ function scoreTradeSize(amountMin: number | null, amountMax: number | null): num
   const value = amountMax ?? amountMin ?? 0;
 
   if (value >= 250000) return SCORE_WEIGHTS.tradeSize;
-  if (value >= 100000) return 15;
-  if (value >= 50000) return 12;
-  if (value >= 15000) return 8;
-  if (value >= 1000) return 4;
+  if (value >= 100000) return 13;
+  if (value >= 50000) return 10;
+  if (value >= 15000) return 6;
+  if (value >= 1000) return 3;
 
   return 0;
 }
@@ -91,9 +91,9 @@ function scoreFilingFreshness(filingLagDays: number | null): number {
   if (filingLagDays == null) return 0;
 
   if (filingLagDays <= 7) return SCORE_WEIGHTS.filingFreshness;
-  if (filingLagDays <= 14) return 10;
-  if (filingLagDays <= 30) return 7;
-  if (filingLagDays <= 45) return 3;
+  if (filingLagDays <= 14) return 6;
+  if (filingLagDays <= 30) return 4;
+  if (filingLagDays <= 45) return 2;
 
   return 1;
 }
@@ -111,7 +111,7 @@ function scoreMomentumFromAlpha(
   const has30d = alpha30d != null;
 
   if (!has7d && !has30d) {
-    return 6;
+    return 8;
   }
 
   const resolved7d = alpha7d ?? 0;
@@ -120,15 +120,15 @@ function scoreMomentumFromAlpha(
   // Keep short-term bias, but reward confirmed 30d strength more than before.
   const blendedAlpha = resolved7d * 0.6 + resolved30d * 0.4;
 
-  let rawScore = 7 + blendedAlpha * 1.8;
+  let rawScore = 8 + blendedAlpha * 2.2;
 
   // Strong negative relative performance should get punished harder.
   if (blendedAlpha <= -2) rawScore -= 3;
-  if (blendedAlpha <= -5) rawScore -= 2;
+  if (blendedAlpha <= -5) rawScore -= 3;
 
   // Strong positive relative performance should have a path to top-end scores.
-  if (blendedAlpha >= 5) rawScore += 1.5;
-  if (blendedAlpha >= 10) rawScore += 1.5;
+  if (blendedAlpha >= 5) rawScore += 2;
+  if (blendedAlpha >= 10) rawScore += 2;
 
   return round2(clamp(rawScore, 0, SCORE_WEIGHTS.momentum));
 }
@@ -213,7 +213,7 @@ function getReasonSummary(
     reasons.push("large reported trade size");
   }
 
-  if (breakdown.filingFreshnessScore >= 10) {
+  if (breakdown.filingFreshnessScore >= 6) {
     reasons.push("fresh filing timing");
   }
 
@@ -225,7 +225,7 @@ function getReasonSummary(
     reasons.push("strong 7-day outperformance vs SPY");
   } else if (alpha30d != null && alpha30d >= 2) {
     reasons.push("strong 30-day outperformance vs SPY");
-  } else if (breakdown.momentumScore >= 10) {
+  } else if (breakdown.momentumScore >= 14) {
     reasons.push("positive momentum context");
   }
 
