@@ -24,21 +24,21 @@ export default function SignalsFeedClient({
 
   return (
     <>
-      <div className="mb-5">
+      <div className="mb-4">
         <SignalFilters
           initialFilters={initialFilters}
           onResultsChange={setSignals}
           onLoadingChange={setIsLoading}
         />
 
-        <div className="mt-3 min-h-5">
+        <div className="mt-2 min-h-5">
           {isLoading ? (
             <p className="text-sm font-medium text-gray-500">Updating results...</p>
           ) : null}
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         {signals.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
             No results.
