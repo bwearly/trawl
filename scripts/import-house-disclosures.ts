@@ -87,6 +87,24 @@ type PtrRowSkipReason =
   | "missing_politician_name"
   | "ambiguous_line";
 
+type PtrAssetParseFailureReason =
+  | "missing_asset_span"
+  | "asset_name_amount_like"
+  | "asset_name_too_short";
+
+type PtrSuspiciousAssetSample = {
+  reason: PtrAssetParseFailureReason;
+  line: string;
+  extractedAssetName: string;
+  fallbackAssetName: string | null;
+};
+
+type PtrBeforeAfterSample = {
+  line: string;
+  before: string;
+  after: string;
+};
+
 function getArgValue(flag: string): string | undefined {
   const arg = process.argv.find((entry) => entry.startsWith(`${flag}=`));
   if (!arg) return undefined;
@@ -364,6 +382,57 @@ function parseOwnerTypeFromText(line: string): NormalizedDisclosure["ownerType"]
   return "unknown";
 }
 
+function parseLeadingOwnerToken(line: string): { ownerType: NormalizedDisclosure["ownerType"]; ownerTokenLength: number } {
+  const match = line.match(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b/i);
+  if (!match) return { ownerType: "unknown", ownerTokenLength: 0 };
+  return {
+    ownerType: parseOwnerTypeFromText(match[1]),
+    ownerTokenLength: match[0].length,
+  };
+}
+
+function extractLikelyAmountText(text: string): string | null {
+  const match = text.match(
+    /\b(PARTIAL\s+)?(OVER\s+\$?\s*[\d,\s]+|\$?\s*[\d,\s]+\s*-\s*\$?\s*[\d,\s]+)\b/i
+  );
+  return match?.[0]?.trim() ?? null;
+}
+
+function normalizeAmountInput(raw: string | null): string | null {
+  if (!raw) return null;
+  const compactedDigits = raw.replace(/(?<=\d)\s+(?=\d)/g, "");
+  const normalizedWhitespace = compactedDigits.replace(/\s+/g, " ").trim();
+  return normalizedWhitespace.length > 0 ? normalizedWhitespace : null;
+}
+
+function isAmountLikeAssetName(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) return false;
+
+  if (/^\$?[\d,\s]+(?:-\s*\$?[\d,\s]+)?$/i.test(normalized)) {
+    return true;
+  }
+
+  const stripped = normalized
+    .toUpperCase()
+    .replace(/\b(PARTIAL|OVER|UNDER|LESS|THAN|MORE|FROM|TO|UP)\b/g, " ")
+    .replace(/[$,\-.\s]/g, "");
+
+  return stripped.length > 0 && /^\d+$/.test(stripped);
+}
+
+function buildLegacyPtrAssetCandidate(line: string): string {
+  return line
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ")
+    .replace(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/gi, " ")
+    .replace(/\b(Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+)\b/gi, " ")
+    .replace(/\b(SP|JT|DC|SELF|SPOUSE|DEPENDENT)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\W+|\W+$/g, "")
+    .trim();
+}
+
 function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
   const explicit = getValue(row, ["filer", "name", "member", "full name"]);
   if (explicit) return explicit;
@@ -383,6 +452,9 @@ function parsePtrTransactionsFromPdfText(params: {
   normalized: NormalizedDisclosure[];
   transactionLikeLineCount: number;
   skipReasons: Map<PtrRowSkipReason, number>;
+  assetFailureReasons: Map<PtrAssetParseFailureReason, number>;
+  suspiciousAssetSamples: PtrSuspiciousAssetSample[];
+  beforeAfterSamples: PtrBeforeAfterSample[];
 } {
   const { text, sourceRow, sourceUrl } = params;
   const lines = text
@@ -391,7 +463,10 @@ function parsePtrTransactionsFromPdfText(params: {
     .filter((line) => line.length > 0);
 
   const skipReasons = new Map<PtrRowSkipReason, number>();
+  const assetFailureReasons = new Map<PtrAssetParseFailureReason, number>();
   const normalized: NormalizedDisclosure[] = [];
+  const suspiciousAssetSamples: PtrSuspiciousAssetSample[] = [];
+  const beforeAfterSamples: PtrBeforeAfterSample[] = [];
   const politicianName = buildPoliticianNameFromHouseRow(sourceRow);
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
@@ -402,7 +477,7 @@ function parsePtrTransactionsFromPdfText(params: {
   for (const line of lines) {
     const hasDate = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(line);
     const hasTradeType = /\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/i.test(line);
-    const hasAmount = /\$\s?[\d,]+/.test(line) || /over\s+\$\s?[\d,]+/i.test(line);
+    const hasAmount = Boolean(extractLikelyAmountText(line));
     if (!(hasDate && hasTradeType && hasAmount)) {
       continue;
     }
@@ -427,26 +502,73 @@ function parsePtrTransactionsFromPdfText(params: {
       continue;
     }
 
-    const amountMatch = line.match(
-      /(Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+|\$1,001\s*-\s*\$15,000|\$15,001\s*-\s*\$50,000|\$50,001\s*-\s*\$100,000|\$100,001\s*-\s*\$250,000|\$250,001\s*-\s*\$500,000|\$500,001\s*-\s*\$1,000,000|\$1,000,001\s*-\s*\$5,000,000|\$5,000,001\s*-\s*\$25,000,000|\$25,000,001\s*-\s*\$50,000,000)/i
-    );
-    const amount = normalizeAmountRange(amountMatch?.[1] ?? null);
+    const amountText = normalizeAmountInput(extractLikelyAmountText(line));
+    const amount = normalizeAmountRange(amountText);
 
     const tickerMatch = line.match(/\(([A-Z.\-]{1,8})\)/);
     const rawTicker = tickerMatch?.[1] ?? null;
 
-    const assetCandidate = line
-      .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ")
-      .replace(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/gi, " ")
-      .replace(/\b(Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+)\b/gi, " ")
-      .replace(/\b(SP|JT|DC|SELF|SPOUSE|DEPENDENT)\b/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const legacyAssetName = buildLegacyPtrAssetCandidate(line);
+    const dateMatches = [...line.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)];
+    const firstDateIndex = dateMatches[0]?.index ?? -1;
+    const tradeTypeSearchText = firstDateIndex > 0 ? line.slice(0, firstDateIndex) : line;
+    const tradeTypeMatches = [
+      ...tradeTypeSearchText.matchAll(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/gi),
+    ];
+    const finalTradeTypeMatch = tradeTypeMatches.at(-1);
+    const { ownerTokenLength } = parseLeadingOwnerToken(line);
 
-    const assetName = assetCandidate.replace(/^\W+|\W+$/g, "").trim();
-    if (!assetName || assetName.length < 3) {
+    const assetSliceStart = ownerTokenLength;
+    const assetSliceEnd = finalTradeTypeMatch?.index ?? -1;
+    const slicedAssetName =
+      assetSliceEnd > assetSliceStart ? line.slice(assetSliceStart, assetSliceEnd).trim() : "";
+
+    const assetName = slicedAssetName.replace(/^\W+|\W+$/g, "").trim();
+    if (!assetName) {
+      assetFailureReasons.set(
+        "missing_asset_span",
+        (assetFailureReasons.get("missing_asset_span") ?? 0) + 1
+      );
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
       continue;
+    }
+
+    if (isAmountLikeAssetName(assetName)) {
+      assetFailureReasons.set(
+        "asset_name_amount_like",
+        (assetFailureReasons.get("asset_name_amount_like") ?? 0) + 1
+      );
+      if (suspiciousAssetSamples.length < 10) {
+        suspiciousAssetSamples.push({
+          reason: "asset_name_amount_like",
+          line,
+          extractedAssetName: assetName,
+          fallbackAssetName: legacyAssetName.length > 0 ? legacyAssetName : null,
+        });
+      }
+      skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      continue;
+    }
+
+    if (assetName.length < 3) {
+      assetFailureReasons.set(
+        "asset_name_too_short",
+        (assetFailureReasons.get("asset_name_too_short") ?? 0) + 1
+      );
+      if (suspiciousAssetSamples.length < 10) {
+        suspiciousAssetSamples.push({
+          reason: "asset_name_too_short",
+          line,
+          extractedAssetName: assetName,
+          fallbackAssetName: legacyAssetName.length > 0 ? legacyAssetName : null,
+        });
+      }
+      skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      continue;
+    }
+
+    if (beforeAfterSamples.length < 8 && legacyAssetName !== assetName) {
+      beforeAfterSamples.push({ line, before: legacyAssetName, after: assetName });
     }
 
     if (assetName.split(" ").length > 40) {
@@ -472,7 +594,7 @@ function parsePtrTransactionsFromPdfText(params: {
       assetName,
       assetType: inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeMatch[1] ?? null),
-      ownerType: parseOwnerTypeFromText(line),
+      ownerType: parseLeadingOwnerToken(line).ownerType,
       amountRangeLabel: amount.label,
       amountMin: amount.min,
       amountMax: amount.max,
@@ -486,7 +608,14 @@ function parsePtrTransactionsFromPdfText(params: {
     });
   }
 
-  return { normalized, transactionLikeLineCount, skipReasons };
+  return {
+    normalized,
+    transactionLikeLineCount,
+    skipReasons,
+    assetFailureReasons,
+    suspiciousAssetSamples,
+    beforeAfterSamples,
+  };
 }
 
 async function fetchPdfFromGuesses(urls: string[]): Promise<{
@@ -850,6 +979,9 @@ async function main() {
     let ptrTransactionLikeLines = 0;
     let ptrNormalizedRows = 0;
     const ptrSkipReasons = new Map<PtrRowSkipReason, number>();
+    const ptrAssetFailureReasons = new Map<PtrAssetParseFailureReason, number>();
+    const ptrSuspiciousAssetSamples: PtrSuspiciousAssetSample[] = [];
+    const ptrBeforeAfterSamples: PtrBeforeAfterSample[] = [];
 
     for (const [index, row] of filingTypeP.entries()) {
       const docId = getRowDocId(row);
@@ -911,6 +1043,17 @@ async function main() {
       parsed.skipReasons.forEach((count, reason) => {
         ptrSkipReasons.set(reason, (ptrSkipReasons.get(reason) ?? 0) + count);
       });
+      parsed.assetFailureReasons.forEach((count, reason) => {
+        ptrAssetFailureReasons.set(reason, (ptrAssetFailureReasons.get(reason) ?? 0) + count);
+      });
+      for (const sample of parsed.suspiciousAssetSamples) {
+        if (ptrSuspiciousAssetSamples.length >= 8) break;
+        ptrSuspiciousAssetSamples.push(sample);
+      }
+      for (const sample of parsed.beforeAfterSamples) {
+        if (ptrBeforeAfterSamples.length >= 6) break;
+        ptrBeforeAfterSamples.push(sample);
+      }
       normalizedRows.push(...parsed.normalized);
 
       console.log(
@@ -926,6 +1069,28 @@ async function main() {
       for (const [reason, count] of [...ptrSkipReasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
         console.log(`   - ${reason}: ${count}`);
       }
+    }
+    if (ptrAssetFailureReasons.size > 0) {
+      console.log(`🧪 ${year}: top PTR asset-name parse failure reasons:`);
+      for (const [reason, count] of [...ptrAssetFailureReasons.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)) {
+        console.log(`   - ${reason}: ${count}`);
+      }
+    }
+    if (ptrSuspiciousAssetSamples.length > 0) {
+      console.log(`🧪 ${year}: sample suspicious PTR rows with amount-like asset names:`);
+      ptrSuspiciousAssetSamples.slice(0, 5).forEach((sample, idx) => {
+        console.log(
+          `   [${idx + 1}] reason=${sample.reason} extracted="${sample.extractedAssetName}" fallback="${sample.fallbackAssetName ?? "(none)"}" line="${sample.line}"`
+        );
+      });
+    }
+    if (ptrBeforeAfterSamples.length > 0) {
+      console.log(`🧪 ${year}: sample PTR asset extraction before/after fixes:`);
+      ptrBeforeAfterSamples.slice(0, 5).forEach((sample, idx) => {
+        console.log(`   [${idx + 1}] before="${sample.before}" after="${sample.after}"`);
+      });
     }
 
     for (const sourceRow of sourceRows) {
