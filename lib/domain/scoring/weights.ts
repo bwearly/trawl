@@ -2,10 +2,10 @@ export const SCORE_MAX = 100;
 
 export const SCORE_WEIGHTS = {
   tradeType: 18,
-  tradeSize: 18,
-  filingFreshness: 12,
+  tradeSize: 16,
+  filingFreshness: 7,
   historicalPolitician: 20,
-  momentum: 15,
+  momentum: 22,
   committeeRelevance: 10,
   cluster: 5,
   userRelevance: 5,
