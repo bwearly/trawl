@@ -91,11 +91,11 @@ function scoreFilingFreshness(filingLagDays: number | null): number {
   if (filingLagDays == null) return 0;
 
   if (filingLagDays <= 7) return SCORE_WEIGHTS.filingFreshness;
-  if (filingLagDays <= 14) return 6;
-  if (filingLagDays <= 30) return 4;
-  if (filingLagDays <= 45) return 2;
+  if (filingLagDays <= 14) return 4;
+  if (filingLagDays <= 30) return 2;
+  if (filingLagDays <= 45) return 1;
 
-  return 1;
+  return 0;
 }
 
 function scoreMomentumFromAlpha(
@@ -213,7 +213,7 @@ function getReasonSummary(
     reasons.push("large reported trade size");
   }
 
-  if (breakdown.filingFreshnessScore >= 6) {
+  if (breakdown.filingFreshnessScore >= 4) {
     reasons.push("fresh filing timing");
   }
 
