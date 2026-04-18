@@ -133,6 +133,55 @@ function scoreMomentumFromAlpha(
   return round2(clamp(rawScore, 0, SCORE_WEIGHTS.momentum));
 }
 
+function calculateEliteUpsideBonus(
+  input: ScoreSignalInput,
+  breakdown: ScoreSignalResult["breakdown"]
+): number {
+  const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
+  const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
+
+  let bonus = 0;
+
+  // Unlock additional upside only for truly exceptional momentum context.
+  if (breakdown.momentumScore >= 20) {
+    bonus += 1;
+  }
+
+  if (breakdown.momentumScore >= 21.5) {
+    bonus += 1;
+  }
+
+  // Reward material 30d benchmark-relative outperformance.
+  if (alpha30d != null && alpha30d >= 6) {
+    bonus += 1.5;
+  }
+
+  if (alpha30d != null && alpha30d >= 10) {
+    bonus += 1.5;
+  }
+
+  // Reward strongest factor alignment without lifting mediocre setups.
+  if (
+    breakdown.momentumScore >= 20 &&
+    input.tradeType.toLowerCase() === "purchase" &&
+    breakdown.historicalPoliticianScore >= 12
+  ) {
+    bonus += 1;
+  }
+
+  if (
+    breakdown.momentumScore >= 20 &&
+    alpha30d != null &&
+    alpha30d >= 8 &&
+    alpha7d != null &&
+    alpha7d >= 3
+  ) {
+    bonus += 1;
+  }
+
+  return round2(clamp(bonus, 0, 7));
+}
+
 function getPrimaryReason(
   result: ScoreSignalResult["breakdown"],
   input: ScoreSignalInput
@@ -196,7 +245,8 @@ function getPrimaryReason(
 
 function getReasonSummary(
   breakdown: ScoreSignalResult["breakdown"],
-  input: ScoreSignalInput
+  input: ScoreSignalInput,
+  eliteUpsideBonus = 0
 ): string {
   const reasons: string[] = [];
   const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
@@ -239,6 +289,10 @@ function getReasonSummary(
 
   if (breakdown.userRelevanceScore >= 4) {
     reasons.push("match with user preferences");
+  }
+
+  if (eliteUpsideBonus >= 2) {
+    reasons.push("elite momentum and outperformance alignment");
   }
 
   if (reasons.length === 0) {
@@ -292,9 +346,11 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     breakdown.clusterScore +
     breakdown.userRelevanceScore;
 
-  const totalScore = round2(clamp(rawTotal, 0, SCORE_MAX));
+  const eliteUpsideBonus = calculateEliteUpsideBonus(input, breakdown);
+
+  const totalScore = round2(clamp(rawTotal + eliteUpsideBonus, 0, SCORE_MAX));
   const primaryReason = getPrimaryReason(breakdown, input);
-  const reasonSummary = getReasonSummary(breakdown, input);
+  const reasonSummary = getReasonSummary(breakdown, input, eliteUpsideBonus);
 
   return {
     totalScore,
