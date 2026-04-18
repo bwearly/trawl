@@ -31,27 +31,33 @@ function calcAlpha(
 }
 
 function scoreHistoricalPoliticianFromAlphas(alphas: number[]): number {
-  if (alphas.length === 0) {
-    return 10;
+  const sampleSize = alphas.length;
+
+  if (sampleSize === 0) {
+    return 0;
   }
 
-  const sampleSize = alphas.length;
   const winRate = alphas.filter((alpha) => alpha > 0).length / sampleSize;
   const avgAlpha =
     alphas.reduce((sum, alpha) => sum + alpha, 0) / sampleSize;
 
-  // Build a raw score centered around neutral = 10
-  const winRateAdjustment = (winRate - 0.5) * 12; // range roughly -6 to +6
-  const alphaAdjustment = Math.max(-4, Math.min(avgAlpha, 4)); // range -4 to +4
-
+  // Build a raw quality score from win rate + average alpha
+  const winRateAdjustment = (winRate - 0.5) * 12; // about -6 to +6
+  const alphaAdjustment = Math.max(-4, Math.min(avgAlpha, 4)); // clamp to -4..+4
   const rawScore = 10 + winRateAdjustment + alphaAdjustment;
 
-  // Confidence ramps in slowly so tiny samples stay near neutral
-  const confidence = Math.min(sampleSize / 5, 1);
+  // Hard cap score based on sample size so tiny histories stay modest
+  let sampleCap = 0;
+  if (sampleSize <= 2) sampleCap = 4;
+  else if (sampleSize <= 4) sampleCap = 8;
+  else if (sampleSize <= 7) sampleCap = 12;
+  else if (sampleSize <= 10) sampleCap = 16;
+  else sampleCap = 20;
 
-  const blendedScore = 10 + (rawScore - 10) * confidence;
+  // Convert raw score to a bounded historical score
+  const boundedScore = Math.max(0, Math.min(rawScore, sampleCap));
 
-  return round2(Math.max(0, Math.min(blendedScore, 20)));
+  return round2(boundedScore);
 }
 
 async function main() {
@@ -123,6 +129,17 @@ async function main() {
       userRelevanceScore: 2,
     });
 
+    let confidencePenalty = 0;
+
+    if (historicalAlphas.length === 0) confidencePenalty += 4;
+      else if (historicalAlphas.length === 1) confidencePenalty += 3;
+      else if (historicalAlphas.length === 2) confidencePenalty += 2;
+      else if (historicalAlphas.length <= 4) confidencePenalty += 1;
+    if (performance?.return30d == null || performance?.spyReturn30d == null) confidencePenalty += 3;
+    if (performance?.return7d == null || performance?.spyReturn7d == null) confidencePenalty += 2;
+
+    const adjustedTotalScore = Math.max(0, scored.totalScore - confidencePenalty);
+
     const existing = await db
       .select()
       .from(researchSignals)
@@ -133,7 +150,7 @@ async function main() {
         .update(researchSignals)
         .set({
           ticker: disclosure.ticker ?? "UNKNOWN",
-          score: scored.totalScore.toFixed(2),
+          score: adjustedTotalScore.toFixed(2),
           signalStatus: "active",
           primaryReason: scored.primaryReason,
           reasonSummary: scored.reasonSummary,
@@ -168,7 +185,7 @@ async function main() {
           disclosureId: disclosure.id,
           politicianId: disclosure.politicianId,
           ticker: disclosure.ticker ?? "UNKNOWN",
-          score: scored.totalScore.toFixed(2),
+          score: adjustedTotalScore.toFixed(2),
           signalStatus: "active",
           primaryReason: scored.primaryReason,
           reasonSummary: scored.reasonSummary,
@@ -207,7 +224,9 @@ async function main() {
       historicalSampleSize: historicalAlphas.length,
       historicalPoliticianScore,
       momentumScore: scored.breakdown.momentumScore,
-      totalScore: scored.totalScore,
+      confidencePenalty,
+      adjustedTotalScore,
+      rawTotalScore: scored.totalScore,
       primaryReason: scored.primaryReason,
     });
   }

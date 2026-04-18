@@ -14,7 +14,8 @@
     "performance:backfill": "tsx scripts/backfill-performance.ts",
     "prices:import": "tsx scripts/import-price-history.ts",
     "politicians:backfill": "tsx scripts/backfill-politician-stats.ts",
-    "alerts:backfill": "tsx scripts/backfill-alerts.ts"
+    "alerts:backfill": "tsx scripts/backfill-alerts.ts",
+    "signals:evaluate": "tsx scripts/evaluate-signals.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -22,7 +23,8 @@
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "yahoo-finance2": "^3.14.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

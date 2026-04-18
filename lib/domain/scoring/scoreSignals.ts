@@ -14,7 +14,7 @@ export type ScoreSignalInput = {
 
   // Optional direct component overrides
   historicalPoliticianScore?: number | null; // 0-20
-  momentumScore?: number | null; // 0-10
+  momentumScore?: number | null; // 0-15
   committeeRelevanceScore?: number | null; // 0-10
   clusterScore?: number | null; // 0-5
   userRelevanceScore?: number | null; // 0-5
@@ -67,9 +67,9 @@ function scoreTradeType(tradeType: string): number {
     case "purchase":
       return SCORE_WEIGHTS.tradeType;
     case "exchange":
-      return 12;
+      return 10;
     case "sale":
-      return 6;
+      return 4;
     default:
       return 0;
   }
@@ -79,10 +79,10 @@ function scoreTradeSize(amountMin: number | null, amountMax: number | null): num
   const value = amountMax ?? amountMin ?? 0;
 
   if (value >= 250000) return SCORE_WEIGHTS.tradeSize;
-  if (value >= 100000) return 13;
-  if (value >= 50000) return 11;
+  if (value >= 100000) return 15;
+  if (value >= 50000) return 12;
   if (value >= 15000) return 8;
-  if (value >= 1000) return 5;
+  if (value >= 1000) return 4;
 
   return 0;
 }
@@ -91,9 +91,9 @@ function scoreFilingFreshness(filingLagDays: number | null): number {
   if (filingLagDays == null) return 0;
 
   if (filingLagDays <= 7) return SCORE_WEIGHTS.filingFreshness;
-  if (filingLagDays <= 14) return 12;
-  if (filingLagDays <= 30) return 8;
-  if (filingLagDays <= 45) return 4;
+  if (filingLagDays <= 14) return 10;
+  if (filingLagDays <= 30) return 7;
+  if (filingLagDays <= 45) return 3;
 
   return 1;
 }
@@ -104,15 +104,31 @@ function scoreMomentumFromAlpha(
   return30d: number | string | null | undefined,
   spyReturn30d: number | string | null | undefined
 ): number {
-  const alpha7d = calcAlpha(return7d, spyReturn7d) ?? 0;
-  const alpha30d = calcAlpha(return30d, spyReturn30d) ?? 0;
+  const alpha7d = calcAlpha(return7d, spyReturn7d);
+  const alpha30d = calcAlpha(return30d, spyReturn30d);
 
-  // Bias toward short-term post-disclosure reaction, but keep some 30d signal.
-  const blendedAlpha = alpha7d * 0.7 + alpha30d * 0.3;
+  const has7d = alpha7d != null;
+  const has30d = alpha30d != null;
 
-  // 0 alpha => neutral middle score around 5
-  // positive alpha lifts score, negative alpha lowers it
-  const rawScore = 5 + blendedAlpha;
+  if (!has7d && !has30d) {
+    return 6;
+  }
+
+  const resolved7d = alpha7d ?? 0;
+  const resolved30d = alpha30d ?? 0;
+
+  // Keep short-term bias, but reward confirmed 30d strength more than before.
+  const blendedAlpha = resolved7d * 0.6 + resolved30d * 0.4;
+
+  let rawScore = 7 + blendedAlpha * 1.8;
+
+  // Strong negative relative performance should get punished harder.
+  if (blendedAlpha <= -2) rawScore -= 3;
+  if (blendedAlpha <= -5) rawScore -= 2;
+
+  // Strong positive relative performance should have a path to top-end scores.
+  if (blendedAlpha >= 5) rawScore += 1.5;
+  if (blendedAlpha >= 10) rawScore += 1.5;
 
   return round2(clamp(rawScore, 0, SCORE_WEIGHTS.momentum));
 }
@@ -123,11 +139,22 @@ function getPrimaryReason(
 ): string {
   const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
   const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
-  const bestAlpha = Math.max(alpha7d ?? Number.NEGATIVE_INFINITY, alpha30d ?? Number.NEGATIVE_INFINITY);
+  const bestAlpha = Math.max(
+    alpha7d ?? Number.NEGATIVE_INFINITY,
+    alpha30d ?? Number.NEGATIVE_INFINITY
+  );
 
   const entries = [
-    { key: "tradeTypeScore", label: "Strong purchase signal", value: result.tradeTypeScore },
-    { key: "tradeSizeScore", label: "Large reported trade", value: result.tradeSizeScore },
+    {
+      key: "tradeTypeScore",
+      label: "Strong purchase signal",
+      value: result.tradeTypeScore,
+    },
+    {
+      key: "tradeSizeScore",
+      label: "Large reported trade",
+      value: result.tradeSizeScore,
+    },
     {
       key: "filingFreshnessScore",
       label: "Fresh disclosure timing",
@@ -151,8 +178,16 @@ function getPrimaryReason(
       label: "Strong committee relevance",
       value: result.committeeRelevanceScore,
     },
-    { key: "clusterScore", label: "Clustered activity", value: result.clusterScore },
-    { key: "userRelevanceScore", label: "High user relevance", value: result.userRelevanceScore },
+    {
+      key: "clusterScore",
+      label: "Clustered activity",
+      value: result.clusterScore,
+    },
+    {
+      key: "userRelevanceScore",
+      label: "High user relevance",
+      value: result.userRelevanceScore,
+    },
   ];
 
   entries.sort((a, b) => b.value - a.value);
@@ -167,15 +202,18 @@ function getReasonSummary(
   const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
   const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
 
-  if (breakdown.tradeTypeScore >= 15 && input.tradeType.toLowerCase() === "purchase") {
+  if (
+    breakdown.tradeTypeScore >= 15 &&
+    input.tradeType.toLowerCase() === "purchase"
+  ) {
     reasons.push("purchase disclosure");
   }
 
-  if (breakdown.tradeSizeScore >= 11) {
+  if (breakdown.tradeSizeScore >= 12) {
     reasons.push("large reported trade size");
   }
 
-  if (breakdown.filingFreshnessScore >= 12) {
+  if (breakdown.filingFreshnessScore >= 10) {
     reasons.push("fresh filing timing");
   }
 
@@ -187,7 +225,7 @@ function getReasonSummary(
     reasons.push("strong 7-day outperformance vs SPY");
   } else if (alpha30d != null && alpha30d >= 2) {
     reasons.push("strong 30-day outperformance vs SPY");
-  } else if (breakdown.momentumScore >= 7) {
+  } else if (breakdown.momentumScore >= 10) {
     reasons.push("positive momentum context");
   }
 
@@ -225,11 +263,23 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     tradeTypeScore: scoreTradeType(input.tradeType),
     tradeSizeScore: scoreTradeSize(input.amountMin, input.amountMax),
     filingFreshnessScore: scoreFilingFreshness(input.filingLagDays),
-    historicalPoliticianScore: clamp(input.historicalPoliticianScore ?? 0, 0, 20),
+    historicalPoliticianScore: clamp(
+      input.historicalPoliticianScore ?? 0,
+      0,
+      SCORE_WEIGHTS.historicalPolitician
+    ),
     momentumScore: resolvedMomentumScore,
-    committeeRelevanceScore: clamp(input.committeeRelevanceScore ?? 0, 0, 10),
-    clusterScore: clamp(input.clusterScore ?? 0, 0, 5),
-    userRelevanceScore: clamp(input.userRelevanceScore ?? 0, 0, 5),
+    committeeRelevanceScore: clamp(
+      input.committeeRelevanceScore ?? 0,
+      0,
+      SCORE_WEIGHTS.committeeRelevance
+    ),
+    clusterScore: clamp(input.clusterScore ?? 0, 0, SCORE_WEIGHTS.cluster),
+    userRelevanceScore: clamp(
+      input.userRelevanceScore ?? 0,
+      0,
+      SCORE_WEIGHTS.userRelevance
+    ),
   };
 
   const rawTotal =

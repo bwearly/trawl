@@ -1,117 +1,110 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
+import YahooFinance from "yahoo-finance2";
 import { db } from "../lib/db";
 import { disclosures, priceHistory } from "../lib/db/schema";
 import { eq } from "drizzle-orm";
 
-type AlphaVantageDailyRow = {
-  "1. open": string;
-  "2. high": string;
-  "3. low": string;
-  "4. close": string;
-  "5. volume": string;
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["yahooSurvey"],
+});
+
+type YahooChartQuote = {
+  date: Date;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close?: number | null;
+  volume?: number | null;
 };
 
-type AlphaVantageTimeSeries = Record<string, AlphaVantageDailyRow>;
+type YahooChartResultArray = {
+  quotes: YahooChartQuote[];
+};
 
-type AlphaVantageDailyResponse = {
-  "Time Series (Daily)"?: AlphaVantageTimeSeries;
-  Note?: string;
-  Information?: string;
-  ErrorMessage?: string;
+type YahooPriceRow = {
+  date: Date;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
 };
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchDaily(symbol: string): Promise<AlphaVantageTimeSeries> {
-  const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("ALPHA_VANTAGE_API_KEY is not set");
+function normalizeYahooSymbol(symbol: string) {
+  switch (symbol) {
+    case "BRK.B":
+      return "BRK-B";
+    default:
+      return symbol;
   }
+}
 
-  const url = new URL("https://www.alphavantage.co/query");
-  url.searchParams.set("function", "TIME_SERIES_DAILY");
-  url.searchParams.set("symbol", symbol);
-  url.searchParams.set("outputsize", "compact");
-  url.searchParams.set("apikey", apiKey);
+async function fetchDailyHistory(symbol: string): Promise<YahooPriceRow[]> {
+  const end = new Date();
+  const start = new Date();
+  start.setUTCFullYear(end.getUTCFullYear() - 1);
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
-  });
+  const result = (await yahooFinance.chart(symbol, {
+    period1: start,
+    period2: end,
+    interval: "1d",
+  })) as YahooChartResultArray;
 
-  if (!response.ok) {
-    throw new Error(`Alpha Vantage request failed: ${response.status}`);
-  }
+  const quotes = result.quotes ?? [];
 
-  const data = (await response.json()) as AlphaVantageDailyResponse;
-
-  console.log(`Raw Alpha Vantage response for ${symbol}:`);
-  console.dir(data, { depth: null });
-
-  if (data.ErrorMessage) {
-    throw new Error(`Alpha Vantage error for ${symbol}: ${data.ErrorMessage}`);
-  }
-
-  if (data.Note) {
-    throw new Error(`Alpha Vantage rate limit hit for ${symbol}: ${data.Note}`);
-  }
-
-  if (data.Information) {
-    throw new Error(
-      `Alpha Vantage information for ${symbol}: ${data.Information}`
-    );
-  }
-
-  const timeSeries = data["Time Series (Daily)"];
-
-  if (!timeSeries) {
-    throw new Error(`No daily data returned for ${symbol}`);
-  }
-
-  return timeSeries;
+  return quotes
+    .filter((q: YahooChartQuote) => q.date && q.close != null)
+    .map((q: YahooChartQuote) => ({
+      date: q.date,
+      open: q.open ?? null,
+      high: q.high ?? null,
+      low: q.low ?? null,
+      close: q.close ?? null,
+      volume: q.volume ?? null,
+    }));
 }
 
 async function main() {
-  console.log("Importing price history...");
+  console.log("Importing price history from Yahoo Finance...");
 
-    const disclosureRows = await db
+  const disclosureRows = await db
     .select({ ticker: disclosures.ticker })
     .from(disclosures);
 
-    const tickerSet = new Set<string>();
+  const tickers = Array.from(
+    new Set(
+      disclosureRows
+        .map((row) => row.ticker)
+        .filter((ticker): ticker is string => Boolean(ticker))
+    )
+  );
 
-    for (const row of disclosureRows) {
-    if (!row.ticker) continue;
-    tickerSet.add(row.ticker.trim().toUpperCase());
-    }
-
-    tickerSet.add("SPY");
-
-    const tickers = Array.from(tickerSet);
-
-    console.log(`Found ${tickers.length} unique tickers: ${tickers.join(", ")}`);
+  console.log(`Found ${tickers.length} unique tickers: ${tickers.join(", ")}`);
 
   for (const ticker of tickers) {
-    console.log(`Fetching ${ticker}...`);
+    const yahooSymbol = normalizeYahooSymbol(ticker);
 
-    const series = await fetchDaily(ticker);
+    console.log(`Fetching ${ticker} (Yahoo: ${yahooSymbol})...`);
+
+    const quotes = await fetchDailyHistory(yahooSymbol);
 
     await db.delete(priceHistory).where(eq(priceHistory.ticker, ticker));
 
-    const rows = Object.entries(series).map(([date, values]) => ({
+    const rows = quotes.map((quote) => ({
       ticker,
-      date: new Date(`${date}T00:00:00Z`),
-      open: values["1. open"],
-      high: values["2. high"],
-      low: values["3. low"],
-      close: values["4. close"],
-      adjustedClose: values["4. close"], // placeholder until you use a true adjusted source
-      volume: Number(values["5. volume"]),
+      date: quote.date,
+      open: quote.open != null ? quote.open.toFixed(2) : null,
+      high: quote.high != null ? quote.high.toFixed(2) : null,
+      low: quote.low != null ? quote.low.toFixed(2) : null,
+      close: quote.close != null ? quote.close.toFixed(2) : null,
+      adjustedClose: quote.close != null ? quote.close.toFixed(2) : null,
+      volume: quote.volume ?? 0,
       updatedAt: new Date(),
     }));
 
@@ -121,8 +114,7 @@ async function main() {
 
     console.log(`Inserted ${rows.length} rows for ${ticker}.`);
 
-    // free plan is limited, so stay conservative
-    await sleep(15000);
+    await sleep(1000);
   }
 
   console.log("Finished importing price history.");
