@@ -38,6 +38,25 @@ const ASSET_NAME_TO_TICKER: Record<string, string> = {
 };
 
 type HouseRow = Record<string, string>;
+type NormalizationFailureReason =
+  | "missing_trade_date"
+  | "missing_filing_date"
+  | "missing_trade_type"
+  | "missing_asset_name"
+  | "missing_politician_name"
+  | "not_transaction_like_record";
+
+type ParseDelimitedResult = {
+  headers: string[];
+  rows: HouseRow[];
+};
+
+type YearFetchResult = {
+  rows: HouseRow[];
+  zipEntries: string[];
+  selectedFile: string | null;
+  selectedHeaders: string[];
+};
 
 type NormalizedDisclosure = {
   politicianName: string;
@@ -91,14 +110,14 @@ function normalizeHeader(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function parseDelimited(content: string): HouseRow[] {
+function parseDelimited(content: string): ParseDelimitedResult {
   const lines = content
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
   if (lines.length < 2) {
-    return [];
+    return { headers: [], rows: [] };
   }
 
   const delimiter = ["|", "\t", ","].reduce(
@@ -109,7 +128,7 @@ function parseDelimited(content: string): HouseRow[] {
 
   const headers = lines[0].split(delimiter).map((h) => h.trim());
 
-  return lines.slice(1).map((line) => {
+  const rows = lines.slice(1).map((line) => {
     const values = line.split(delimiter).map((value) => value.trim());
     const row: HouseRow = {};
 
@@ -119,6 +138,8 @@ function parseDelimited(content: string): HouseRow[] {
 
     return row;
   });
+
+  return { headers, rows };
 }
 
 function getValue(row: HouseRow, aliases: string[]): string | null {
@@ -296,6 +317,44 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
   };
 }
 
+function isTransactionLikeRecord(row: HouseRow): boolean {
+  const transactionSignal = getValue(row, [
+    "transaction date",
+    "trade date",
+    "tx date",
+    "transaction type",
+    "tx type",
+    "asset",
+    "asset name",
+    "description",
+    "issuer",
+    "amount",
+    "amount range",
+  ]);
+  return Boolean(transactionSignal);
+}
+
+function classifyNormalizationFailure(row: HouseRow): NormalizationFailureReason[] {
+  const reasons: NormalizationFailureReason[] = [];
+
+  const politicianName = getValue(row, ["filer", "name", "member", "full name"]);
+  const assetName = getValue(row, ["asset", "asset name", "description", "issuer"]);
+  const tradeDate = parseDate(
+    getValue(row, ["transaction date", "trade date", "date", "tx date"])
+  );
+  const filingDate = parseDate(getValue(row, ["notification date", "filed", "filing date"]));
+  const tradeType = getValue(row, ["type", "transaction type", "tx type"]);
+
+  if (!isTransactionLikeRecord(row)) reasons.push("not_transaction_like_record");
+  if (!politicianName) reasons.push("missing_politician_name");
+  if (!assetName) reasons.push("missing_asset_name");
+  if (!tradeDate) reasons.push("missing_trade_date");
+  if (!filingDate) reasons.push("missing_filing_date");
+  if (!tradeType) reasons.push("missing_trade_type");
+
+  return reasons;
+}
+
 async function listZipEntries(zipPath: string): Promise<string[]> {
   const { stdout } = await execFileAsync("unzip", ["-Z1", zipPath], {
     maxBuffer: 1024 * 1024 * 50,
@@ -321,7 +380,7 @@ function scoreFileContent(content: string): number {
   return hints.filter((hint) => header.includes(hint)).length;
 }
 
-async function fetchYearRows(year: number): Promise<HouseRow[]> {
+async function fetchYearRows(year: number): Promise<YearFetchResult> {
   const url = `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${year}FD.zip`;
   console.log(`📥 Downloading ${url}`);
 
@@ -345,21 +404,26 @@ async function fetchYearRows(year: number): Promise<HouseRow[]> {
     }
 
     let bestRows: HouseRow[] = [];
+    let bestHeaders: string[] = [];
+    let selectedFile: string | null = null;
     let bestScore = -1;
 
     for (const candidate of candidates) {
       const content = await readZipEntry(zipPath, candidate);
-      const rows = parseDelimited(content);
+      const parsed = parseDelimited(content);
+      const rows = parsed.rows;
       if (rows.length === 0) continue;
 
       const score = scoreFileContent(content);
-      if (score > bestScore) {
+      if (score > bestScore || (score === bestScore && rows.length > bestRows.length)) {
         bestScore = score;
         bestRows = rows;
+        bestHeaders = parsed.headers;
+        selectedFile = candidate;
       }
     }
 
-    return bestRows;
+    return { rows: bestRows, zipEntries: entries, selectedFile, selectedHeaders: bestHeaders };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -460,19 +524,44 @@ async function main() {
   console.log(`🏛️ House import started for year(s): ${years.join(", ")}`);
 
   const normalizedRows: NormalizedDisclosure[] = [];
+  const failureReasonCounts = new Map<NormalizationFailureReason, number>();
+  let rejectedRows = 0;
 
   for (const year of years) {
-    const sourceRows = await fetchYearRows(year);
+    const fetchResult = await fetchYearRows(year);
+    const sourceRows = fetchResult.rows;
     console.log(`📄 ${year}: parsed ${sourceRows.length} source rows.`);
+    console.log(`🧭 ${year}: ZIP entries discovered (${fetchResult.zipEntries.length}):`);
+    for (const entry of fetchResult.zipEntries) {
+      console.log(`   - ${entry}`);
+    }
+    console.log(`🧪 ${year}: selected file for parsing: ${fetchResult.selectedFile ?? "(none)"}`);
+    console.log(`🧪 ${year}: parsed headers: ${fetchResult.selectedHeaders.join(" | ")}`);
+    console.log(`🧪 ${year}: first ${Math.min(10, sourceRows.length)} source rows:`);
+    sourceRows.slice(0, 10).forEach((row, index) => {
+      console.log(`   [${index + 1}] ${JSON.stringify(row)}`);
+    });
 
     for (const sourceRow of sourceRows) {
       const normalized = normalizeRow(sourceRow, year);
-      if (!normalized) continue;
+      if (!normalized) {
+        rejectedRows += 1;
+        const reasons = classifyNormalizationFailure(sourceRow);
+        for (const reason of reasons) {
+          failureReasonCounts.set(reason, (failureReasonCounts.get(reason) ?? 0) + 1);
+        }
+        continue;
+      }
       normalizedRows.push(normalized);
     }
   }
 
   console.log(`🧪 Normalized ${normalizedRows.length} disclosure row(s).`);
+  console.log(`🧪 Rejected ${rejectedRows} row(s) during normalization.`);
+  console.log("🧪 Normalization failure reasons:");
+  for (const [reason, count] of [...failureReasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`   - ${reason}: ${count}`);
+  }
 
   const stats = await importNormalizedDisclosures(normalizedRows);
 
