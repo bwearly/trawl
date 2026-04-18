@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import WatchButton from "@/components/watchlist/WatchButton";
+import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 
@@ -18,6 +19,9 @@ type SignalCardProps = {
   tradeDate: Date | null;
   filingDate: Date | null;
   filingLagDays: number | null;
+  return7d?: string | null;
+  return30d?: string | null;
+  historicalSampleSize?: number | null;
   sourceUrl: string | null;
   primaryReason: string | null;
   reasonSummary: string | null;
@@ -61,6 +65,9 @@ export default function SignalCard({
   tradeDate,
   filingDate,
   filingLagDays,
+  return7d,
+  return30d,
+  historicalSampleSize,
   sourceUrl,
   primaryReason,
   reasonSummary,
@@ -85,6 +92,12 @@ export default function SignalCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm text-gray-500">Research signal</p>
             <SignalStrengthBadge tier={alertTier} />
+            <SignalConfidenceBadge
+              hasReturn7d={return7d != null}
+              hasReturn30d={return30d != null}
+              historicalSampleSize={historicalSampleSize}
+              filingLagDays={filingLagDays}
+            />
           </div>
         </div>
 

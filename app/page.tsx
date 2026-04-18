@@ -100,6 +100,9 @@ export default async function Home() {
                     tradeDate={signal.tradeDate}
                     filingDate={signal.filingDate}
                     filingLagDays={signal.filingLagDays}
+                    return7d={signal.return7d}
+                    return30d={signal.return30d}
+                    historicalSampleSize={signal.historicalSampleSize}
                     sourceUrl={signal.sourceUrl}
                     primaryReason={signal.primaryReason}
                     reasonSummary={signal.reasonSummary}
@@ -154,6 +157,9 @@ export default async function Home() {
                   tradeDate={signal.tradeDate}
                   filingDate={signal.filingDate}
                   filingLagDays={signal.filingLagDays}
+                  return7d={signal.return7d}
+                  return30d={signal.return30d}
+                  historicalSampleSize={signal.historicalSampleSize}
                   sourceUrl={signal.sourceUrl}
                   primaryReason={signal.primaryReason}
                   reasonSummary={signal.reasonSummary}
@@ -218,6 +224,9 @@ export default async function Home() {
                     tradeDate={signal.tradeDate}
                     filingDate={signal.filingDate}
                     filingLagDays={signal.filingLagDays}
+                    return7d={signal.return7d}
+                    return30d={signal.return30d}
+                    historicalSampleSize={signal.historicalSampleSize}
                     sourceUrl={signal.sourceUrl}
                     primaryReason={signal.primaryReason}
                     reasonSummary={signal.reasonSummary}

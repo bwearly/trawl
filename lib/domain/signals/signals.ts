@@ -1,6 +1,12 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
+import {
+  disclosurePerformanceWindows,
+  disclosures,
+  politicianStats,
+  politicians,
+  researchSignals,
+} from "@/lib/db/schema";
 
 export type SignalFilters = {
   minScore: "0" | "50" | "70" | "80";
@@ -24,6 +30,9 @@ export type SignalRow = {
   tradeDate: Date | null;
   filingDate: Date | null;
   filingLagDays: number | null;
+  return7d: string | null;
+  return30d: string | null;
+  historicalSampleSize: number | null;
   sourceUrl: string | null;
   signalDate: Date;
 };
@@ -107,12 +116,20 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       filingLagDays: disclosures.filingLagDays,
+      return7d: disclosurePerformanceWindows.return7d,
+      return30d: disclosurePerformanceWindows.return30d,
+      historicalSampleSize: politicianStats.totalDisclosures,
       sourceUrl: disclosures.sourceUrl,
       signalDate: researchSignals.signalDate,
     })
     .from(researchSignals)
     .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
+    .leftJoin(
+      disclosurePerformanceWindows,
+      eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
+    )
+    .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(whereFilters.length ? and(...whereFilters) : undefined)
     .orderBy(
       filters.sort === "newest"
