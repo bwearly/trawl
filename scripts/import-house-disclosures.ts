@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { resolveHouseTicker, type TickerResolutionSource } from "./lib/house-asset-resolution";
 import { db } from "../lib/db";
 import { disclosures, politicians } from "../lib/db/schema";
 
@@ -26,15 +27,6 @@ const AMOUNT_RANGE_MAP: Record<string, { min: number | null; max: number | null 
   "$25,000,001 - $50,000,000": { min: 25000001, max: 50000000 },
   "Over $50,000,000": { min: 50000001, max: null },
   "Over $1,000,000": { min: 1000001, max: null },
-};
-
-const ASSET_NAME_TO_TICKER: Record<string, string> = {
-  "ALPHABET INC": "GOOGL",
-  "AMAZON.COM INC": "AMZN",
-  "APPLE INC": "AAPL",
-  "MICROSOFT CORP": "MSFT",
-  "NVIDIA CORP": "NVDA",
-  "TESLA INC": "TSLA",
 };
 
 type HouseRow = Record<string, string>;
@@ -78,6 +70,8 @@ type NormalizedDisclosure = {
   filingLagDays: number | null;
   sourceUrl: string | null;
   sourceLabel: string;
+  normalizedAssetName: string;
+  tickerResolutionSource: TickerResolutionSource;
 };
 
 type ImportStats = {
@@ -251,23 +245,6 @@ function normalizeAmountRange(raw: string | null): {
   }
 
   return { label, min: null, max: null };
-}
-
-function resolveTicker(rawTicker: string | null, assetName: string): string | null {
-  if (rawTicker) {
-    const clean = rawTicker.trim().toUpperCase();
-    if (/^[A-Z.\-]{1,10}$/.test(clean)) {
-      return clean;
-    }
-  }
-
-  const normalizedAsset = assetName
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return ASSET_NAME_TO_TICKER[normalizedAsset] ?? null;
 }
 
 function buildSourceUrl(year: number, row: HouseRow): string | null {
@@ -481,12 +458,17 @@ function parsePtrTransactionsFromPdfText(params: {
       ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
+    const resolvedTicker = resolveHouseTicker({
+      rawTicker,
+      rawAssetName: assetName,
+    });
+
     normalized.push({
       politicianName,
       party,
       state,
       chamber: "house",
-      ticker: resolveTicker(rawTicker, assetName),
+      ticker: resolvedTicker.ticker,
       assetName,
       assetType: inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeMatch[1] ?? null),
@@ -499,6 +481,8 @@ function parsePtrTransactionsFromPdfText(params: {
       filingLagDays,
       sourceUrl,
       sourceLabel: HOUSE_SOURCE_LABEL,
+      normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
+      tickerResolutionSource: resolvedTicker.source,
     });
   }
 
@@ -560,14 +544,17 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
     getValue(row, ["amount", "amount range", "amount range label", "value"])
   );
 
-  const ticker = resolveTicker(getValue(row, ["ticker", "symbol"]), assetName);
+  const resolvedTicker = resolveHouseTicker({
+    rawTicker: getValue(row, ["ticker", "symbol"]),
+    rawAssetName: assetName,
+  });
 
   return {
     politicianName,
     party: normalizeParty(getValue(row, ["party"])),
     state: getValue(row, ["state", "district state", "st"]),
     chamber: "house",
-    ticker,
+    ticker: resolvedTicker.ticker,
     assetName,
     assetType: inferAssetType(assetName),
     tradeType: normalizeTradeType(getValue(row, ["type", "transaction type", "tx type"])),
@@ -580,6 +567,8 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
     filingLagDays,
     sourceUrl: buildSourceUrl(year, row),
     sourceLabel: HOUSE_SOURCE_LABEL,
+    normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
+    tickerResolutionSource: resolvedTicker.source,
   };
 }
 
@@ -810,6 +799,8 @@ async function main() {
 
   const normalizedRows: NormalizedDisclosure[] = [];
   const failureReasonCounts = new Map<NormalizationFailureReason, number>();
+  const tickerResolutionCounts = new Map<TickerResolutionSource, number>();
+  const unresolvedAssetCounts = new Map<string, number>();
   let rejectedRows = 0;
 
   for (const year of years) {
@@ -951,11 +942,33 @@ async function main() {
     }
   }
 
+  for (const row of normalizedRows) {
+    tickerResolutionCounts.set(
+      row.tickerResolutionSource,
+      (tickerResolutionCounts.get(row.tickerResolutionSource) ?? 0) + 1
+    );
+    if (row.tickerResolutionSource === "unresolved") {
+      unresolvedAssetCounts.set(
+        row.normalizedAssetName,
+        (unresolvedAssetCounts.get(row.normalizedAssetName) ?? 0) + 1
+      );
+    }
+  }
+
   console.log(`🧪 Normalized ${normalizedRows.length} disclosure row(s).`);
   console.log(`🧪 Rejected ${rejectedRows} row(s) during normalization.`);
   console.log("🧪 Normalization failure reasons:");
   for (const [reason, count] of [...failureReasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`   - ${reason}: ${count}`);
+  }
+  console.log("🧪 Ticker resolution diagnostics:");
+  console.log(`   - explicit: ${tickerResolutionCounts.get("explicit") ?? 0}`);
+  console.log(`   - mapping: ${tickerResolutionCounts.get("mapping") ?? 0}`);
+  console.log(`   - pattern: ${tickerResolutionCounts.get("pattern") ?? 0}`);
+  console.log(`   - unresolved: ${tickerResolutionCounts.get("unresolved") ?? 0}`);
+  console.log("🧪 Top unresolved normalized asset names:");
+  for (const [asset, count] of [...unresolvedAssetCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+    console.log(`   - ${asset}: ${count}`);
   }
 
   const stats = await importNormalizedDisclosures(normalizedRows);
