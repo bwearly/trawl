@@ -7,7 +7,6 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { inflateSync } from "node:zlib";
 import { db } from "../lib/db";
 import { disclosures, politicians } from "../lib/db/schema";
 
@@ -306,46 +305,63 @@ function buildDocumentUrlGuesses(year: number, docIdRaw: string): string[] {
   ];
 }
 
-function decodePdfTextBuffer(buffer: Buffer): string | null {
-  const raw = buffer.toString("latin1");
-  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  const chunks: string[] = [];
+async function extractPdfTextBuffer(buffer: Buffer): Promise<{
+  text: string | null;
+  pageCount: number;
+}> {
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+    });
+    const pdfDocument = await loadingTask.promise;
+    const pageTexts: string[] = [];
 
-  for (const match of raw.matchAll(streamRegex)) {
-    const streamBody = match[1];
-    if (!streamBody) continue;
+    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      const lines: string[] = [];
+      let lineBuffer = "";
 
-    const binary = Buffer.from(streamBody, "latin1");
-    let decoded: Buffer | null = null;
+      for (const item of textContent.items as Array<{ str?: string; hasEOL?: boolean }>) {
+        const value = (item.str ?? "").replace(/\u00a0/g, " ").trim();
+        if (!value) {
+          if (item.hasEOL && lineBuffer.trim().length > 0) {
+            lines.push(lineBuffer.trim());
+            lineBuffer = "";
+          }
+          continue;
+        }
 
-    try {
-      decoded = inflateSync(binary);
-    } catch {
-      decoded = binary;
+        lineBuffer = lineBuffer ? `${lineBuffer} ${value}` : value;
+
+        if (item.hasEOL) {
+          lines.push(lineBuffer.trim());
+          lineBuffer = "";
+        }
+      }
+
+      if (lineBuffer.trim().length > 0) {
+        lines.push(lineBuffer.trim());
+      }
+
+      pageTexts.push(lines.join("\n"));
     }
 
-    const text = decoded.toString("latin1");
-    const textFragments = [...text.matchAll(/\(([^()]*)\)\s*Tj/g), ...text.matchAll(/\(([^()]*)\)\s*TJ/g)]
-      .map((entry) => entry[1])
-      .filter(Boolean);
-
-    if (textFragments.length > 0) {
-      chunks.push(textFragments.join(" "));
-      continue;
-    }
-
-    const plain = text
-      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (plain.length > 30) chunks.push(plain);
+    const text = pageTexts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    await loadingTask.destroy();
+    return {
+      text: text.length > 0 ? text : null,
+      pageCount: pdfDocument.numPages,
+    };
+  } catch {
+    return {
+      text: null,
+      pageCount: 0,
+    };
   }
-
-  if (chunks.length === 0) {
-    return null;
-  }
-
-  return chunks.join("\n").replace(/\\([nrtbf()\\])/g, "$1");
 }
 
 function parseOwnerTypeFromText(line: string): NormalizedDisclosure["ownerType"] {
@@ -846,7 +862,8 @@ async function main() {
         continue;
       }
 
-      const extractedText = decodePdfTextBuffer(pdfFetch.buffer);
+      const extraction = await extractPdfTextBuffer(pdfFetch.buffer);
+      const extractedText = extraction.text;
       const textPreview = (extractedText ?? "")
         .replace(/\s+/g, " ")
         .slice(0, 320)
@@ -855,7 +872,7 @@ async function main() {
         `   📄 Candidate[${index + 1}] DocID=${docId} fetch result: status=${pdfFetch.status} content-type=${pdfFetch.contentType ?? "(unknown)"}`
       );
       console.log(
-        `      extraction: ${extractedText ? "success" : "failed"} preview="${textPreview || "(empty)"}"`
+        `      extraction: ${extractedText ? "success" : "failed"} pages=${extraction.pageCount} text-length=${extractedText?.length ?? 0} preview="${textPreview || "(empty)"}"`
       );
 
       if (!extractedText) {
