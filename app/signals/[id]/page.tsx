@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import {
   disclosurePerformanceWindows,
   disclosures,
+  politicianStats,
   politicians,
   priceHistory,
   researchSignals,
 } from "@/lib/db/schema";
 import SignalPriceChart from "./SignalPriceChart";
+import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 
@@ -75,6 +77,7 @@ export default async function SignalDetailPage({
       filingDate: disclosures.filingDate,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
+      historicalSampleSize: politicianStats.totalDisclosures,
 
       tradeDatePrice: disclosurePerformanceWindows.tradeDatePrice,
       filingDatePrice: disclosurePerformanceWindows.filingDatePrice,
@@ -88,6 +91,7 @@ export default async function SignalDetailPage({
     .from(researchSignals)
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
     .innerJoin(politicians, eq(disclosures.politicianId, politicians.id))
+    .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .leftJoin(
       disclosurePerformanceWindows,
       eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
@@ -215,6 +219,12 @@ export default async function SignalDetailPage({
                 Signal #{signal.id}
               </span>
               <SignalStrengthBadge tier={alertTier} />
+              <SignalConfidenceBadge
+                hasReturn7d={signal.return7d != null}
+                hasReturn30d={signal.return30d != null}
+                historicalSampleSize={signal.historicalSampleSize}
+                filingLagDays={signal.filingLagDays}
+              />
             </div>
 
             <p className="text-base text-gray-600">

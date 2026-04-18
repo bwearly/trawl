@@ -1,6 +1,12 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
+import {
+  disclosurePerformanceWindows,
+  disclosures,
+  politicianStats,
+  politicians,
+  researchSignals,
+} from "@/lib/db/schema";
 
 export async function getTopPicks(limit = 6) {
   return db
@@ -19,11 +25,19 @@ export async function getTopPicks(limit = 6) {
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       filingLagDays: disclosures.filingLagDays,
+      return7d: disclosurePerformanceWindows.return7d,
+      return30d: disclosurePerformanceWindows.return30d,
+      historicalSampleSize: politicianStats.totalDisclosures,
       sourceUrl: disclosures.sourceUrl,
     })
     .from(researchSignals)
     .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
+    .leftJoin(
+      disclosurePerformanceWindows,
+      eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
+    )
+    .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(
       and(
         eq(researchSignals.signalStatus, "active"),

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   disclosurePerformanceWindows,
   disclosures,
+  politicianStats,
   politicians,
   researchSignals,
 } from "@/lib/db/schema";
@@ -45,6 +46,9 @@ export async function getBiggestOutperformers(limit = 6) {
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       filingLagDays: disclosures.filingLagDays,
+      return7d: disclosurePerformanceWindows.return7d,
+      return30d: disclosurePerformanceWindows.return30d,
+      historicalSampleSize: politicianStats.totalDisclosures,
       sourceUrl: disclosures.sourceUrl,
       signalDate: researchSignals.signalDate,
       alpha7d: sql<number | null>`(
@@ -59,6 +63,7 @@ export async function getBiggestOutperformers(limit = 6) {
     .from(researchSignals)
     .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
+    .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .innerJoin(
       disclosurePerformanceWindows,
       eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
