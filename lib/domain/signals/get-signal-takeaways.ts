@@ -108,7 +108,7 @@ export function getSignalTakeaways(input: GetSignalTakeawaysInput): string[] {
   if (takeaways.length < 2) {
     if (input.alertTier === "high_conviction") {
       takeaways.push("Meets high-conviction alert thresholds in the current model.");
-    } else if (input.alertTier === "eligible") {
+    } else if (input.alertTier === "normal") {
       takeaways.push("Meets alert-eligible thresholds in the current model.");
     }
   }
