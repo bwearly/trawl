@@ -12,9 +12,16 @@ import {
 import SignalPriceChart from "./SignalPriceChart";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
+import WatchButton from "@/components/watchlist/WatchButton";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 import { getSignalConfidenceTier } from "@/lib/domain/signals/get-signal-confidence-tier";
 import { getSignalTakeaways } from "@/lib/domain/signals/get-signal-takeaways";
+import {
+  isPoliticianWatched,
+  isTickerWatched,
+} from "@/lib/domain/watchlists/watchlists";
+
+const DEMO_USER_ID = "demo-user";
 
 function formatCurrency(value: string | null) {
   if (value == null) return "—";
@@ -218,6 +225,11 @@ export default async function SignalDetailPage({
     tradeSizeScore: signal.tradeSizeScore,
     historicalPoliticianScore: signal.historicalPoliticianScore,
   });
+  const [initialIsWatchingTicker, initialIsWatchingPolitician] =
+    await Promise.all([
+      isTickerWatched(DEMO_USER_ID, signal.ticker),
+      isPoliticianWatched(DEMO_USER_ID, signal.politicianId),
+    ]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -276,11 +288,28 @@ export default async function SignalDetailPage({
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
-            <p className="text-sm font-medium text-gray-500">Signal Score</p>
-            <p className="mt-1 text-3xl font-semibold text-gray-950">
-              {signal.score}
-            </p>
+          <div className="flex flex-col items-start gap-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
+              <p className="text-sm font-medium text-gray-500">Signal Score</p>
+              <p className="mt-1 text-3xl font-semibold text-gray-950">
+                {signal.score}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <WatchButton
+                itemType="politician"
+                politicianId={signal.politicianId}
+                size="sm"
+                variant="ghost"
+                initialIsWatching={initialIsWatchingPolitician}
+              />
+              <WatchButton
+                itemType="ticker"
+                ticker={signal.ticker}
+                size="sm"
+                initialIsWatching={initialIsWatchingTicker}
+              />
+            </div>
           </div>
         </div>
 

@@ -132,6 +132,11 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               </h1>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                {initialIsWatching && (
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                    Watching
+                  </span>
+                )}
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
                   {toTitleCase(data.politician.chamber)}
                 </span>

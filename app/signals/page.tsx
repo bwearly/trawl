@@ -5,6 +5,7 @@ import {
   getSignals,
   parseSignalFilters,
 } from "@/lib/domain/signals/signals";
+import { getWatchedTickers } from "@/lib/domain/watchlists/watchlists";
 
 type SearchParams = {
   minScore?: string | string[];
@@ -33,9 +34,10 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     sort: firstParam(params.sort),
   });
 
-  const [rows, unreadAlertsCount] = await Promise.all([
+  const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([
     getSignals(initialFilters),
     getUnreadAlertsCount(DEMO_USER_ID),
+    getWatchedTickers(DEMO_USER_ID),
   ]);
 
   return (
@@ -81,6 +83,7 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
         <SignalsFeedClient
           initialSignals={rows}
           initialFilters={initialFilters}
+          initialWatchedTickers={watchedTickers}
         />
       </div>
     </main>

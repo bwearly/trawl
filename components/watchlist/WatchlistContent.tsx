@@ -43,15 +43,56 @@ export default function WatchlistContent({
 }: WatchlistContentProps) {
   const [politicians, setPoliticians] = useState(initialPoliticians);
   const [tickers, setTickers] = useState(initialTickers);
+  const totalWatched = politicians.length + tickers.length;
+  const hasItems = totalWatched > 0;
 
   return (
     <>
+      {!hasItems && (
+        <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-950">
+            Start building your watchlist
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-gray-600">
+            Save tickers and politicians while researching signals so you can
+            quickly revisit names that matter to you.
+          </p>
+
+          <div className="mt-5 flex flex-wrap gap-2.5">
+            <Link
+              href="/signals"
+              className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+            >
+              Browse research signals
+            </Link>
+            <Link
+              href="/politicians"
+              className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Explore politicians
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-gray-950">Watched Politicians</h2>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-950">Watched Politicians</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Track who&apos;s behind the trades and jump back into their recent signals.
+            </p>
+          </div>
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">
+            {politicians.length} saved
+          </span>
+        </div>
 
         <div className="mt-4 space-y-3">
           {politicians.length === 0 && (
-            <div className="text-sm text-gray-500">No politicians added yet.</div>
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+              No politicians saved yet.
+            </div>
           )}
 
           {politicians.map((p) => (
@@ -110,11 +151,23 @@ export default function WatchlistContent({
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-gray-950">Watched Tickers</h2>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-950">Watched Tickers</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Keep high-interest names close and revisit disclosure flow quickly.
+            </p>
+          </div>
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">
+            {tickers.length} saved
+          </span>
+        </div>
 
         <div className="mt-4 space-y-3">
           {tickers.length === 0 && (
-            <div className="text-sm text-gray-500">No tickers added yet.</div>
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+              No tickers saved yet.
+            </div>
           )}
 
           {tickers.map((t) => (
