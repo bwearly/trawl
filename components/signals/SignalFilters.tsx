@@ -177,8 +177,8 @@ export default function SignalFilters({
     searchResults.politicians.length > 0 || searchResults.tickers.length > 0;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="space-y-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="space-y-3.5">
         <div ref={searchContainerRef} className="relative">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
