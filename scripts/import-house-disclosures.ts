@@ -308,20 +308,30 @@ function buildDocumentUrlGuesses(year: number, docIdRaw: string): string[] {
 async function extractPdfTextBuffer(buffer: Buffer): Promise<{
   text: string | null;
   pageCount: number;
+  pageItemCounts: number[];
+  error: string | null;
 }> {
   try {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
+      data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
+      disableWorker: true,
       useWorkerFetch: false,
       isEvalSupported: false,
+      stopAtErrors: false,
+      verbosity: pdfjs.VerbosityLevel.WARNINGS,
     });
+    loadingTask.onPassword = () => {
+      throw new Error("Password-protected PDF is not supported.");
+    };
     const pdfDocument = await loadingTask.promise;
     const pageTexts: string[] = [];
+    const pageItemCounts: number[] = [];
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
       const page = await pdfDocument.getPage(pageNumber);
       const textContent = await page.getTextContent();
+      pageItemCounts.push(textContent.items.length);
       const lines: string[] = [];
       let lineBuffer = "";
 
@@ -355,11 +365,15 @@ async function extractPdfTextBuffer(buffer: Buffer): Promise<{
     return {
       text: text.length > 0 ? text : null,
       pageCount: pdfDocument.numPages,
+      pageItemCounts,
+      error: null,
     };
-  } catch {
+  } catch (error) {
     return {
       text: null,
       pageCount: 0,
+      pageItemCounts: [],
+      error: error instanceof Error ? `${error.name}: ${error.message}` : "Unknown PDF extraction error",
     };
   }
 }
@@ -868,12 +882,26 @@ async function main() {
         .replace(/\s+/g, " ")
         .slice(0, 320)
         .trim();
+      const shouldLogPdfDebug = index < 3;
       console.log(
         `   📄 Candidate[${index + 1}] DocID=${docId} fetch result: status=${pdfFetch.status} content-type=${pdfFetch.contentType ?? "(unknown)"}`
       );
       console.log(
         `      extraction: ${extractedText ? "success" : "failed"} pages=${extraction.pageCount} text-length=${extractedText?.length ?? 0} preview="${textPreview || "(empty)"}"`
       );
+      if (shouldLogPdfDebug) {
+        console.log(
+          `      debug: bytes=${pdfFetch.buffer.byteLength} getDocument=${extraction.error ? "failed" : "ok"} numPages=${extraction.pageCount}`
+        );
+        if (extraction.pageItemCounts.length > 0) {
+          console.log(
+            `      debug: per-page text item counts=${extraction.pageItemCounts.join(", ")}`
+          );
+        }
+        if (extraction.error) {
+          console.log(`      debug: pdfjs error=${extraction.error}`);
+        }
+      }
 
       if (!extractedText) {
         continue;
