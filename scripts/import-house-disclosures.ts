@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { inflateSync } from "node:zlib";
 import { db } from "../lib/db";
 import { disclosures, politicians } from "../lib/db/schema";
 
@@ -85,6 +86,13 @@ type ImportStats = {
   skippedDuplicate: number;
   skippedInvalid: number;
 };
+
+type PtrRowSkipReason =
+  | "missing_trade_date"
+  | "missing_trade_type"
+  | "missing_asset_name"
+  | "missing_politician_name"
+  | "ambiguous_line";
 
 function getArgValue(flag: string): string | undefined {
   const arg = process.argv.find((entry) => entry.startsWith(`${flag}=`));
@@ -298,20 +306,180 @@ function buildDocumentUrlGuesses(year: number, docIdRaw: string): string[] {
   ];
 }
 
-function analyzeTransactionSignals(text: string): { matchedKeywords: string[]; appearsTransactionLike: boolean } {
-  const keywords = ["asset", "purchase", "sale", "date", "amount", "owner", "transaction", "ticker"];
-  const lower = text.toLowerCase();
-  const matchedKeywords = keywords.filter((keyword) => lower.includes(keyword));
-  return { matchedKeywords, appearsTransactionLike: matchedKeywords.length >= 3 };
+function decodePdfTextBuffer(buffer: Buffer): string | null {
+  const raw = buffer.toString("latin1");
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const chunks: string[] = [];
+
+  for (const match of raw.matchAll(streamRegex)) {
+    const streamBody = match[1];
+    if (!streamBody) continue;
+
+    const binary = Buffer.from(streamBody, "latin1");
+    let decoded: Buffer | null = null;
+
+    try {
+      decoded = inflateSync(binary);
+    } catch {
+      decoded = binary;
+    }
+
+    const text = decoded.toString("latin1");
+    const textFragments = [...text.matchAll(/\(([^()]*)\)\s*Tj/g), ...text.matchAll(/\(([^()]*)\)\s*TJ/g)]
+      .map((entry) => entry[1])
+      .filter(Boolean);
+
+    if (textFragments.length > 0) {
+      chunks.push(textFragments.join(" "));
+      continue;
+    }
+
+    const plain = text
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (plain.length > 30) chunks.push(plain);
+  }
+
+  if (chunks.length === 0) {
+    return null;
+  }
+
+  return chunks.join("\n").replace(/\\([nrtbf()\\])/g, "$1");
 }
 
-async function inspectDocumentFromGuesses(urls: string[]): Promise<{
+function parseOwnerTypeFromText(line: string): NormalizedDisclosure["ownerType"] {
+  const upper = line.toUpperCase();
+  if (/\bSP(OUSE)?\b/.test(upper)) return "spouse";
+  if (/\bDC\b|\bDEPENDENT\b|\bCHILD\b/.test(upper)) return "dependent";
+  if (/\bJT\b|\bJOINT\b/.test(upper)) return "joint";
+  if (/\bSELF\b/.test(upper)) return "self";
+  return "unknown";
+}
+
+function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
+  const explicit = getValue(row, ["filer", "name", "member", "full name"]);
+  if (explicit) return explicit;
+
+  const prefix = (getValue(row, ["prefix"]) ?? "").trim();
+  const first = (getValue(row, ["first", "firstname"]) ?? "").trim();
+  const last = (getValue(row, ["last", "lastname"]) ?? "").trim();
+  const combined = [prefix, first, last].filter(Boolean).join(" ").trim();
+  return combined.length > 0 ? combined : null;
+}
+
+function parsePtrTransactionsFromPdfText(params: {
+  text: string;
+  sourceRow: HouseRow;
+  sourceUrl: string;
+}): {
+  normalized: NormalizedDisclosure[];
+  transactionLikeLineCount: number;
+  skipReasons: Map<PtrRowSkipReason, number>;
+} {
+  const { text, sourceRow, sourceUrl } = params;
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 0);
+
+  const skipReasons = new Map<PtrRowSkipReason, number>();
+  const normalized: NormalizedDisclosure[] = [];
+  const politicianName = buildPoliticianNameFromHouseRow(sourceRow);
+  const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
+  const party = normalizeParty(getValue(sourceRow, ["party"]));
+  const state = getValue(sourceRow, ["state"]);
+
+  let transactionLikeLineCount = 0;
+
+  for (const line of lines) {
+    const hasDate = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(line);
+    const hasTradeType = /\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/i.test(line);
+    const hasAmount = /\$\s?[\d,]+/.test(line) || /over\s+\$\s?[\d,]+/i.test(line);
+    if (!(hasDate && hasTradeType && hasAmount)) {
+      continue;
+    }
+
+    transactionLikeLineCount += 1;
+
+    if (!politicianName) {
+      skipReasons.set("missing_politician_name", (skipReasons.get("missing_politician_name") ?? 0) + 1);
+      continue;
+    }
+
+    const dates = [...line.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)].map((match) => match[0]);
+    const tradeDate = parseDate(dates[0] ?? null);
+    if (!tradeDate) {
+      skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
+      continue;
+    }
+
+    const tradeTypeMatch = line.match(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/i);
+    if (!tradeTypeMatch) {
+      skipReasons.set("missing_trade_type", (skipReasons.get("missing_trade_type") ?? 0) + 1);
+      continue;
+    }
+
+    const amountMatch = line.match(
+      /(Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+|\$1,001\s*-\s*\$15,000|\$15,001\s*-\s*\$50,000|\$50,001\s*-\s*\$100,000|\$100,001\s*-\s*\$250,000|\$250,001\s*-\s*\$500,000|\$500,001\s*-\s*\$1,000,000|\$1,000,001\s*-\s*\$5,000,000|\$5,000,001\s*-\s*\$25,000,000|\$25,000,001\s*-\s*\$50,000,000)/i
+    );
+    const amount = normalizeAmountRange(amountMatch?.[1] ?? null);
+
+    const tickerMatch = line.match(/\(([A-Z.\-]{1,8})\)/);
+    const rawTicker = tickerMatch?.[1] ?? null;
+
+    const assetCandidate = line
+      .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ")
+      .replace(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/gi, " ")
+      .replace(/\b(Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+)\b/gi, " ")
+      .replace(/\b(SP|JT|DC|SELF|SPOUSE|DEPENDENT)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const assetName = assetCandidate.replace(/^\W+|\W+$/g, "").trim();
+    if (!assetName || assetName.length < 3) {
+      skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      continue;
+    }
+
+    if (assetName.split(" ").length > 40) {
+      skipReasons.set("ambiguous_line", (skipReasons.get("ambiguous_line") ?? 0) + 1);
+      continue;
+    }
+
+    const filingLagDays = filingDate
+      ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    normalized.push({
+      politicianName,
+      party,
+      state,
+      chamber: "house",
+      ticker: resolveTicker(rawTicker, assetName),
+      assetName,
+      assetType: inferAssetType(assetName),
+      tradeType: normalizeTradeType(tradeTypeMatch[1] ?? null),
+      ownerType: parseOwnerTypeFromText(line),
+      amountRangeLabel: amount.label,
+      amountMin: amount.min,
+      amountMax: amount.max,
+      tradeDate,
+      filingDate,
+      filingLagDays,
+      sourceUrl,
+      sourceLabel: HOUSE_SOURCE_LABEL,
+    });
+  }
+
+  return { normalized, transactionLikeLineCount, skipReasons };
+}
+
+async function fetchPdfFromGuesses(urls: string[]): Promise<{
   finalUrl: string | null;
   status: number | null;
   contentType: string | null;
-  kind: "text_like" | "binary_like" | "unavailable";
-  preview: string | null;
-  matchedKeywords: string[];
+  buffer: Buffer | null;
 }> {
   for (const url of urls) {
     try {
@@ -320,33 +488,14 @@ async function inspectDocumentFromGuesses(urls: string[]): Promise<{
 
       const contentType = response.headers.get("content-type");
       const normalizedContentType = (contentType ?? "").toLowerCase();
-      const isTextLike =
-        normalizedContentType.includes("text/") ||
-        normalizedContentType.includes("html") ||
-        normalizedContentType.includes("xml") ||
-        normalizedContentType.includes("json");
+      if (!normalizedContentType.includes("pdf")) continue;
 
-      if (isTextLike) {
-        const text = await response.text();
-        const preview = text.slice(0, 1000).replace(/\s+/g, " ").trim();
-        const signal = analyzeTransactionSignals(text);
-        return {
-          finalUrl: url,
-          status: response.status,
-          contentType,
-          kind: "text_like",
-          preview,
-          matchedKeywords: signal.matchedKeywords,
-        };
-      }
-
+      const arrayBuffer = await response.arrayBuffer();
       return {
         finalUrl: url,
         status: response.status,
         contentType,
-        kind: "binary_like",
-        preview: null,
-        matchedKeywords: [],
+        buffer: Buffer.from(arrayBuffer),
       };
     } catch {
       continue;
@@ -357,9 +506,7 @@ async function inspectDocumentFromGuesses(urls: string[]): Promise<{
     finalUrl: null,
     status: null,
     contentType: null,
-    kind: "unavailable",
-    preview: null,
-    matchedKeywords: [],
+    buffer: null,
   };
 }
 
@@ -659,16 +806,13 @@ async function main() {
       console.log(`   [${index + 1}] ${JSON.stringify(row)}`);
     });
 
-    const rowsWithDocId = sourceRows.filter((row) => Boolean(getRowDocId(row)));
     const filingTypeP = sourceRows.filter(
       (row) => (getRowFilingType(row) ?? "").trim().toUpperCase() === "P"
     );
-    const ptrCandidates = [...filingTypeP, ...rowsWithDocId.filter((row) => !filingTypeP.includes(row))]
-      .slice(0, 5);
 
     console.log(`🧪 ${year}: FilingType=P rows: ${filingTypeP.length}`);
-    console.log(`🧪 ${year}: PTR candidate sample count: ${ptrCandidates.length}`);
-    ptrCandidates.forEach((row, index) => {
+    console.log(`🧪 ${year}: PTR candidate preview count: ${Math.min(5, filingTypeP.length)}`);
+    filingTypeP.slice(0, 5).forEach((row, index) => {
       const summary = {
         Prefix: row.Prefix ?? row.prefix ?? "",
         Last: row.Last ?? row.last ?? "",
@@ -680,39 +824,72 @@ async function main() {
       console.log(`   🔎 Candidate[${index + 1}] ${JSON.stringify(summary)}`);
     });
 
-    for (const [index, row] of ptrCandidates.entries()) {
+    let ptrPdfProcessed = 0;
+    let ptrPdfExtracted = 0;
+    let ptrTransactionLikeLines = 0;
+    let ptrNormalizedRows = 0;
+    const ptrSkipReasons = new Map<PtrRowSkipReason, number>();
+
+    for (const [index, row] of filingTypeP.entries()) {
       const docId = getRowDocId(row);
       if (!docId) {
-        console.log(`   📄 Candidate[${index + 1}] has no DocID; skipping document inspection.`);
+        console.log(`   📄 Candidate[${index + 1}] has no DocID; skipping PDF extraction.`);
         continue;
       }
+      ptrPdfProcessed += 1;
 
       const guessedUrls = buildDocumentUrlGuesses(year, docId);
-      console.log(`   📄 Candidate[${index + 1}] DocID=${docId}`);
-      guessedUrls.forEach((url) => {
-        console.log(`      guessed URL: ${url}`);
+      const pdfFetch = await fetchPdfFromGuesses(guessedUrls);
+
+      if (!pdfFetch.buffer || !pdfFetch.finalUrl) {
+        console.log(`   📄 Candidate[${index + 1}] DocID=${docId} fetch result: PDF unavailable`);
+        continue;
+      }
+
+      const extractedText = decodePdfTextBuffer(pdfFetch.buffer);
+      const textPreview = (extractedText ?? "")
+        .replace(/\s+/g, " ")
+        .slice(0, 320)
+        .trim();
+      console.log(
+        `   📄 Candidate[${index + 1}] DocID=${docId} fetch result: status=${pdfFetch.status} content-type=${pdfFetch.contentType ?? "(unknown)"}`
+      );
+      console.log(
+        `      extraction: ${extractedText ? "success" : "failed"} preview="${textPreview || "(empty)"}"`
+      );
+
+      if (!extractedText) {
+        continue;
+      }
+      ptrPdfExtracted += 1;
+
+      const parsed = parsePtrTransactionsFromPdfText({
+        text: extractedText,
+        sourceRow: row,
+        sourceUrl: pdfFetch.finalUrl,
       });
 
-      const inspection = await inspectDocumentFromGuesses(guessedUrls);
-      if (inspection.kind === "unavailable") {
-        console.log("      fetch result: unavailable / fetch failed");
-        continue;
-      }
+      ptrTransactionLikeLines += parsed.transactionLikeLineCount;
+      ptrNormalizedRows += parsed.normalized.length;
+
+      parsed.skipReasons.forEach((count, reason) => {
+        ptrSkipReasons.set(reason, (ptrSkipReasons.get(reason) ?? 0) + count);
+      });
+      normalizedRows.push(...parsed.normalized);
 
       console.log(
-        `      fetch result: status=${inspection.status} content-type=${inspection.contentType ?? "(unknown)"}`
+        `      transaction-like lines=${parsed.transactionLikeLineCount}, normalized disclosures=${parsed.normalized.length}`
       );
+    }
 
-      if (inspection.kind === "binary_like") {
-        console.log("      classification: PDF/binary only (no OCR attempted in debug pass)");
-        continue;
+    console.log(
+      `🧪 ${year}: PTR PDFs processed=${ptrPdfProcessed}, extraction succeeded=${ptrPdfExtracted}, transaction-like lines=${ptrTransactionLikeLines}, normalized disclosures=${ptrNormalizedRows}`
+    );
+    if (ptrSkipReasons.size > 0) {
+      console.log(`🧪 ${year}: top PTR row skip reasons:`);
+      for (const [reason, count] of [...ptrSkipReasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
+        console.log(`   - ${reason}: ${count}`);
       }
-
-      const signal = analyzeTransactionSignals(inspection.preview ?? "");
-      console.log(
-        `      classification: HTML/text/XML; transaction-like keywords found=${signal.matchedKeywords.join(", ") || "(none)"}`
-      );
-      console.log(`      content preview: ${(inspection.preview ?? "").slice(0, 400)}`);
     }
 
     for (const sourceRow of sourceRows) {
