@@ -8,6 +8,7 @@ type WatchButtonProps = {
   politicianId?: number;
   initialIsWatching?: boolean;
   size?: "default" | "sm";
+  variant?: "pill" | "ghost";
   onChange?: (isWatching: boolean) => void;
 };
 
@@ -17,6 +18,7 @@ export default function WatchButton({
   politicianId,
   initialIsWatching = false,
   size = "default",
+  variant = "pill",
   onChange,
 }: WatchButtonProps) {
   const [isWatching, setIsWatching] = useState(initialIsWatching);
@@ -65,6 +67,28 @@ export default function WatchButton({
       ? "inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium transition"
       : "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition";
 
+  const icon = isWatching ? "★" : "☆";
+
+  const label =
+    isLoading
+      ? "Updating..."
+      : isWatching
+      ? variant === "ghost"
+        ? "Watching"
+        : "Saved"
+      : variant === "ghost"
+      ? "Watch"
+      : "Save";
+
+  const toneClasses =
+    variant === "ghost"
+      ? isWatching
+        ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100"
+        : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+      : isWatching
+      ? "bg-gray-900 text-white hover:bg-gray-800"
+      : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50";
+
   return (
     <button
       type="button"
@@ -74,13 +98,13 @@ export default function WatchButton({
         toggleWatch();
       }}
       disabled={isLoading}
-      className={`${baseClasses} ${
-        isWatching
-          ? "bg-gray-900 text-white hover:bg-gray-800"
-          : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-      } disabled:cursor-not-allowed disabled:opacity-60`}
+      aria-label={
+        isWatching ? `Remove ${itemType} from watchlist` : `Add ${itemType} to watchlist`
+      }
+      className={`${baseClasses} ${toneClasses} disabled:cursor-not-allowed disabled:opacity-60`}
     >
-      {isLoading ? "Updating..." : isWatching ? "Watching" : "Watch"}
+      <span aria-hidden>{icon}</span>
+      <span className="ml-1.5">{label}</span>
     </button>
   );
 }

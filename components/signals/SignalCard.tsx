@@ -25,6 +25,7 @@ type SignalCardProps = {
   sourceUrl: string | null;
   primaryReason: string | null;
   reasonSummary: string | null;
+  initialIsWatchingTicker?: boolean;
 };
 
 function formatDate(date: Date | null) {
@@ -71,6 +72,7 @@ export default function SignalCard({
   sourceUrl,
   primaryReason,
   reasonSummary,
+  initialIsWatchingTicker = false,
 }: SignalCardProps) {
   const alertTier = getSignalAlertTier({
     score,
@@ -199,8 +201,19 @@ export default function SignalCard({
           View news
         </button>
 
-        <div className="ml-auto sm:ml-0">
-          <WatchButton itemType="ticker" ticker={ticker} />
+        <div className="ml-auto flex items-center gap-2 sm:ml-0">
+          <WatchButton
+            itemType="politician"
+            politicianId={politicianId}
+            size="sm"
+            variant="ghost"
+          />
+          <WatchButton
+            itemType="ticker"
+            ticker={ticker}
+            size="sm"
+            initialIsWatching={initialIsWatchingTicker}
+          />
         </div>
       </div>
     </article>

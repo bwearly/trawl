@@ -8,6 +8,7 @@ import type { SignalFilters as SignalFiltersType, SignalRow } from "@/lib/domain
 type SignalsFeedClientProps = {
   initialSignals: SignalRow[];
   initialFilters: SignalFiltersType;
+  initialWatchedTickers: string[];
 };
 
 function toDate(value: Date | string | null) {
@@ -18,9 +19,11 @@ function toDate(value: Date | string | null) {
 export default function SignalsFeedClient({
   initialSignals,
   initialFilters,
+  initialWatchedTickers,
 }: SignalsFeedClientProps) {
   const [signals, setSignals] = useState<SignalRow[]>(initialSignals);
   const [isLoading, setIsLoading] = useState(false);
+  const watchedTickerSet = new Set(initialWatchedTickers);
 
   return (
     <>
@@ -65,6 +68,7 @@ export default function SignalsFeedClient({
               sourceUrl={signal.sourceUrl}
               primaryReason={signal.primaryReason}
               reasonSummary={signal.reasonSummary}
+              initialIsWatchingTicker={watchedTickerSet.has(signal.ticker)}
             />
           ))
         )}

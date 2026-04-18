@@ -161,6 +161,44 @@ export async function isPoliticianWatched(
   return Boolean(rows[0]);
 }
 
+export async function getWatchedTickers(userId: string) {
+  const watchlist = await getOrCreateDefaultWatchlist(userId);
+
+  const rows = await db
+    .select({ ticker: watchlistItems.ticker })
+    .from(watchlistItems)
+    .where(
+      and(
+        eq(watchlistItems.watchlistId, watchlist.id),
+        eq(watchlistItems.itemType, "ticker")
+      )
+    );
+
+  return rows
+    .map((row) => row.ticker)
+    .filter((ticker): ticker is string => Boolean(ticker));
+}
+
+export async function getWatchedPoliticianIds(userId: string) {
+  const watchlist = await getOrCreateDefaultWatchlist(userId);
+
+  const rows = await db
+    .select({ politicianId: watchlistItems.politicianId })
+    .from(watchlistItems)
+    .where(
+      and(
+        eq(watchlistItems.watchlistId, watchlist.id),
+        eq(watchlistItems.itemType, "politician")
+      )
+    );
+
+  return rows
+    .map((row) => row.politicianId)
+    .filter((politicianId): politicianId is number =>
+      Number.isFinite(politicianId)
+    );
+}
+
 export async function getWatchlist(userId: string) {
   const watchlist = await getOrCreateDefaultWatchlist(userId);
 
