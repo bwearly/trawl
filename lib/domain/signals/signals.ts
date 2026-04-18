@@ -13,6 +13,7 @@ export type SignalRow = {
   signalId: number;
   ticker: string;
   score: string;
+  signalStatus: string;
   primaryReason: string | null;
   reasonSummary: string | null;
   politicianId: number;
@@ -95,6 +96,7 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
       signalId: researchSignals.id,
       ticker: researchSignals.ticker,
       score: researchSignals.score,
+      signalStatus: researchSignals.signalStatus,
       primaryReason: researchSignals.primaryReason,
       reasonSummary: researchSignals.reasonSummary,
       politicianName: politicians.fullName,

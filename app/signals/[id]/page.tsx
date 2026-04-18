@@ -9,6 +9,8 @@ import {
   researchSignals,
 } from "@/lib/db/schema";
 import SignalPriceChart from "./SignalPriceChart";
+import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
+import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 
 function formatCurrency(value: string | null) {
   if (value == null) return "—";
@@ -65,7 +67,10 @@ export default async function SignalDetailPage({
     .select({
       id: researchSignals.id,
       score: researchSignals.score,
+      signalStatus: researchSignals.signalStatus,
       ticker: disclosures.ticker,
+      tradeType: disclosures.tradeType,
+      filingLagDays: disclosures.filingLagDays,
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       politicianName: politicians.fullName,
@@ -178,6 +183,12 @@ export default async function SignalDetailPage({
   const alpha7d = calcRelativeReturn(signal.return7d, signal.spyReturn7d);
   const alpha30d = calcRelativeReturn(signal.return30d, signal.spyReturn30d);
   const alpha90d = calcRelativeReturn(signal.return90d, signal.spyReturn90d);
+  const alertTier = getSignalAlertTier({
+    score: signal.score,
+    signalStatus: signal.signalStatus,
+    tradeType: signal.tradeType,
+    filingLagDays: signal.filingLagDays,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -203,6 +214,7 @@ export default async function SignalDetailPage({
               <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
                 Signal #{signal.id}
               </span>
+              <SignalStrengthBadge tier={alertTier} />
             </div>
 
             <p className="text-base text-gray-600">

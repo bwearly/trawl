@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
 import {
   alerts,
+  disclosures,
   researchSignals,
   watchlistItems,
   watchlists,
 } from "@/lib/db/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getOrCreateAlertPreferences } from "@/lib/domain/alerts/preferences";
+import { shouldGenerateAlert } from "@/lib/domain/alerts/should-generate-alert";
 
 export type AlertRow = {
   id: number;
@@ -57,7 +59,14 @@ export async function markAllAlertsAsRead(userId: string) {
     .where(and(eq(alerts.userId, userId), eq(alerts.isRead, false)));
 }
 
-export async function generateAlertsForSignal(researchSignalId: number) {
+type GenerateAlertsOptions = {
+  confidencePenalty?: number | null;
+};
+
+export async function generateAlertsForSignal(
+  researchSignalId: number,
+  options: GenerateAlertsOptions = {}
+) {
   const signalRows = await db
     .select({
       id: researchSignals.id,
@@ -65,10 +74,14 @@ export async function generateAlertsForSignal(researchSignalId: number) {
       politicianId: researchSignals.politicianId,
       ticker: researchSignals.ticker,
       score: researchSignals.score,
+      signalStatus: researchSignals.signalStatus,
       primaryReason: researchSignals.primaryReason,
       signalDate: researchSignals.signalDate,
+      tradeType: disclosures.tradeType,
+      filingLagDays: disclosures.filingLagDays,
     })
     .from(researchSignals)
+    .innerJoin(disclosures, eq(disclosures.id, researchSignals.disclosureId))
     .where(eq(researchSignals.id, researchSignalId))
     .limit(1);
 
@@ -83,6 +96,23 @@ export async function generateAlertsForSignal(researchSignalId: number) {
     signal.score === null || signal.score === undefined
       ? 0
       : Number(signal.score);
+  const eligibility = shouldGenerateAlert({
+    signalStatus: signal.signalStatus,
+    tradeType: signal.tradeType,
+    adjustedScore: signalScore,
+    confidencePenalty: options.confidencePenalty ?? null,
+    filingLagDays: signal.filingLagDays,
+  });
+
+  if (!eligibility.shouldAlert) {
+    return {
+      tickerAlertsCreated: 0,
+      politicianAlertsCreated: 0,
+      skipped: true,
+      tier: eligibility.tier,
+      blockedBy: eligibility.blockedBy,
+    };
+  }
 
   const watchedTickerRows = await db
     .select({
@@ -176,6 +206,9 @@ export async function generateAlertsForSignal(researchSignalId: number) {
   return {
     tickerAlertsCreated: eligibleTickerUserIds.length,
     politicianAlertsCreated: eligiblePoliticianUserIds.length,
+    skipped: false,
+    tier: eligibility.tier,
+    blockedBy: eligibility.blockedBy,
   };
 }
 

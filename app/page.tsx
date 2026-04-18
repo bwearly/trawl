@@ -85,6 +85,7 @@ export default async function Home() {
                     signalId={signal.signalId}
                     ticker={signal.ticker}
                     score={signal.score}
+                    signalStatus={signal.signalStatus}
                     politicianId={signal.politicanId}
                     politicianName={signal.politicianName}
                     tradeType={signal.tradeType}

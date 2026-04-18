@@ -50,6 +50,7 @@ export default function SignalsFeedClient({
               signalId={signal.signalId}
               ticker={signal.ticker}
               score={signal.score}
+              signalStatus={signal.signalStatus}
               politicianId={signal.politicianId}
               politicianName={signal.politicianName}
               tradeType={signal.tradeType}

@@ -8,6 +8,7 @@ import {
 } from "../lib/db/schema";
 import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
 import { generateAlertsForSignal } from "../lib/domain/alerts/alerts";
+import { shouldGenerateAlert } from "../lib/domain/alerts/should-generate-alert";
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
@@ -139,6 +140,13 @@ async function main() {
     if (performance?.return7d == null || performance?.spyReturn7d == null) confidencePenalty += 2;
 
     const adjustedTotalScore = Math.max(0, scored.totalScore - confidencePenalty);
+    const alertEligibility = shouldGenerateAlert({
+      signalStatus: "active",
+      tradeType: disclosure.tradeType,
+      adjustedScore: adjustedTotalScore,
+      confidencePenalty,
+      filingLagDays: disclosure.filingLagDays,
+    });
 
     const existing = await db
       .select()
@@ -172,7 +180,7 @@ async function main() {
       const updatedSignal = updatedRows[0];
 
       if (updatedSignal) {
-        await generateAlertsForSignal(updatedSignal.id);
+        await generateAlertsForSignal(updatedSignal.id, { confidencePenalty });
       }
 
       console.log(
@@ -206,7 +214,7 @@ async function main() {
       const insertedSignal = insertedRows[0];
 
       if (insertedSignal) {
-        await generateAlertsForSignal(insertedSignal.id);
+        await generateAlertsForSignal(insertedSignal.id, { confidencePenalty });
       }
 
       console.log(
@@ -227,6 +235,9 @@ async function main() {
       confidencePenalty,
       adjustedTotalScore,
       rawTotalScore: scored.totalScore,
+      shouldAlert: alertEligibility.shouldAlert,
+      alertTier: alertEligibility.tier,
+      alertBlockedBy: alertEligibility.blockedBy,
       primaryReason: scored.primaryReason,
     });
   }

@@ -8,6 +8,7 @@ export async function getTopPicks(limit = 6) {
       signalId: researchSignals.id,
       ticker: researchSignals.ticker,
       score: researchSignals.score,
+      signalStatus: researchSignals.signalStatus,
       primaryReason: researchSignals.primaryReason,
       reasonSummary: researchSignals.reasonSummary,
       politicianName: politicians.fullName,
