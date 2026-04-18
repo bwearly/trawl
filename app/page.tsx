@@ -1,9 +1,13 @@
 import Link from "next/link";
 import SignalCard from "@/components/signals/SignalCard";
+import { getRecentlyFiled } from "@/lib/domain/signals/get-recently-filed";
 import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
 
 export default async function Home() {
-  const topPicks = await getTopPicks(6);
+  const [topPicks, recentlyFiled] = await Promise.all([
+    getTopPicks(6),
+    getRecentlyFiled(6),
+  ]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-6 py-16">
@@ -99,6 +103,59 @@ export default async function Home() {
                     reasonSummary={signal.reasonSummary}
                   />
                 </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
+                Fresh disclosures
+              </p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
+                Recently Filed
+              </h2>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
+                Newest public filings to review, regardless of score ranking.
+                This feed prioritizes filing recency over signal strength.
+              </p>
+            </div>
+
+            <Link
+              href="/signals?sort=newest"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+            >
+              View newest filings →
+            </Link>
+          </div>
+
+          <div className="mt-6 space-y-5">
+            {recentlyFiled.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
+                No recent filings available yet.
+              </div>
+            ) : (
+              recentlyFiled.map((signal) => (
+                <SignalCard
+                  key={signal.signalId}
+                  signalId={signal.signalId}
+                  ticker={signal.ticker}
+                  score={signal.score}
+                  signalStatus={signal.signalStatus}
+                  politicianId={signal.politicianId}
+                  politicianName={signal.politicianName}
+                  tradeType={signal.tradeType}
+                  ownerType={signal.ownerType}
+                  amountRangeLabel={signal.amountRangeLabel}
+                  tradeDate={signal.tradeDate}
+                  filingDate={signal.filingDate}
+                  filingLagDays={signal.filingLagDays}
+                  sourceUrl={signal.sourceUrl}
+                  primaryReason={signal.primaryReason}
+                  reasonSummary={signal.reasonSummary}
+                />
               ))
             )}
           </div>
