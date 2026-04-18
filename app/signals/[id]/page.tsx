@@ -13,6 +13,8 @@ import SignalPriceChart from "./SignalPriceChart";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
+import { getSignalConfidenceTier } from "@/lib/domain/signals/get-signal-confidence-tier";
+import { getSignalTakeaways } from "@/lib/domain/signals/get-signal-takeaways";
 
 function formatCurrency(value: string | null) {
   if (value == null) return "—";
@@ -75,9 +77,12 @@ export default async function SignalDetailPage({
       filingLagDays: disclosures.filingLagDays,
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
+      amountRangeLabel: disclosures.amountRangeLabel,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
       historicalSampleSize: politicianStats.totalDisclosures,
+      historicalPoliticianScore: researchSignals.historicalPoliticianScore,
+      tradeSizeScore: researchSignals.tradeSizeScore,
 
       tradeDatePrice: disclosurePerformanceWindows.tradeDatePrice,
       filingDatePrice: disclosurePerformanceWindows.filingDatePrice,
@@ -193,6 +198,26 @@ export default async function SignalDetailPage({
     tradeType: signal.tradeType,
     filingLagDays: signal.filingLagDays,
   });
+  const confidence = getSignalConfidenceTier({
+    hasReturn7d: signal.return7d != null,
+    hasReturn30d: signal.return30d != null,
+    historicalSampleSize: signal.historicalSampleSize,
+    filingLagDays: signal.filingLagDays,
+  });
+  const takeaways = getSignalTakeaways({
+    tradeType: signal.tradeType,
+    score: signal.score,
+    alertTier,
+    confidenceTier: confidence.tier,
+    filingLagDays: signal.filingLagDays,
+    alpha7d,
+    alpha30d,
+    alpha90d,
+    historicalSampleSize: signal.historicalSampleSize,
+    amountRangeLabel: signal.amountRangeLabel,
+    tradeSizeScore: signal.tradeSizeScore,
+    historicalPoliticianScore: signal.historicalPoliticianScore,
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -258,6 +283,22 @@ export default async function SignalDetailPage({
             </p>
           </div>
         </div>
+
+        <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-950">
+            Key signal takeaways
+          </h2>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {takeaways.map((takeaway) => (
+              <div
+                key={takeaway}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+              >
+                {takeaway}
+              </div>
+            ))}
+          </div>
+        </section>
 
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-8">
