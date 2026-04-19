@@ -6,9 +6,9 @@ import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
 
 export default async function Home() {
   const [topPicks, recentlyFiled, biggestOutperformers] = await Promise.all([
-    getTopPicks(6),
-    getRecentlyFiled(6),
-    getBiggestOutperformers(6),
+    getTopPicks(4),
+    getRecentlyFiled(4),
+    getBiggestOutperformers(4),
   ]);
 
   return (
@@ -70,7 +70,7 @@ export default async function Home() {
             </Link>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-6 space-y-4">
             {topPicks.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
                 No top picks available yet.
@@ -136,7 +136,7 @@ export default async function Home() {
             </Link>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-6 space-y-4">
             {recentlyFiled.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
                 No recent filings available yet.
@@ -192,7 +192,7 @@ export default async function Home() {
             </Link>
           </div>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-6 space-y-4">
             {biggestOutperformers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
                 No outperformers with benchmark-relative performance data yet.

@@ -253,7 +253,11 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-gray-700">{row.assetName}</td>
+                      <td className="px-4 py-4 text-gray-700">
+                        <span className="block max-w-[18rem] truncate" title={row.assetName}>
+                          {row.assetName}
+                        </span>
+                      </td>
 
                       <td className="px-4 py-4">
                         <span
