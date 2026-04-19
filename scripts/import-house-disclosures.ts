@@ -433,6 +433,16 @@ function buildLegacyPtrAssetCandidate(line: string): string {
     .trim();
 }
 
+function cleanAssetName(raw: string): string {
+  return raw
+    .replace(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b[:\-\s]*/i, "")
+    .replace(/\(partial\)/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\W+|\W+$/g, "")
+    .trim();
+}
+
 function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
   const explicit = getValue(row, ["filer", "name", "member", "full name"]);
   if (explicit) return explicit;
@@ -476,7 +486,8 @@ function parsePtrTransactionsFromPdfText(params: {
 
   for (const line of lines) {
     const hasDate = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(line);
-    const hasTradeType = /\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/i.test(line);
+    const transactionTypeMatch = line.match(/\b(Purchase|Sale|Exchange)\b/i);
+    const hasTradeType = Boolean(transactionTypeMatch);
     const hasAmount = Boolean(extractLikelyAmountText(line));
     if (!(hasDate && hasTradeType && hasAmount)) {
       continue;
@@ -496,7 +507,7 @@ function parsePtrTransactionsFromPdfText(params: {
       continue;
     }
 
-    const tradeTypeMatch = line.match(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/i);
+    const tradeTypeMatch = line.match(/\b(Purchase|Sale|Exchange)\b/i);
     if (!tradeTypeMatch) {
       skipReasons.set("missing_trade_type", (skipReasons.get("missing_trade_type") ?? 0) + 1);
       continue;
@@ -509,27 +520,22 @@ function parsePtrTransactionsFromPdfText(params: {
     const rawTicker = tickerMatch?.[1] ?? null;
 
     const legacyAssetName = buildLegacyPtrAssetCandidate(line);
-    const dateMatches = [...line.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)];
-    const firstDateIndex = dateMatches[0]?.index ?? -1;
-    const tradeTypeSearchText = firstDateIndex > 0 ? line.slice(0, firstDateIndex) : line;
-    const tradeTypeMatches = [
-      ...tradeTypeSearchText.matchAll(/\b(P|S|E|PURCHASE|SALE|EXCHANGE|BUY|SELL)\b/gi),
-    ];
-    const finalTradeTypeMatch = tradeTypeMatches.at(-1);
-    const { ownerTokenLength } = parseLeadingOwnerToken(line);
-
-    const assetSliceStart = ownerTokenLength;
-    const assetSliceEnd = finalTradeTypeMatch?.index ?? -1;
-    const slicedAssetName =
-      assetSliceEnd > assetSliceStart ? line.slice(assetSliceStart, assetSliceEnd).trim() : "";
-
-    const assetName = slicedAssetName.replace(/^\W+|\W+$/g, "").trim();
+    const transactionTypeIndex = tradeTypeMatch.index ?? -1;
+    const beforeTx = transactionTypeIndex >= 0 ? line.slice(0, transactionTypeIndex) : "";
+    const afterTx =
+      transactionTypeIndex >= 0
+        ? line.slice(transactionTypeIndex + tradeTypeMatch[0].length).trim()
+        : "";
+    const assetName = cleanAssetName(beforeTx);
     if (!assetName) {
       assetFailureReasons.set(
         "missing_asset_span",
         (assetFailureReasons.get("missing_asset_span") ?? 0) + 1
       );
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      console.log(
+        `🧪 PTR asset extraction failed (missing span): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
+      );
       continue;
     }
 
@@ -547,6 +553,9 @@ function parsePtrTransactionsFromPdfText(params: {
         });
       }
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      console.log(
+        `🧪 PTR asset extraction failed (amount-like): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
+      );
       continue;
     }
 
@@ -564,6 +573,9 @@ function parsePtrTransactionsFromPdfText(params: {
         });
       }
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
+      console.log(
+        `🧪 PTR asset extraction failed (too short): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
+      );
       continue;
     }
 
