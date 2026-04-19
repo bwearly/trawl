@@ -117,27 +117,27 @@ export default async function SignalDetailPage({
     return <div className="p-6">Signal not found.</div>;
   }
 
-  if (!signal.ticker) {
-    return <div className="p-6">Ticker not found for this signal.</div>;
-  }
+  const normalizedTicker = signal.ticker ?? null;
 
   const anchorDate = signal.tradeDate || signal.filingDate || new Date();
   const chartStartDate = addDays(anchorDate, -30);
 
-    const chartRows = await db
-    .select({
-      ticker: priceHistory.ticker,
-      date: priceHistory.date,
-      close: priceHistory.close,
-    })
-    .from(priceHistory)
-    .where(
-      and(
-        gte(priceHistory.date, chartStartDate),
-        eq(priceHistory.ticker, signal.ticker)
-      )
-    )
-    .orderBy(asc(priceHistory.date));
+  const chartRows = normalizedTicker
+    ? await db
+        .select({
+          ticker: priceHistory.ticker,
+          date: priceHistory.date,
+          close: priceHistory.close,
+        })
+        .from(priceHistory)
+        .where(
+          and(
+            gte(priceHistory.date, chartStartDate),
+            eq(priceHistory.ticker, normalizedTicker)
+          )
+        )
+        .orderBy(asc(priceHistory.date))
+    : [];
 
   const spyRows = await db
     .select({
@@ -227,7 +227,9 @@ export default async function SignalDetailPage({
   });
   const [initialIsWatchingTicker, initialIsWatchingPolitician] =
     await Promise.all([
-      isTickerWatched(DEMO_USER_ID, signal.ticker),
+      normalizedTicker
+        ? isTickerWatched(DEMO_USER_ID, normalizedTicker)
+        : Promise.resolve(false),
       isPoliticianWatched(DEMO_USER_ID, signal.politicianId),
     ]);
 
@@ -246,12 +248,18 @@ export default async function SignalDetailPage({
         <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-start md:justify-between">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-3">
-              <Link
-                href={`/tickers/${signal.ticker}`}
-                className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition hover:bg-gray-200"
-              >
-                {signal.ticker}
-              </Link>
+              {normalizedTicker ? (
+                <Link
+                  href={`/tickers/${normalizedTicker}`}
+                  className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition hover:bg-gray-200"
+                >
+                  {normalizedTicker}
+                </Link>
+              ) : (
+                <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
+                  Ticker unavailable
+                </span>
+              )}
               <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
                 Signal #{signal.id}
               </span>
@@ -303,12 +311,14 @@ export default async function SignalDetailPage({
                 variant="ghost"
                 initialIsWatching={initialIsWatchingPolitician}
               />
-              <WatchButton
-                itemType="ticker"
-                ticker={signal.ticker}
-                size="sm"
-                initialIsWatching={initialIsWatchingTicker}
-              />
+              {normalizedTicker ? (
+                <WatchButton
+                  itemType="ticker"
+                  ticker={normalizedTicker}
+                  size="sm"
+                  initialIsWatching={initialIsWatchingTicker}
+                />
+              ) : null}
             </div>
           </div>
         </div>

@@ -118,7 +118,8 @@ export default function SignalCard({
           <span className="mx-1.5 text-gray-300">•</span>
           <Link
             href={`/politicians/${politicianId}`}
-            className="font-medium text-gray-900 transition hover:underline"
+            className="inline-block max-w-[20rem] truncate align-bottom font-medium text-gray-900 transition hover:underline"
+            title={politicianName}
           >
             {politicianName}
           </Link>
@@ -186,20 +187,6 @@ export default function SignalCard({
             View filing
           </a>
         ) : null}
-
-        <button
-          type="button"
-          className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          View chart
-        </button>
-
-        <button
-          type="button"
-          className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          View news
-        </button>
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <WatchButton

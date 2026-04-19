@@ -230,7 +230,8 @@ export default async function TickerDetailPage({ params }: PageProps) {
                       <td className="px-4 py-4">
                         <Link
                           href={`/politicians/${row.politicianId}`}
-                          className="font-semibold text-gray-950 transition hover:text-gray-700 hover:underline"
+                          className="inline-block max-w-[16rem] truncate font-semibold text-gray-950 transition hover:text-gray-700 hover:underline"
+                          title={row.politicianName}
                         >
                           {row.politicianName}
                         </Link>
