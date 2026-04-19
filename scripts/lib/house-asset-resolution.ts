@@ -34,9 +34,12 @@ export const HOUSE_ASSET_NAME_TO_TICKER: Record<string, string> = {
   "CVS HEALTH CORP CS": "CVS",
   "EATON CORP PLC ORDINARY": "ETN",
   "IDEXX LABORATORIES INC": "IDXX",
+  "JONES LANG LASALLE INC": "JLL",
   "RYMAN HOSPITALITY PROPERTIES INC": "RHP",
   "SBA COMMUNICATIONS CORP": "SBAC",
+  "SERVICENOW INC": "NOW",
   "TE CONNECTIVITY PLC ORDINARY SHARES": "TEL",
+  "AT AND T INC": "T",
   "MICROSOFT CORP": "MSFT",
   "NVIDIA CORP": "NVDA",
   "PALANTIR TECHNOLOGIES INC": "PLTR",
@@ -49,6 +52,12 @@ export const HOUSE_ASSET_NAME_TO_TICKER: Record<string, string> = {
   "ISHARES CORE S&P 500 ETF": "IVV",
   "VERACYTE INC": "VCYT",
 };
+
+const TRAILING_EQUITY_SUFFIXES: RegExp[] = [
+  /\s+COMMON STOCK$/i,
+  /\s+CS$/i,
+  /\s+ORDINARY SHARES$/i,
+];
 
 function cleanSpacingAndPunctuation(value: string): string {
   return value
@@ -92,6 +101,15 @@ export function normalizeAssetName(rawAssetName: string): AssetNormalizationResu
     cleanedAssetName,
     canonicalAssetName,
   };
+}
+
+function stripTrailingEquitySuffixForMatching(canonicalAssetName: string): string {
+  let candidate = canonicalAssetName;
+  for (const suffix of TRAILING_EQUITY_SUFFIXES) {
+    candidate = candidate.replace(suffix, "");
+  }
+
+  return candidate.replace(/\s+/g, " ").trim();
 }
 
 function normalizeExplicitTicker(rawTicker: string | null): string | null {
@@ -141,7 +159,11 @@ export function resolveHouseTicker(params: {
     };
   }
 
-  const mappedTicker = HOUSE_ASSET_NAME_TO_TICKER[normalization.canonicalAssetName];
+  const mappedTicker =
+    HOUSE_ASSET_NAME_TO_TICKER[normalization.canonicalAssetName] ??
+    HOUSE_ASSET_NAME_TO_TICKER[
+      stripTrailingEquitySuffixForMatching(normalization.canonicalAssetName)
+    ];
   if (mappedTicker) {
     return {
       ticker: mappedTicker,
