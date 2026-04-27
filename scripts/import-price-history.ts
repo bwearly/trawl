@@ -4,7 +4,7 @@ config({ path: ".env.local" });
 import YahooFinance from "yahoo-finance2";
 import { db } from "../lib/db";
 import { disclosures, priceHistory } from "../lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -37,17 +37,37 @@ type TickerWindow = {
   earliestAnchorDate: Date;
 };
 
+type PriceImportFailureReason =
+  | "rate_limited"
+  | "no_data"
+  | "invalid_symbol"
+  | "request_error";
+
+type TickerFetchResult = {
+  ticker: string;
+  yahooSymbol: string;
+  reason: PriceImportFailureReason;
+  detail: string;
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeYahooSymbol(symbol: string) {
-  switch (symbol) {
-    case "BRK.B":
-      return "BRK-B";
-    default:
-      return symbol;
-  }
+  const trimmed = symbol.trim().toUpperCase();
+
+  if (trimmed === "BRK.B" || trimmed === "BRK-B") return "BRK-B";
+
+  return trimmed;
+}
+
+function normalizeTickerForStorage(symbol: string) {
+  const trimmed = symbol.trim().toUpperCase();
+
+  if (trimmed === "BRK-B") return "BRK.B";
+
+  return trimmed;
 }
 
 function startOfUtcDay(date: Date) {
@@ -88,6 +108,37 @@ async function fetchDailyHistory(
     }));
 }
 
+function classifyYahooError(error: unknown): {
+  reason: PriceImportFailureReason;
+  detail: string;
+} {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("429") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("too many requests")
+  ) {
+    return { reason: "rate_limited", detail: message };
+  }
+
+  if (
+    normalized.includes("delisted") ||
+    normalized.includes("not found") ||
+    normalized.includes("invalid") ||
+    normalized.includes("symbol")
+  ) {
+    return { reason: "invalid_symbol", detail: message };
+  }
+
+  if (normalized.includes("no data")) {
+    return { reason: "no_data", detail: message };
+  }
+
+  return { reason: "request_error", detail: message };
+}
+
 async function main() {
   console.log("Importing price history from Yahoo Finance...");
 
@@ -102,7 +153,7 @@ async function main() {
   const tickerWindows = new Map<string, Date>();
 
   for (const row of disclosureRows) {
-    const ticker = row.ticker?.trim().toUpperCase();
+    const ticker = row.ticker ? normalizeTickerForStorage(row.ticker) : null;
     if (!ticker) continue;
 
     const anchorDate = row.tradeDate ?? row.filingDate;
@@ -122,6 +173,31 @@ async function main() {
     })
   );
 
+  const existingCoverageRows = await db
+    .select({
+      ticker: priceHistory.ticker,
+      count: sql<number>`count(*)`,
+    })
+    .from(priceHistory)
+    .groupBy(priceHistory.ticker);
+  const coveredTickerSet = new Set(
+    existingCoverageRows
+      .map((row) => normalizeTickerForStorage(row.ticker))
+      .filter((ticker) => ticker.length > 0)
+  );
+
+  const neededTickerSet = new Set(tickers.map((entry) => entry.ticker));
+  const alreadyCoveredNeededTickers = [...neededTickerSet].filter((ticker) =>
+    coveredTickerSet.has(ticker)
+  );
+
+  const attemptedTickers: string[] = [];
+  const succeededTickers: string[] = [];
+  const failedTickers: TickerFetchResult[] = [];
+
+  console.log(`Diagnostics: needed tickers from disclosures=${neededTickerSet.size}`);
+  console.log(`Diagnostics: tickers already covered in price_history=${alreadyCoveredNeededTickers.length}`);
+
   console.log(
     `Found ${tickers.length} unique tickers: ${tickers
       .map((entry) => entry.ticker)
@@ -131,12 +207,41 @@ async function main() {
   for (const { ticker, earliestAnchorDate } of tickers) {
     const yahooSymbol = normalizeYahooSymbol(ticker);
     const periodStart = addDays(earliestAnchorDate, -10);
+    attemptedTickers.push(ticker);
 
     console.log(
       `Fetching ${ticker} (Yahoo: ${yahooSymbol}) from ${periodStart.toISOString().slice(0, 10)}...`
     );
 
-    const quotes = await fetchDailyHistory(yahooSymbol, periodStart);
+    let quotes: YahooPriceRow[] = [];
+    try {
+      quotes = await fetchDailyHistory(yahooSymbol, periodStart);
+    } catch (error) {
+      const classified = classifyYahooError(error);
+      failedTickers.push({
+        ticker,
+        yahooSymbol,
+        reason: classified.reason,
+        detail: classified.detail,
+      });
+      console.log(
+        `❌ Failed ${ticker} (Yahoo: ${yahooSymbol}) reason=${classified.reason} detail="${classified.detail}"`
+      );
+      await sleep(1000);
+      continue;
+    }
+
+    if (quotes.length === 0) {
+      failedTickers.push({
+        ticker,
+        yahooSymbol,
+        reason: "no_data",
+        detail: "Yahoo returned 0 daily quote rows",
+      });
+      console.log(`⚠️ No data for ${ticker} (Yahoo: ${yahooSymbol}).`);
+      await sleep(1000);
+      continue;
+    }
 
     await db.delete(priceHistory).where(eq(priceHistory.ticker, ticker));
 
@@ -155,10 +260,54 @@ async function main() {
     if (rows.length > 0) {
       await db.insert(priceHistory).values(rows);
     }
+    succeededTickers.push(ticker);
 
     console.log(`Inserted ${rows.length} rows for ${ticker}.`);
 
     await sleep(1000);
+  }
+
+  const postImportCoverageRows = await db
+    .select({
+      ticker: priceHistory.ticker,
+    })
+    .from(priceHistory)
+    .groupBy(priceHistory.ticker);
+  const postImportCoveredTickers = new Set(
+    postImportCoverageRows.map((row) => normalizeTickerForStorage(row.ticker))
+  );
+  const missingNeededTickers = [...neededTickerSet].filter(
+    (ticker) => !postImportCoveredTickers.has(ticker)
+  );
+
+  console.log("Diagnostics summary:");
+  console.log(`  - tickers needed from disclosures: ${neededTickerSet.size}`);
+  console.log(`  - tickers already covered in price_history: ${alreadyCoveredNeededTickers.length}`);
+  console.log(`  - tickers attempted: ${attemptedTickers.length}`);
+  console.log(`  - tickers succeeded: ${succeededTickers.length}`);
+  console.log(`  - tickers failed: ${failedTickers.length}`);
+
+  if (failedTickers.length > 0) {
+    console.log("  - failure reason per ticker:");
+    for (const failure of failedTickers) {
+      console.log(
+        `    * ${failure.ticker} (Yahoo: ${failure.yahooSymbol}) -> ${failure.reason} | ${failure.detail}`
+      );
+    }
+  }
+
+  const rateLimitedFailures = failedTickers.filter((row) => row.reason === "rate_limited").length;
+  const noDataFailures = failedTickers.filter((row) => row.reason === "no_data").length;
+  console.log(`  - API rate-limit detected failures: ${rateLimitedFailures}`);
+  console.log(`  - API no-data detected failures: ${noDataFailures}`);
+
+  console.log("  - top missing valid tickers after price import:");
+  if (missingNeededTickers.length === 0) {
+    console.log("    * none");
+  } else {
+    for (const ticker of missingNeededTickers.slice(0, 25)) {
+      console.log(`    * ${ticker}`);
+    }
   }
 
   console.log("Finished importing price history.");

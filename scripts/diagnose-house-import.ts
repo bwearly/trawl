@@ -1,9 +1,15 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../lib/db";
-import { disclosures, politicians, researchSignals } from "../lib/db/schema";
+import {
+  alerts,
+  disclosurePerformanceWindows,
+  disclosures,
+  politicians,
+  researchSignals,
+} from "../lib/db/schema";
 
 const HOUSE_SOURCE_LABEL = "House Clerk Financial Disclosure";
 
@@ -39,8 +45,19 @@ function hasAllSourcesFlag(argv: string[]): boolean {
   return argv.includes("--all-sources");
 }
 
+function hasCleanupDuplicatesFlag(argv: string[]): boolean {
+  return argv.includes("--cleanup-duplicates");
+}
+
 function sourceScopeCondition(allSources: boolean) {
   return allSources ? sql`true` : eq(disclosures.sourceLabel, HOUSE_SOURCE_LABEL);
+}
+
+function scoreAssetNameQuality(assetName: string | null): number {
+  const value = (assetName ?? "").trim();
+  if (value.length === 0) return 0;
+  const tokenCount = value.split(/\s+/).filter(Boolean).length;
+  return Math.min(80, value.length) + Math.min(40, tokenCount * 4);
 }
 
 async function getFilingLagRange(allSources: boolean) {
@@ -70,8 +87,89 @@ async function getFilingLagRange(allSources: boolean) {
   };
 }
 
+async function cleanupHouseDuplicateDisclosures(): Promise<void> {
+  const duplicateGroups = await db.execute(sql`
+    with duplicate_groups as (
+      select
+        d.politician_id,
+        upper(coalesce(d.ticker, 'NULL')) as ticker_key,
+        d.trade_type,
+        d.trade_date::date as trade_date_key,
+        d.filing_date::date as filing_date_key,
+        coalesce(d.amount_range_label, 'NULL') as amount_key,
+        array_agg(d.id order by d.id asc) as disclosure_ids
+      from disclosures d
+      where d.source_label = ${HOUSE_SOURCE_LABEL}
+      group by
+        d.politician_id,
+        upper(coalesce(d.ticker, 'NULL')),
+        d.trade_type,
+        d.trade_date::date,
+        d.filing_date::date,
+        coalesce(d.amount_range_label, 'NULL')
+      having count(*) > 1
+    )
+    select disclosure_ids from duplicate_groups;
+  `);
+
+  const groups = duplicateGroups.rows as Array<{ disclosure_ids: number[] }>;
+  let deletedDisclosures = 0;
+  let deletedSignals = 0;
+  let deletedPerformanceRows = 0;
+
+  for (const group of groups) {
+    const ids = group.disclosure_ids;
+    if (!Array.isArray(ids) || ids.length <= 1) continue;
+
+    const disclosureRows = await db
+      .select({ id: disclosures.id, assetName: disclosures.assetName })
+      .from(disclosures)
+      .where(inArray(disclosures.id, ids));
+
+    let keepId = disclosureRows[0]?.id ?? ids[0]!;
+    let keepScore = scoreAssetNameQuality(disclosureRows[0]?.assetName ?? "");
+    for (const row of disclosureRows.slice(1)) {
+      const score = scoreAssetNameQuality(row.assetName);
+      if (score > keepScore) {
+        keepScore = score;
+        keepId = row.id;
+      }
+    }
+
+    const removeIds = ids.filter((id) => id !== keepId);
+
+    const signalRows = await db
+      .select({ id: researchSignals.id })
+      .from(researchSignals)
+      .where(inArray(researchSignals.disclosureId, removeIds));
+    const signalIds = signalRows.map((row) => row.id);
+
+    if (signalIds.length > 0) {
+      await db.delete(alerts).where(inArray(alerts.researchSignalId, signalIds));
+      await db.delete(researchSignals).where(inArray(researchSignals.id, signalIds));
+      deletedSignals += signalIds.length;
+    }
+
+    if (removeIds.length > 0) {
+      await db.delete(alerts).where(inArray(alerts.disclosureId, removeIds));
+      await db
+        .delete(disclosurePerformanceWindows)
+        .where(inArray(disclosurePerformanceWindows.disclosureId, removeIds));
+      await db.delete(disclosures).where(inArray(disclosures.id, removeIds));
+      deletedDisclosures += removeIds.length;
+      deletedPerformanceRows += removeIds.length;
+    }
+  }
+
+  console.log(
+    `🧹 Duplicate cleanup complete. deleted_disclosures=${deletedDisclosures}, deleted_signals=${deletedSignals}, deleted_performance_rows≈${deletedPerformanceRows}.`
+  );
+}
+
 async function main() {
-  const allSources = hasAllSourcesFlag(process.argv.slice(2));
+  const args = process.argv.slice(2);
+  const allSources = hasAllSourcesFlag(args);
+  const shouldCleanupDuplicates = hasCleanupDuplicatesFlag(args);
   const now = new Date();
   const filingLagDaysExpr = sql<number>`(${disclosures.filingDate}::date - ${disclosures.tradeDate}::date)`;
   const scopeCondition = sourceScopeCondition(allSources);
@@ -200,6 +298,92 @@ async function main() {
       )
     );
 
+  const duplicateGroupRows = await db.execute(sql`
+    with duplicate_groups as (
+      select
+        d.politician_id as "politicianId",
+        p.full_name as "politicianName",
+        d.ticker as ticker,
+        d.trade_type as "tradeType",
+        d.trade_date as "tradeDate",
+        d.filing_date as "filingDate",
+        d.amount_range_label as "amountRangeLabel",
+        count(*)::int as duplicate_count
+      from disclosures d
+      inner join politicians p on p.id = d.politician_id
+      where ${allSources ? sql`true` : sql`d.source_label = ${HOUSE_SOURCE_LABEL}`}
+      group by
+        d.politician_id,
+        p.full_name,
+        d.ticker,
+        d.trade_type,
+        d.trade_date,
+        d.filing_date,
+        d.amount_range_label
+      having count(*) > 1
+    )
+    select
+      "politicianId",
+      "politicianName",
+      ticker,
+      "tradeType",
+      "tradeDate",
+      "filingDate",
+      "amountRangeLabel",
+      duplicate_count as "duplicateCount"
+    from duplicate_groups
+    order by duplicate_count desc, "tradeDate" desc nulls last
+    limit 100;
+  `);
+
+  type DuplicateGroupRow = {
+    politicianId: number;
+    politicianName: string;
+    ticker: string | null;
+    tradeType: string;
+    tradeDate: Date | null;
+    filingDate: Date | null;
+    amountRangeLabel: string | null;
+    duplicateCount: number;
+  };
+
+  const duplicateGroups = duplicateGroupRows.rows as DuplicateGroupRow[];
+
+  const sampleRowsByGroup = new Map<string, Array<{
+    id: number;
+    assetName: string;
+    ownerType: string;
+    amountRangeLabel: string | null;
+    sourceUrl: string | null;
+  }>>();
+  for (const group of duplicateGroups.slice(0, 10)) {
+    const sampleRows = await db
+      .select({
+        id: disclosures.id,
+        assetName: disclosures.assetName,
+        ownerType: disclosures.ownerType,
+        amountRangeLabel: disclosures.amountRangeLabel,
+        sourceUrl: disclosures.sourceUrl,
+      })
+      .from(disclosures)
+      .where(
+        and(
+          eq(disclosures.politicianId, group.politicianId),
+          group.ticker ? eq(disclosures.ticker, group.ticker) : isNull(disclosures.ticker),
+          eq(disclosures.tradeType, group.tradeType),
+          group.tradeDate ? eq(disclosures.tradeDate, group.tradeDate) : isNull(disclosures.tradeDate),
+          group.filingDate ? eq(disclosures.filingDate, group.filingDate) : isNull(disclosures.filingDate),
+          group.amountRangeLabel
+            ? eq(disclosures.amountRangeLabel, group.amountRangeLabel)
+            : isNull(disclosures.amountRangeLabel)
+        )
+      )
+      .orderBy(disclosures.id)
+      .limit(5);
+    const groupKey = `${group.politicianId}|${group.ticker ?? "null"}|${group.tradeType}|${group.tradeDate?.toISOString() ?? "null"}`;
+    sampleRowsByGroup.set(groupKey, sampleRows);
+  }
+
   const invalidDateOrderCount = parseNumeric(invalidDateOrderResult[0]?.count);
   const futureTradeDateCount = parseNumeric(futureTradeDateResult[0]?.count);
   const minLag = filingLagCurrentScope.minLag;
@@ -268,6 +452,28 @@ async function main() {
     }
   }
   console.log(`   research_signals tied to invalid disclosures: ${invalidSignalCount}`);
+  console.log(`   likely duplicate House disclosure groups (>1 row): ${duplicateGroups.length}`);
+  if (duplicateGroups.length === 0) {
+    console.log("   - duplicate groups: none");
+  } else {
+    for (const group of duplicateGroups.slice(0, 20)) {
+      console.log(
+        `   - politician_id=${group.politicianId}, politician=${group.politicianName}, ticker=${group.ticker ?? "NULL"}, trade_type=${group.tradeType}, trade_date=${group.tradeDate ? formatDate(group.tradeDate) : "NULL"}, filing_date=${group.filingDate ? formatDate(group.filingDate) : "NULL"}, amount_range_label=${group.amountRangeLabel ?? "NULL"}, count=${group.duplicateCount}`
+      );
+      const groupKey = `${group.politicianId}|${group.ticker ?? "null"}|${group.tradeType}|${group.tradeDate?.toISOString() ?? "null"}`;
+      const sampleRows = sampleRowsByGroup.get(groupKey) ?? [];
+      for (const sample of sampleRows) {
+        console.log(
+          `      sample: disclosure_id=${sample.id}, asset_name=${sample.assetName}, owner_type=${sample.ownerType}, amount_range_label=${sample.amountRangeLabel ?? "NULL"}, source_url=${sample.sourceUrl ?? "NULL"}`
+        );
+      }
+    }
+  }
+
+  if (shouldCleanupDuplicates) {
+    console.log("   cleanup: --cleanup-duplicates requested; applying cleanup now (house scope only).");
+    await cleanupHouseDuplicateDisclosures();
+  }
 }
 
 main().catch((error) => {
