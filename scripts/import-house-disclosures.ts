@@ -1092,113 +1092,131 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     stats.rejectionReasons.set(reason, (stats.rejectionReasons.get(reason) ?? 0) + 1);
   };
 
-  for (const row of rows) {
     const now = new Date();
-    const hasValidTradeDate = isValidTradingDate(row.tradeDate);
-    const hasFilingDate = row.filingDate !== null;
-    const hasValidFilingDate = hasFilingDate && isValidTradingDate(row.filingDate);
-    const isTradeDateFuture = hasValidTradeDate ? isFutureDate(row.tradeDate, now) : false;
-    const isTradeAfterFiling =
-      hasValidTradeDate && hasValidFilingDate ? row.tradeDate.getTime() > row.filingDate.getTime() : false;
-    const isTradeDateValid =
-      hasValidTradeDate && !isTradeDateFuture && hasValidFilingDate && !isTradeAfterFiling;
-    const filingLagDays =
-      row.filingDate && isTradeDateValid
-        ? Math.floor((row.filingDate.getTime() - row.tradeDate.getTime()) / (1000 * 60 * 60 * 24))
-        : null;
-    const isUnsupportedAsset = row.assetType !== "stock";
-    const isValid =
-      Boolean(row.ticker) &&
-      hasFilingDate &&
-      isTradeDateValid &&
-      filingLagDays !== null &&
-      filingLagDays >= 0 &&
-      !isUnsupportedAsset;
 
-    if (!isValid) {
+  for (const row of rows) {
+    const tradeDate = row.tradeDate;
+    const filingDate = row.filingDate;
+    const isUnsupportedAsset = row.assetType !== "stock";
+
+    let reason: ImportRejectedReason | null = null;
+
+    if (!row.ticker) {
+      reason = "missing ticker";
+    } else if (isUnsupportedAsset) {
+      reason = "non-stock/unsupported asset";
+    } else if (!(tradeDate instanceof Date) || !isValidTradingDate(tradeDate)) {
+      reason = "invalid trade date";
+    } else if (!(filingDate instanceof Date) || !isValidTradingDate(filingDate)) {
+      reason = "missing filing date";
+    } else if (isFutureDate(tradeDate, now)) {
+      reason = "future trade date";
+    } else if (tradeDate.getTime() > filingDate.getTime()) {
+      reason = "trade date after filing date";
+    }
+
+    if (reason) {
       stats.skippedInvalid += 1;
-      const reason: ImportRejectedReason = !row.ticker
-        ? "missing ticker"
-        : !hasFilingDate
-          ? "missing filing date"
-          : !hasValidTradeDate
-            ? "invalid trade date"
-            : isTradeDateFuture
-              ? "future trade date"
-              : isTradeAfterFiling
-                ? "trade date after filing date"
-                : isUnsupportedAsset
-                  ? "non-stock/unsupported asset"
-                  : "parse failure";
       incrementRejectReason(reason);
+
       if (rejectedLogCount < 20) {
         console.log(
-          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
+          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${tradeDate instanceof Date ? tradeDate.toISOString().slice(0, 10) : "null"}" filingDate="${filingDate instanceof Date ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
       }
+
+      continue;
+    }
+
+    const validTradeDate = tradeDate as Date;
+    const validFilingDate = filingDate as Date;
+
+    const filingLagDays = Math.floor(
+      (validFilingDate.getTime() - validTradeDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (filingLagDays < 0) {
+      stats.skippedInvalid += 1;
+      incrementRejectReason("trade date after filing date");
       continue;
     }
 
     row.filingLagDays = filingLagDays;
 
-    const politicianId = await getOrCreatePoliticianId(row);
-    const duplicate = await isDuplicateDisclosure(politicianId, row);
+    const validRow = {
+      ...row,
+      tradeDate: validTradeDate,
+      filingDate: validFilingDate,
+      filingLagDays,
+    };
+
+    const politicianId = await getOrCreatePoliticianId(validRow);
+    const duplicate = await isDuplicateDisclosure(politicianId, validRow);
+
     if (duplicate) {
       stats.skippedUnchanged += 1;
       incrementRejectReason("duplicate");
+
       if (rejectedLogCount < 20) {
         console.log(
-          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="duplicate" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
+          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="duplicate" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${validTradeDate.toISOString().slice(0, 10)}" filingDate="${validFilingDate.toISOString().slice(0, 10)}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
       }
+
       continue;
     }
 
     if (acceptedLogCount < 20) {
       console.log(
-        `✅ Accepted row[${acceptedLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
+        `✅ Accepted row[${acceptedLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${validTradeDate.toISOString().slice(0, 10)}" filingDate="${validFilingDate.toISOString().slice(0, 10)}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
       );
       acceptedLogCount += 1;
     }
 
-    const existingHouseDisclosureId = await findExistingHouseDisclosureForUpsert(politicianId, row);
+    const existingHouseDisclosureId = await findExistingHouseDisclosureForUpsert(
+      politicianId,
+      validRow
+    );
+
     if (existingHouseDisclosureId) {
       await db
         .update(disclosures)
         .set({
-          ticker: row.ticker,
-          assetType: row.assetType,
-          ownerType: row.ownerType,
-          amountRangeLabel: row.amountRangeLabel,
-          amountMin: row.amountMin,
-          amountMax: row.amountMax,
-          filingLagDays: row.filingLagDays,
-          sourceUrl: row.sourceUrl,
-          sourceLabel: row.sourceLabel,
+          ticker: validRow.ticker,
+          assetType: validRow.assetType,
+          ownerType: validRow.ownerType,
+          amountRangeLabel: validRow.amountRangeLabel,
+          amountMin: validRow.amountMin,
+          amountMax: validRow.amountMax,
+          filingLagDays,
+          sourceUrl: validRow.sourceUrl,
+          sourceLabel: validRow.sourceLabel,
           updatedAt: new Date(),
         })
         .where(eq(disclosures.id, existingHouseDisclosureId));
+
       stats.updated += 1;
     } else {
       await db.insert(disclosures).values({
         politicianId,
-        ticker: row.ticker,
-        assetName: row.assetName,
-        assetType: row.assetType,
-        tradeType: row.tradeType,
-        ownerType: row.ownerType,
-        amountRangeLabel: row.amountRangeLabel,
-        amountMin: row.amountMin,
-        amountMax: row.amountMax,
-        tradeDate: row.tradeDate,
-        filingDate: row.filingDate,
-        filingLagDays: row.filingLagDays,
-        sourceUrl: row.sourceUrl,
-        sourceLabel: row.sourceLabel,
+        ticker: validRow.ticker,
+        assetName: validRow.assetName,
+        assetType: validRow.assetType,
+        tradeType: validRow.tradeType,
+        ownerType: validRow.ownerType,
+        amountRangeLabel: validRow.amountRangeLabel,
+        amountMin: validRow.amountMin,
+        amountMax: validRow.amountMax,
+        tradeDate: validTradeDate,
+        filingDate: validFilingDate,
+        filingLagDays,
+        sourceUrl: validRow.sourceUrl,
+        sourceLabel: validRow.sourceLabel,
         updatedAt: new Date(),
       });
+
       stats.inserted += 1;
     }
   }
