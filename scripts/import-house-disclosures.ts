@@ -125,6 +125,43 @@ type PtrCandidateRecord = {
   rawText: string;
 };
 
+const ALLOWED_SINGLE_LETTER_TICKERS = new Set(["F", "T", "U", "V", "C", "D", "K", "O", "S"]);
+
+const UNSUPPORTED_ASSET_PATTERNS: RegExp[] = [
+  /shares\s+jt\s+virginia\s+state\s+housing\s+development/i,
+  /\bhousing\s+development\b/i,
+  /\bbond\b/i,
+  /\bnote\b/i,
+  /\bmaturity\b/i,
+  /\bcoupon\b/i,
+  /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/,
+  /\b\d+(?:\.\d+)?%\b/,
+];
+
+function sanitizeParsedText(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const withoutControlChars = raw.replace(/[\u0000-\u001f\u007f]/g, " ");
+  const collapsedWhitespace = withoutControlChars.replace(/\s+/g, " ").trim();
+  return collapsedWhitespace.length > 0 ? collapsedWhitespace : null;
+}
+
+function sanitizeParsedTextOrEmpty(raw: string | null | undefined): string {
+  return sanitizeParsedText(raw) ?? "";
+}
+
+function hasClearTickerInParentheses(text: string): boolean {
+  return /\(([A-Z]{2,5}(?:\.[A-Z])?|[FTUVCDKOS])\)/.test(text.toUpperCase());
+}
+
+function hasUnsupportedAssetTerms(assetName: string, debugRawLine: string | null): boolean {
+  const combined = `${assetName} ${debugRawLine ?? ""}`;
+  return UNSUPPORTED_ASSET_PATTERNS.some((pattern) => pattern.test(combined));
+}
+
+function isAllowedTickerToken(token: string): boolean {
+  return token.length !== 1 || ALLOWED_SINGLE_LETTER_TICKERS.has(token);
+}
+
 function getArgValue(flag: string): string | undefined {
   const arg = process.argv.find((entry) => entry.startsWith(`${flag}=`));
   if (!arg) return undefined;
@@ -188,8 +225,8 @@ function getValue(row: HouseRow, aliases: string[]): string | null {
 
   for (const [key, raw] of Object.entries(row)) {
     if (aliasSet.has(normalizeHeader(key))) {
-      const value = raw.trim();
-      if (value.length > 0) return value;
+      const value = sanitizeParsedText(raw);
+      if (value) return value;
     }
   }
 
@@ -434,7 +471,7 @@ function extractTickerFromPtrLine(line: string, assetName: string): string | nul
 
   for (const candidate of parentheticalCandidates) {
     const compact = candidate.replace(/-/g, "");
-    if (isValidTickerToken(compact)) {
+    if (isValidTickerToken(compact) && isAllowedTickerToken(compact)) {
       return compact;
     }
   }
@@ -453,6 +490,7 @@ function extractTickerFromPtrLine(line: string, assetName: string): string | nul
   for (const token of tokens) {
     const compact = token.replace(/-/g, "");
     if (!isValidTickerToken(compact)) continue;
+    if (!isAllowedTickerToken(compact)) continue;
     if (/^\d/.test(compact)) continue;
     if (["OVER", "UNDER", "PRICE", "CASH", "SALE", "PURCH", "SP", "JT", "DC"].includes(compact)) continue;
     return compact;
@@ -504,7 +542,7 @@ function buildLegacyPtrAssetCandidate(line: string): string {
 }
 
 function cleanAssetName(raw: string): string {
-  return raw
+  return sanitizeParsedTextOrEmpty(raw)
     .replace(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b[:\-\s]*/i, "")
     .replace(/\(partial\)/gi, " ")
     .replace(/\s+/g, " ")
@@ -525,10 +563,7 @@ function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
 }
 
 function normalizePtrLine(line: string): string {
-  return line
-    .replace(/\u00a0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return sanitizeParsedTextOrEmpty(line.replace(/\u00a0/g, " "));
 }
 
 function splitPtrLineOnTypeTokens(line: string): string[] {
@@ -622,7 +657,9 @@ function parsePtrTransactionsFromPdfText(params: {
   const normalized: NormalizedDisclosure[] = [];
   const suspiciousAssetSamples: PtrSuspiciousAssetSample[] = [];
   const beforeAfterSamples: PtrBeforeAfterSample[] = [];
-  const politicianName = buildPoliticianNameFromHouseRow(sourceRow) ?? "Unknown House Member";
+  const politicianName = sanitizeParsedTextOrEmpty(
+    buildPoliticianNameFromHouseRow(sourceRow) ?? "Unknown House Member"
+  );
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
   const state = getValue(sourceRow, ["state"]);
@@ -731,10 +768,14 @@ function parsePtrTransactionsFromPdfText(params: {
 
     const ownerType = parseLeadingOwnerToken(line).ownerType;
     const tradeType = normalizeTradeType(tradeTypeMatch[1] ?? null);
+    const sanitizedTicker = sanitizeParsedText(resolvedTicker.ticker)?.toUpperCase() ?? null;
+    const finalTicker = sanitizedTicker && isAllowedTickerToken(sanitizedTicker) ? sanitizedTicker : null;
+    const sanitizedAssetName = sanitizeParsedTextOrEmpty(assetName);
+    const sanitizedLine = sanitizeParsedText(line);
 
     if (debugRowsLogged < 20) {
       console.log(
-        `🧪 PTR debug row[${debugRowsLogged + 1}] raw="${line}" ticker="${resolvedTicker.ticker ?? "null"}" tradeDate="${tradeDate.toISOString().slice(0, 10)}" filingDate="${filingDate ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${ownerType}" tradeType="${tradeType}"`
+        `🧪 PTR debug row[${debugRowsLogged + 1}] raw="${sanitizedLine ?? "(none)"}" ticker="${finalTicker ?? "null"}" tradeDate="${tradeDate.toISOString().slice(0, 10)}" filingDate="${filingDate ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${ownerType}" tradeType="${tradeType}"`
       );
       debugRowsLogged += 1;
     }
@@ -744,22 +785,22 @@ function parsePtrTransactionsFromPdfText(params: {
       party,
       state,
       chamber: "house",
-      ticker: resolvedTicker.ticker,
-      assetName,
-      assetType: inferAssetType(assetName),
+      ticker: finalTicker,
+      assetName: sanitizedAssetName,
+      assetType: inferAssetType(sanitizedAssetName),
       tradeType,
       ownerType,
-      amountRangeLabel: amount.label,
+      amountRangeLabel: sanitizeParsedText(amount.label),
       amountMin: amount.min,
       amountMax: amount.max,
       tradeDate,
       filingDate,
       filingLagDays,
-      sourceUrl,
-      sourceLabel: HOUSE_SOURCE_LABEL,
-      normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
+      sourceUrl: sanitizeParsedText(sourceUrl),
+      sourceLabel: sanitizeParsedTextOrEmpty(HOUSE_SOURCE_LABEL),
+      normalizedAssetName: sanitizeParsedTextOrEmpty(resolvedTicker.normalization.canonicalAssetName),
       tickerResolutionSource: resolvedTicker.source,
-      debugRawLine: line,
+      debugRawLine: sanitizedLine,
     });
   }
 
@@ -840,27 +881,30 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
     rawAssetName: assetName,
   });
 
+  const sanitizedTicker = sanitizeParsedText(resolvedTicker.ticker)?.toUpperCase() ?? null;
+  const finalTicker = sanitizedTicker && isAllowedTickerToken(sanitizedTicker) ? sanitizedTicker : null;
+
   return {
-    politicianName,
+    politicianName: sanitizeParsedTextOrEmpty(politicianName),
     party: normalizeParty(getValue(row, ["party"])),
-    state: getValue(row, ["state", "district state", "st"]),
+    state: sanitizeParsedText(getValue(row, ["state", "district state", "st"])),
     chamber: "house",
-    ticker: resolvedTicker.ticker,
-    assetName,
+    ticker: finalTicker,
+    assetName: sanitizeParsedTextOrEmpty(assetName),
     assetType: inferAssetType(assetName),
     tradeType: normalizeTradeType(getValue(row, ["type", "transaction type", "tx type"])),
     ownerType: normalizeOwnerType(getValue(row, ["owner", "owner type"])),
-    amountRangeLabel: amount.label,
+    amountRangeLabel: sanitizeParsedText(amount.label),
     amountMin: amount.min,
     amountMax: amount.max,
     tradeDate,
     filingDate,
     filingLagDays,
-    sourceUrl: buildSourceUrl(year, row),
-    sourceLabel: HOUSE_SOURCE_LABEL,
-    normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
+    sourceUrl: sanitizeParsedText(buildSourceUrl(year, row)),
+    sourceLabel: sanitizeParsedTextOrEmpty(HOUSE_SOURCE_LABEL),
+    normalizedAssetName: sanitizeParsedTextOrEmpty(resolvedTicker.normalization.canonicalAssetName),
     tickerResolutionSource: resolvedTicker.source,
-    debugRawLine: JSON.stringify(row),
+    debugRawLine: sanitizeParsedText(JSON.stringify(row)),
   };
 }
 
@@ -1078,6 +1122,25 @@ function chunkArray<T>(entries: T[], chunkSize: number): T[][] {
   return chunks;
 }
 
+function sanitizeDisclosureForImport(row: NormalizedDisclosure): NormalizedDisclosure {
+  const sanitizedTicker = sanitizeParsedText(row.ticker)?.toUpperCase() ?? null;
+  return {
+    ...row,
+    politicianName: sanitizeParsedTextOrEmpty(row.politicianName),
+    ticker: sanitizedTicker && isAllowedTickerToken(sanitizedTicker) ? sanitizedTicker : null,
+    assetName: sanitizeParsedTextOrEmpty(row.assetName),
+    ownerType: sanitizeParsedTextOrEmpty(row.ownerType) as NormalizedDisclosure["ownerType"],
+    tradeType: sanitizeParsedTextOrEmpty(row.tradeType) as NormalizedDisclosure["tradeType"],
+    amountRangeLabel: sanitizeParsedText(row.amountRangeLabel),
+    sourceUrl: sanitizeParsedText(row.sourceUrl),
+    sourceLabel: sanitizeParsedTextOrEmpty(row.sourceLabel),
+    normalizedAssetName: sanitizeParsedTextOrEmpty(row.normalizedAssetName),
+    debugRawLine: sanitizeParsedText(row.debugRawLine),
+    party: sanitizeParsedText(row.party),
+    state: sanitizeParsedText(row.state),
+  };
+}
+
 async function resetHouseImportedRowsForLocalDev(): Promise<void> {
   const houseDisclosureRows = await db
     .select({ id: disclosures.id })
@@ -1145,12 +1208,18 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     stats.rejectionReasons.set(reason, (stats.rejectionReasons.get(reason) ?? 0) + 1);
   };
 
-    const now = new Date();
+  const now = new Date();
 
-  for (const row of rows) {
+  for (const rawRow of rows) {
+    const row = sanitizeDisclosureForImport(rawRow);
     const tradeDate = row.tradeDate;
     const filingDate = row.filingDate;
-    const isUnsupportedAsset = row.assetType !== "stock";
+    const clearTickerParenthetical =
+      hasClearTickerInParentheses(row.assetName) || hasClearTickerInParentheses(row.debugRawLine ?? "");
+    const isUnsupportedByTerms =
+      hasUnsupportedAssetTerms(row.assetName, row.debugRawLine ?? null) && !clearTickerParenthetical;
+    const isUnsupportedByType = row.assetType !== "stock" && !clearTickerParenthetical;
+    const isUnsupportedAsset = isUnsupportedByType || isUnsupportedByTerms;
 
     let reason: ImportRejectedReason | null = null;
 
