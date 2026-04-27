@@ -215,12 +215,13 @@ function normalizeTradeType(raw: string | null): NormalizedDisclosure["tradeType
 
 function normalizeOwnerType(raw: string | null): NormalizedDisclosure["ownerType"] {
   const value = (raw ?? "").trim().toLowerCase();
-  if (!value) return "unknown";
+  if (!value) return "self";
   if (value.includes("spouse")) return "spouse";
   if (value.includes("child") || value.includes("dependent")) return "dependent";
   if (value.includes("joint")) return "joint";
-  if (value.includes("self") || value === "jt") return "self";
-  return "unknown";
+  if (value === "jt") return "joint";
+  if (value.includes("self")) return "self";
+  return "self";
 }
 
 function inferAssetType(assetName: string): string {
@@ -378,16 +379,66 @@ function parseOwnerTypeFromText(line: string): NormalizedDisclosure["ownerType"]
   if (/\bDC\b|\bDEPENDENT\b|\bCHILD\b/.test(upper)) return "dependent";
   if (/\bJT\b|\bJOINT\b/.test(upper)) return "joint";
   if (/\bSELF\b/.test(upper)) return "self";
-  return "unknown";
+  return "self";
 }
 
 function parseLeadingOwnerToken(line: string): { ownerType: NormalizedDisclosure["ownerType"]; ownerTokenLength: number } {
   const match = line.match(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b/i);
-  if (!match) return { ownerType: "unknown", ownerTokenLength: 0 };
+  if (!match) return { ownerType: "self", ownerTokenLength: 0 };
   return {
     ownerType: parseOwnerTypeFromText(match[1]),
     ownerTokenLength: match[0].length,
   };
+}
+
+function isValidTradingDate(date: Date): boolean {
+  return !Number.isNaN(date.getTime());
+}
+
+function normalizeDateFloor(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function isFutureDate(date: Date, now: Date): boolean {
+  return normalizeDateFloor(date).getTime() > normalizeDateFloor(now).getTime();
+}
+
+function isValidTickerToken(token: string): boolean {
+  return /^[A-Z]{1,5}(?:\.[A-Z])?$/.test(token);
+}
+
+function extractTickerFromPtrLine(line: string, assetName: string): string | null {
+  const parentheticalCandidates = [...line.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
+    .map((match) => match[1]?.trim() ?? "")
+    .filter(Boolean);
+
+  for (const candidate of parentheticalCandidates) {
+    const compact = candidate.replace(/-/g, "");
+    if (isValidTickerToken(compact)) {
+      return compact;
+    }
+  }
+
+  const fallbackText = `${assetName} ${line
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\$[\d,\s.\-]+/g, " ")
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, " ")
+    .replace(/\b(PURCHASE|SALE|EXCHANGE|BUY|SELL|PARTIAL|OVER|UNDER)\b/gi, " ")
+    .replace(/\b(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b/gi, " ")}`;
+
+  const tokens = [...fallbackText.matchAll(/\b[A-Z][A-Z0-9.\-]{0,4}\b/g)]
+    .map((match) => match[0]?.trim().toUpperCase() ?? "")
+    .filter(Boolean);
+
+  for (const token of tokens) {
+    const compact = token.replace(/-/g, "");
+    if (!isValidTickerToken(compact)) continue;
+    if (/^\d/.test(compact)) continue;
+    if (["OVER", "UNDER", "PRICE", "CASH", "SALE", "PURCH", "SP", "JT", "DC"].includes(compact)) continue;
+    return compact;
+  }
+
+  return null;
 }
 
 function extractLikelyAmountText(text: string): string | null {
@@ -480,6 +531,8 @@ function parsePtrTransactionsFromPdfText(params: {
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
   const state = getValue(sourceRow, ["state"]);
+  const now = new Date();
+  let debugRowsLogged = 0;
 
   let transactionLikeLineCount = 0;
 
@@ -500,8 +553,8 @@ function parsePtrTransactionsFromPdfText(params: {
     }
 
     const dates = [...line.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)].map((match) => match[0]);
-    const tradeDate = parseDate(dates[0] ?? null);
-    if (!tradeDate) {
+    const parsedTradeDate = parseDate(dates[0] ?? null);
+    if (!parsedTradeDate) {
       skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
       continue;
     }
@@ -514,9 +567,6 @@ function parsePtrTransactionsFromPdfText(params: {
 
     const amountText = normalizeAmountInput(extractLikelyAmountText(line));
     const amount = normalizeAmountRange(amountText);
-
-    const tickerMatch = line.match(/\(([A-Z.\-]{1,8})\)/);
-    const rawTicker = tickerMatch?.[1] ?? null;
 
     const legacyAssetName = buildLegacyPtrAssetCandidate(line);
     const transactionTypeIndex = tradeTypeMatch.index ?? -1;
@@ -587,14 +637,41 @@ function parsePtrTransactionsFromPdfText(params: {
       continue;
     }
 
+    if (!filingDate || !isValidTradingDate(filingDate) || isFutureDate(filingDate, now)) {
+      skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
+      continue;
+    }
+
+    let tradeDate = parsedTradeDate;
+    if (!isValidTradingDate(tradeDate) || isFutureDate(tradeDate, now) || tradeDate.getTime() > filingDate.getTime()) {
+      tradeDate = filingDate;
+    }
+
     const filingLagDays = filingDate
       ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
+
+    if (filingLagDays == null || filingLagDays < 0) {
+      skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
+      continue;
+    }
+
+    const rawTicker = extractTickerFromPtrLine(line, assetName);
 
     const resolvedTicker = resolveHouseTicker({
       rawTicker,
       rawAssetName: assetName,
     });
+
+    const ownerType = parseLeadingOwnerToken(line).ownerType;
+    const tradeType = normalizeTradeType(tradeTypeMatch[1] ?? null);
+
+    if (debugRowsLogged < 20) {
+      console.log(
+        `🧪 PTR debug row[${debugRowsLogged + 1}] raw="${line}" ticker="${resolvedTicker.ticker ?? "null"}" tradeDate="${tradeDate.toISOString().slice(0, 10)}" filingDate="${filingDate.toISOString().slice(0, 10)}" owner="${ownerType}" tradeType="${tradeType}"`
+      );
+      debugRowsLogged += 1;
+    }
 
     normalized.push({
       politicianName,
@@ -604,8 +681,8 @@ function parsePtrTransactionsFromPdfText(params: {
       ticker: resolvedTicker.ticker,
       assetName,
       assetType: inferAssetType(assetName),
-      tradeType: normalizeTradeType(tradeTypeMatch[1] ?? null),
-      ownerType: parseLeadingOwnerToken(line).ownerType,
+      tradeType,
+      ownerType,
       amountRangeLabel: amount.label,
       amountMin: amount.min,
       amountMax: amount.max,
@@ -676,9 +753,16 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
   }
 
   const filingDate = parseDate(getValue(row, ["notification date", "filed", "filing date"]));
-  const filingLagDays = filingDate
-    ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  if (!filingDate || !isValidTradingDate(filingDate) || !isValidTradingDate(tradeDate)) {
+    return null;
+  }
+
+  if (isFutureDate(tradeDate, new Date()) || tradeDate.getTime() > filingDate.getTime()) {
+    return null;
+  }
+
+  const filingLagDays = Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
+  if (filingLagDays < 0) return null;
 
   const amount = normalizeAmountRange(
     getValue(row, ["amount", "amount range", "amount range label", "value"])
@@ -894,8 +978,39 @@ async function isDuplicateDisclosure(
 
 async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promise<ImportStats> {
   const stats: ImportStats = { inserted: 0, skippedDuplicate: 0, skippedInvalid: 0 };
+  let rejectedLogCount = 0;
 
   for (const row of rows) {
+    const isTradeDateValid =
+      isValidTradingDate(row.tradeDate) &&
+      !isFutureDate(row.tradeDate, new Date()) &&
+      row.filingDate !== null &&
+      isValidTradingDate(row.filingDate) &&
+      row.tradeDate.getTime() <= row.filingDate.getTime();
+    const filingLagDays =
+      row.filingDate && isTradeDateValid
+        ? Math.floor((row.filingDate.getTime() - row.tradeDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+    const isValid =
+      Boolean(row.ticker) &&
+      Boolean(row.filingDate) &&
+      isTradeDateValid &&
+      filingLagDays !== null &&
+      filingLagDays >= 0;
+
+    if (!isValid) {
+      stats.skippedInvalid += 1;
+      if (rejectedLogCount < 20) {
+        console.log(
+          `⚠️ Rejected disclosure row[${rejectedLogCount + 1}] ticker="${row.ticker ?? "null"}" tradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" lag="${filingLagDays ?? "null"}" asset="${row.assetName}"`
+        );
+        rejectedLogCount += 1;
+      }
+      continue;
+    }
+
+    row.filingLagDays = filingLagDays;
+
     const politicianId = await getOrCreatePoliticianId(row);
     const duplicate = await isDuplicateDisclosure(politicianId, row);
 
