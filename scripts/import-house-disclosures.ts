@@ -677,11 +677,34 @@ function buildLegacyPtrAssetCandidate(line: string): string {
 function cleanAssetName(raw: string): string {
   return sanitizeParsedTextOrEmpty(raw)
     .replace(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b[:\-\s]*/i, "")
+    .replace(/^\s*(?:Amount\s+Cap\.?\s*Gains\s*>\s*\$200\?\s*)/i, "")
+    .replace(/^\s*(?:Cap\.?\s*)?Gains\s*>\s*\$200\?\s*/i, "")
+    .replace(/^\s*\$200\?\s*/i, "")
+    .replace(/^\s*Date\s+Amount\b[:\-\s]*/i, "")
     .replace(/\(partial\)/gi, " ")
+    .replace(/\[ST\s*$/i, " ")
+    .replace(/\bCommon\s+Stock\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^\W+|\W+$/g, "")
     .trim();
+}
+
+function hasDiscardableAssetPrefix(value: string): boolean {
+  return /^(Amount|Gains|\$200\?|Date\s+Amount|Stock\s*\()/i.test(value.trim());
+}
+
+function scoreAssetNameQuality(value: string): number {
+  const normalized = sanitizeParsedTextOrEmpty(value);
+  if (!normalized) return Number.NEGATIVE_INFINITY;
+
+  let score = 0;
+  if (hasDiscardableAssetPrefix(normalized)) score -= 120;
+  if (/\b[A-Za-z][A-Za-z&.,'\- ]+\s+\([A-Z]{1,5}(?:\.[A-Z]{1,2})?\)/.test(normalized)) score += 50;
+  if (/\b[A-Za-z]{3,}/.test(normalized)) score += 20;
+  score += Math.min(normalized.length, 80);
+
+  return score;
 }
 
 function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
@@ -754,17 +777,7 @@ function buildPtrCandidates(lines: string[]): PtrCandidateRecord[] {
     }
   }
 
-  const deduped = new Map<string, PtrCandidateRecord>();
-  for (const candidate of candidates) {
-    const key = [
-      candidate.assetText.toLowerCase(),
-      candidate.tradeTypeRaw.toLowerCase(),
-      candidate.dates.join("|"),
-      candidate.amountText,
-    ].join("::");
-    if (!deduped.has(key)) deduped.set(key, candidate);
-  }
-  return [...deduped.values()];
+  return candidates;
 }
 
 function parsePtrTransactionsFromPdfText(params: {
@@ -774,6 +787,8 @@ function parsePtrTransactionsFromPdfText(params: {
 }): {
   normalized: NormalizedDisclosure[];
   transactionLikeLineCount: number;
+  candidateCountAfterDedupe: number;
+  duplicateCandidatesRemoved: number;
   skipReasons: Map<PtrRowSkipReason, number>;
   assetFailureReasons: Map<PtrAssetParseFailureReason, number>;
   suspiciousAssetSamples: PtrSuspiciousAssetSample[];
@@ -801,6 +816,7 @@ function parsePtrTransactionsFromPdfText(params: {
 
   const candidates = buildPtrCandidates(lines);
   const transactionLikeLineCount = candidates.length;
+  const candidateRows: NormalizedDisclosure[] = [];
 
   for (const candidate of candidates) {
     const parsedTradeDate = parseDate(candidate.dates[0] ?? null);
@@ -913,7 +929,7 @@ function parsePtrTransactionsFromPdfText(params: {
       debugRowsLogged += 1;
     }
 
-    normalized.push({
+    candidateRows.push({
       politicianName,
       party,
       state,
@@ -937,9 +953,32 @@ function parsePtrTransactionsFromPdfText(params: {
     });
   }
 
+  const dedupedCandidates = new Map<string, { row: NormalizedDisclosure; score: number }>();
+  for (const row of candidateRows) {
+    const tradeDateKey = row.tradeDate.toISOString().slice(0, 10);
+    const filingDateKey = row.filingDate ? row.filingDate.toISOString().slice(0, 10) : "null";
+    const ownerComponent = row.ownerType === "unknown" ? "unreliable_owner" : row.ownerType;
+    const stableKey = [
+      row.ticker ?? "null",
+      row.tradeType,
+      tradeDateKey,
+      filingDateKey,
+      row.amountRangeLabel ?? "null",
+      ownerComponent,
+    ].join("::");
+    const nextScore = scoreAssetNameQuality(row.assetName);
+    const existing = dedupedCandidates.get(stableKey);
+    if (!existing || nextScore > existing.score) {
+      dedupedCandidates.set(stableKey, { row, score: nextScore });
+    }
+  }
+  normalized.push(...[...dedupedCandidates.values()].map((entry) => entry.row));
+
   return {
     normalized,
     transactionLikeLineCount,
+    candidateCountAfterDedupe: dedupedCandidates.size,
+    duplicateCandidatesRemoved: Math.max(0, candidateRows.length - dedupedCandidates.size),
     skipReasons,
     assetFailureReasons,
     suspiciousAssetSamples,
@@ -1504,6 +1543,8 @@ async function main() {
   let pdfsWithExtractedText = 0;
   let parsedTransactionRows = 0;
   let transactionCandidatesBeforeNormalization = 0;
+  let transactionCandidatesAfterDedupe = 0;
+  let duplicateCandidatesRemoved = 0;
   let parseFailureCount = 0;
   let rejectedRows = 0;
   let ptrTextStructureDebugLogged = 0;
@@ -1554,6 +1595,8 @@ async function main() {
     let ptrPdfProcessed = 0;
     let ptrPdfExtracted = 0;
     let ptrTransactionLikeLines = 0;
+    let ptrTransactionAfterDedupe = 0;
+    let ptrDuplicateCandidatesRemoved = 0;
     let ptrNormalizedRows = 0;
     const ptrSkipReasons = new Map<PtrRowSkipReason, number>();
     const ptrAssetFailureReasons = new Map<PtrAssetParseFailureReason, number>();
@@ -1647,7 +1690,11 @@ async function main() {
       });
 
       transactionCandidatesBeforeNormalization += parsed.transactionLikeLineCount;
+      transactionCandidatesAfterDedupe += parsed.candidateCountAfterDedupe;
+      duplicateCandidatesRemoved += parsed.duplicateCandidatesRemoved;
       ptrTransactionLikeLines += parsed.transactionLikeLineCount;
+      ptrTransactionAfterDedupe += parsed.candidateCountAfterDedupe;
+      ptrDuplicateCandidatesRemoved += parsed.duplicateCandidatesRemoved;
       ptrNormalizedRows += parsed.normalized.length;
       parseFailureCount += Math.max(0, parsed.transactionLikeLineCount - parsed.normalized.length);
 
@@ -1669,12 +1716,12 @@ async function main() {
       parsedTransactionRows += parsed.normalized.length;
 
       console.log(
-        `      transaction-like lines=${parsed.transactionLikeLineCount}, normalized disclosures=${parsed.normalized.length}`
+        `      reconstructed candidates before dedupe=${parsed.transactionLikeLineCount}, after dedupe=${parsed.candidateCountAfterDedupe}, duplicate candidates removed=${parsed.duplicateCandidatesRemoved}, normalized disclosures=${parsed.normalized.length}`
       );
     }
 
     console.log(
-      `🧪 ${year}: PTR PDFs processed=${ptrPdfProcessed}, extraction succeeded=${ptrPdfExtracted}, transaction-like lines=${ptrTransactionLikeLines}, normalized disclosures=${ptrNormalizedRows}`
+      `🧪 ${year}: PTR PDFs processed=${ptrPdfProcessed}, extraction succeeded=${ptrPdfExtracted}, reconstructed candidates before dedupe=${ptrTransactionLikeLines}, after dedupe=${ptrTransactionAfterDedupe}, duplicate candidates removed=${ptrDuplicateCandidatesRemoved}, normalized disclosures=${ptrNormalizedRows}`
     );
     if (ptrSkipReasons.size > 0) {
       console.log(`🧪 ${year}: top PTR row skip reasons:`);
@@ -1745,6 +1792,8 @@ async function main() {
   console.log(`   - PDFs successfully downloaded: ${pdfsDownloaded}`);
   console.log(`   - PDFs with extracted text: ${pdfsWithExtractedText}`);
   console.log(`   - parsed transaction rows (before normalization): ${transactionCandidatesBeforeNormalization}`);
+  console.log(`   - parsed transaction rows (after candidate dedupe): ${transactionCandidatesAfterDedupe}`);
+  console.log(`   - duplicate PTR candidates removed pre-normalization: ${duplicateCandidatesRemoved}`);
   console.log(`   - parsed transaction rows: ${parsedTransactionRows}`);
   console.log(`   - parse failures: ${parseFailureCount}`);
   console.log("🧪 Normalization failure reasons:");
@@ -1781,7 +1830,7 @@ async function main() {
     console.log(`   - ${reason}: ${count}`);
   }
   console.log(
-    `🧪 PTR parsed rows before vs after normalization: before=${transactionCandidatesBeforeNormalization}, after=${parsedTransactionRows}`
+    `🧪 PTR parsed rows before dedupe vs after dedupe vs after normalization: before=${transactionCandidatesBeforeNormalization}, after_dedupe=${transactionCandidatesAfterDedupe}, after_normalization=${parsedTransactionRows}`
   );
   console.log(`🧪 rows inserted: ${stats.inserted}`);
   console.log(`🧪 rows updated: ${stats.updated}`);
