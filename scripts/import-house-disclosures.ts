@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { resolveHouseTicker, type TickerResolutionSource } from "./lib/house-asset-resolution";
 import { db } from "../lib/db";
-import { disclosures, politicians } from "../lib/db/schema";
+import { alerts, disclosurePerformanceWindows, disclosures, politicians, researchSignals } from "../lib/db/schema";
 
 const execFileAsync = promisify(execFile);
 
@@ -76,7 +76,8 @@ type NormalizedDisclosure = {
 
 type ImportStats = {
   inserted: number;
-  skippedDuplicate: number;
+  updated: number;
+  skippedUnchanged: number;
   skippedInvalid: number;
 };
 
@@ -976,8 +977,94 @@ async function isDuplicateDisclosure(
   return Boolean(existing[0]);
 }
 
+async function findExistingHouseDisclosureForUpsert(
+  politicianId: number,
+  normalized: NormalizedDisclosure
+): Promise<number | null> {
+  const existing = await db
+    .select({ id: disclosures.id })
+    .from(disclosures)
+    .where(
+      and(
+        eq(disclosures.sourceLabel, HOUSE_SOURCE_LABEL),
+        eq(disclosures.politicianId, politicianId),
+        eq(disclosures.assetName, normalized.assetName),
+        eq(disclosures.tradeType, normalized.tradeType),
+        eq(disclosures.tradeDate, normalized.tradeDate),
+        normalized.filingDate
+          ? eq(disclosures.filingDate, normalized.filingDate)
+          : isNull(disclosures.filingDate)
+      )
+    )
+    .limit(1);
+
+  return existing[0]?.id ?? null;
+}
+
+function chunkArray<T>(entries: T[], chunkSize: number): T[][] {
+  if (chunkSize <= 0) return [entries];
+
+  const chunks: T[][] = [];
+  for (let index = 0; index < entries.length; index += chunkSize) {
+    chunks.push(entries.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+async function resetHouseImportedRowsForLocalDev(): Promise<void> {
+  const houseDisclosureRows = await db
+    .select({ id: disclosures.id })
+    .from(disclosures)
+    .where(eq(disclosures.sourceLabel, HOUSE_SOURCE_LABEL));
+
+  const houseDisclosureIds = houseDisclosureRows.map((row) => row.id);
+  if (houseDisclosureIds.length === 0) {
+    console.log("♻️ RESET_HOUSE_IMPORT requested, but no House disclosures were found.");
+    return;
+  }
+
+  const houseSignalRows = await db
+    .select({ id: researchSignals.id })
+    .from(researchSignals)
+    .where(inArray(researchSignals.disclosureId, houseDisclosureIds));
+  const houseSignalIds = houseSignalRows.map((row) => row.id);
+
+  for (const batch of chunkArray(houseSignalIds, 1000)) {
+    await db.delete(alerts).where(inArray(alerts.researchSignalId, batch));
+  }
+
+  for (const batch of chunkArray(houseDisclosureIds, 1000)) {
+    await db
+      .delete(alerts)
+      .where(
+        or(
+          inArray(alerts.disclosureId, batch),
+          inArray(alerts.researchSignalId, houseSignalIds.length > 0 ? houseSignalIds : [-1])
+        )
+      );
+  }
+
+  for (const batch of chunkArray(houseSignalIds, 1000)) {
+    await db.delete(researchSignals).where(inArray(researchSignals.id, batch));
+  }
+
+  for (const batch of chunkArray(houseDisclosureIds, 1000)) {
+    await db
+      .delete(disclosurePerformanceWindows)
+      .where(inArray(disclosurePerformanceWindows.disclosureId, batch));
+  }
+
+  for (const batch of chunkArray(houseDisclosureIds, 1000)) {
+    await db.delete(disclosures).where(inArray(disclosures.id, batch));
+  }
+
+  console.log(
+    `♻️ RESET_HOUSE_IMPORT complete. Deleted ${houseDisclosureIds.length} House disclosures and ${houseSignalIds.length} dependent research signals.`
+  );
+}
+
 async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promise<ImportStats> {
-  const stats: ImportStats = { inserted: 0, skippedDuplicate: 0, skippedInvalid: 0 };
+  const stats: ImportStats = { inserted: 0, updated: 0, skippedUnchanged: 0, skippedInvalid: 0 };
   let rejectedLogCount = 0;
 
   for (const row of rows) {
@@ -1013,31 +1100,49 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
 
     const politicianId = await getOrCreatePoliticianId(row);
     const duplicate = await isDuplicateDisclosure(politicianId, row);
-
     if (duplicate) {
-      stats.skippedDuplicate += 1;
+      stats.skippedUnchanged += 1;
       continue;
     }
 
-    await db.insert(disclosures).values({
-      politicianId,
-      ticker: row.ticker,
-      assetName: row.assetName,
-      assetType: row.assetType,
-      tradeType: row.tradeType,
-      ownerType: row.ownerType,
-      amountRangeLabel: row.amountRangeLabel,
-      amountMin: row.amountMin,
-      amountMax: row.amountMax,
-      tradeDate: row.tradeDate,
-      filingDate: row.filingDate,
-      filingLagDays: row.filingLagDays,
-      sourceUrl: row.sourceUrl,
-      sourceLabel: row.sourceLabel,
-      updatedAt: new Date(),
-    });
-
-    stats.inserted += 1;
+    const existingHouseDisclosureId = await findExistingHouseDisclosureForUpsert(politicianId, row);
+    if (existingHouseDisclosureId) {
+      await db
+        .update(disclosures)
+        .set({
+          ticker: row.ticker,
+          assetType: row.assetType,
+          ownerType: row.ownerType,
+          amountRangeLabel: row.amountRangeLabel,
+          amountMin: row.amountMin,
+          amountMax: row.amountMax,
+          filingLagDays: row.filingLagDays,
+          sourceUrl: row.sourceUrl,
+          sourceLabel: row.sourceLabel,
+          updatedAt: new Date(),
+        })
+        .where(eq(disclosures.id, existingHouseDisclosureId));
+      stats.updated += 1;
+    } else {
+      await db.insert(disclosures).values({
+        politicianId,
+        ticker: row.ticker,
+        assetName: row.assetName,
+        assetType: row.assetType,
+        tradeType: row.tradeType,
+        ownerType: row.ownerType,
+        amountRangeLabel: row.amountRangeLabel,
+        amountMin: row.amountMin,
+        amountMax: row.amountMax,
+        tradeDate: row.tradeDate,
+        filingDate: row.filingDate,
+        filingLagDays: row.filingLagDays,
+        sourceUrl: row.sourceUrl,
+        sourceLabel: row.sourceLabel,
+        updatedAt: new Date(),
+      });
+      stats.inserted += 1;
+    }
   }
 
   return stats;
@@ -1045,12 +1150,18 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
 
 async function main() {
   const years = parseYearsArg();
+  const shouldResetBeforeImport = process.env.RESET_HOUSE_IMPORT === "true";
 
   if (years.length === 0) {
     throw new Error("No valid years provided. Use --years=2026 or similar.");
   }
 
   console.log(`🏛️ House import started for year(s): ${years.join(", ")}`);
+  console.log(`🧪 RESET_HOUSE_IMPORT=${shouldResetBeforeImport ? "enabled" : "disabled"}`);
+
+  if (shouldResetBeforeImport) {
+    await resetHouseImportedRowsForLocalDev();
+  }
 
   const normalizedRows: NormalizedDisclosure[] = [];
   const failureReasonCounts = new Map<NormalizationFailureReason, number>();
@@ -1265,7 +1376,7 @@ async function main() {
   const stats = await importNormalizedDisclosures(normalizedRows);
 
   console.log(
-    `✅ Import done. Inserted ${stats.inserted}, skipped duplicates ${stats.skippedDuplicate}.`
+    `✅ Import done. Inserted ${stats.inserted}, updated ${stats.updated}, skipped unchanged ${stats.skippedUnchanged}.`
   );
 }
 
