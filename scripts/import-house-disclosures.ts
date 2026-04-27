@@ -72,6 +72,7 @@ type NormalizedDisclosure = {
   sourceLabel: string;
   normalizedAssetName: string;
   tickerResolutionSource: TickerResolutionSource;
+  debugRawLine?: string | null;
 };
 
 type ImportStats = {
@@ -79,7 +80,18 @@ type ImportStats = {
   updated: number;
   skippedUnchanged: number;
   skippedInvalid: number;
+  rejectionReasons: Map<ImportRejectedReason, number>;
 };
+
+type ImportRejectedReason =
+  | "missing ticker"
+  | "invalid trade date"
+  | "trade date after filing date"
+  | "future trade date"
+  | "missing filing date"
+  | "duplicate"
+  | "non-stock/unsupported asset"
+  | "parse failure";
 
 type PtrRowSkipReason =
   | "missing_trade_date"
@@ -694,6 +706,7 @@ function parsePtrTransactionsFromPdfText(params: {
       sourceLabel: HOUSE_SOURCE_LABEL,
       normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
       tickerResolutionSource: resolvedTicker.source,
+      debugRawLine: line,
     });
   }
 
@@ -794,6 +807,7 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
     sourceLabel: HOUSE_SOURCE_LABEL,
     normalizedAssetName: resolvedTicker.normalization.canonicalAssetName,
     tickerResolutionSource: resolvedTicker.source,
+    debugRawLine: JSON.stringify(row),
   };
 }
 
@@ -1064,32 +1078,62 @@ async function resetHouseImportedRowsForLocalDev(): Promise<void> {
 }
 
 async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promise<ImportStats> {
-  const stats: ImportStats = { inserted: 0, updated: 0, skippedUnchanged: 0, skippedInvalid: 0 };
+  const stats: ImportStats = {
+    inserted: 0,
+    updated: 0,
+    skippedUnchanged: 0,
+    skippedInvalid: 0,
+    rejectionReasons: new Map<ImportRejectedReason, number>(),
+  };
   let rejectedLogCount = 0;
+  let acceptedLogCount = 0;
+
+  const incrementRejectReason = (reason: ImportRejectedReason) => {
+    stats.rejectionReasons.set(reason, (stats.rejectionReasons.get(reason) ?? 0) + 1);
+  };
 
   for (const row of rows) {
+    const now = new Date();
+    const hasValidTradeDate = isValidTradingDate(row.tradeDate);
+    const hasFilingDate = row.filingDate !== null;
+    const hasValidFilingDate = hasFilingDate && isValidTradingDate(row.filingDate);
+    const isTradeDateFuture = hasValidTradeDate ? isFutureDate(row.tradeDate, now) : false;
+    const isTradeAfterFiling =
+      hasValidTradeDate && hasValidFilingDate ? row.tradeDate.getTime() > row.filingDate.getTime() : false;
     const isTradeDateValid =
-      isValidTradingDate(row.tradeDate) &&
-      !isFutureDate(row.tradeDate, new Date()) &&
-      row.filingDate !== null &&
-      isValidTradingDate(row.filingDate) &&
-      row.tradeDate.getTime() <= row.filingDate.getTime();
+      hasValidTradeDate && !isTradeDateFuture && hasValidFilingDate && !isTradeAfterFiling;
     const filingLagDays =
       row.filingDate && isTradeDateValid
         ? Math.floor((row.filingDate.getTime() - row.tradeDate.getTime()) / (1000 * 60 * 60 * 24))
         : null;
+    const isUnsupportedAsset = row.assetType !== "stock";
     const isValid =
       Boolean(row.ticker) &&
-      Boolean(row.filingDate) &&
+      hasFilingDate &&
       isTradeDateValid &&
       filingLagDays !== null &&
-      filingLagDays >= 0;
+      filingLagDays >= 0 &&
+      !isUnsupportedAsset;
 
     if (!isValid) {
       stats.skippedInvalid += 1;
+      const reason: ImportRejectedReason = !row.ticker
+        ? "missing ticker"
+        : !hasFilingDate
+          ? "missing filing date"
+          : !hasValidTradeDate
+            ? "invalid trade date"
+            : isTradeDateFuture
+              ? "future trade date"
+              : isTradeAfterFiling
+                ? "trade date after filing date"
+                : isUnsupportedAsset
+                  ? "non-stock/unsupported asset"
+                  : "parse failure";
+      incrementRejectReason(reason);
       if (rejectedLogCount < 20) {
         console.log(
-          `⚠️ Rejected disclosure row[${rejectedLogCount + 1}] ticker="${row.ticker ?? "null"}" tradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" lag="${filingLagDays ?? "null"}" asset="${row.assetName}"`
+          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
       }
@@ -1102,7 +1146,21 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     const duplicate = await isDuplicateDisclosure(politicianId, row);
     if (duplicate) {
       stats.skippedUnchanged += 1;
+      incrementRejectReason("duplicate");
+      if (rejectedLogCount < 20) {
+        console.log(
+          `⚠️ Rejected row[${rejectedLogCount + 1}] reason="duplicate" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
+        );
+        rejectedLogCount += 1;
+      }
       continue;
+    }
+
+    if (acceptedLogCount < 20) {
+      console.log(
+        `✅ Accepted row[${acceptedLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${row.tradeDate?.toISOString?.().slice(0, 10) ?? "null"}" filingDate="${row.filingDate?.toISOString?.().slice(0, 10) ?? "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
+      );
+      acceptedLogCount += 1;
     }
 
     const existingHouseDisclosureId = await findExistingHouseDisclosureForUpsert(politicianId, row);
@@ -1167,6 +1225,12 @@ async function main() {
   const failureReasonCounts = new Map<NormalizationFailureReason, number>();
   const tickerResolutionCounts = new Map<TickerResolutionSource, number>();
   const unresolvedAssetCounts = new Map<string, number>();
+  const filingsDiscoveredByYear = new Map<number, number>();
+  let pdfsAttempted = 0;
+  let pdfsDownloaded = 0;
+  let pdfsWithExtractedText = 0;
+  let parsedTransactionRows = 0;
+  let parseFailureCount = 0;
   let rejectedRows = 0;
 
   for (const year of years) {
@@ -1196,6 +1260,7 @@ async function main() {
     const filingTypeP = sourceRows.filter(
       (row) => (getRowFilingType(row) ?? "").trim().toUpperCase() === "P"
     );
+    filingsDiscoveredByYear.set(year, filingTypeP.length);
 
     console.log(`🧪 ${year}: FilingType=P rows: ${filingTypeP.length}`);
     console.log(`🧪 ${year}: PTR candidate preview count: ${Math.min(5, filingTypeP.length)}`);
@@ -1226,6 +1291,7 @@ async function main() {
         console.log(`   📄 Candidate[${index + 1}] has no DocID; skipping PDF extraction.`);
         continue;
       }
+      pdfsAttempted += 1;
       ptrPdfProcessed += 1;
 
       const guessedUrls = buildDocumentUrlGuesses(year, docId);
@@ -1235,6 +1301,7 @@ async function main() {
         console.log(`   📄 Candidate[${index + 1}] DocID=${docId} fetch result: PDF unavailable`);
         continue;
       }
+      pdfsDownloaded += 1;
 
       const extraction = await extractPdfTextBuffer(pdfFetch.buffer);
       const extractedText = extraction.text;
@@ -1266,6 +1333,7 @@ async function main() {
       if (!extractedText) {
         continue;
       }
+      pdfsWithExtractedText += 1;
       ptrPdfExtracted += 1;
 
       const parsed = parsePtrTransactionsFromPdfText({
@@ -1276,6 +1344,7 @@ async function main() {
 
       ptrTransactionLikeLines += parsed.transactionLikeLineCount;
       ptrNormalizedRows += parsed.normalized.length;
+      parseFailureCount += Math.max(0, parsed.transactionLikeLineCount - parsed.normalized.length);
 
       parsed.skipReasons.forEach((count, reason) => {
         ptrSkipReasons.set(reason, (ptrSkipReasons.get(reason) ?? 0) + count);
@@ -1292,6 +1361,7 @@ async function main() {
         ptrBeforeAfterSamples.push(sample);
       }
       normalizedRows.push(...parsed.normalized);
+      parsedTransactionRows += parsed.normalized.length;
 
       console.log(
         `      transaction-like lines=${parsed.transactionLikeLineCount}, normalized disclosures=${parsed.normalized.length}`
@@ -1334,6 +1404,7 @@ async function main() {
       const normalized = normalizeRow(sourceRow, year);
       if (!normalized) {
         rejectedRows += 1;
+        parseFailureCount += 1;
         const reasons = classifyNormalizationFailure(sourceRow);
         for (const reason of reasons) {
           failureReasonCounts.set(reason, (failureReasonCounts.get(reason) ?? 0) + 1);
@@ -1341,6 +1412,7 @@ async function main() {
         continue;
       }
       normalizedRows.push(normalized);
+      parsedTransactionRows += 1;
     }
   }
 
@@ -1359,6 +1431,16 @@ async function main() {
 
   console.log(`🧪 Normalized ${normalizedRows.length} disclosure row(s).`);
   console.log(`🧪 Rejected ${rejectedRows} row(s) during normalization.`);
+  console.log("🧪 Import-stage counters:");
+  console.log("   - filings discovered by year:");
+  for (const [year, count] of [...filingsDiscoveredByYear.entries()].sort((a, b) => a[0] - b[0])) {
+    console.log(`     • ${year}: ${count}`);
+  }
+  console.log(`   - PDFs attempted: ${pdfsAttempted}`);
+  console.log(`   - PDFs successfully downloaded: ${pdfsDownloaded}`);
+  console.log(`   - PDFs with extracted text: ${pdfsWithExtractedText}`);
+  console.log(`   - parsed transaction rows: ${parsedTransactionRows}`);
+  console.log(`   - parse failures: ${parseFailureCount}`);
   console.log("🧪 Normalization failure reasons:");
   for (const [reason, count] of [...failureReasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`   - ${reason}: ${count}`);
@@ -1374,6 +1456,35 @@ async function main() {
   }
 
   const stats = await importNormalizedDisclosures(normalizedRows);
+  const totalRejectedByValidationAndDuplicate =
+    [...stats.rejectionReasons.entries()].reduce((sum, [, count]) => sum + count, 0) + parseFailureCount;
+
+  console.log("🧪 Rows rejected by reason:");
+  const reasonOrder: ImportRejectedReason[] = [
+    "missing ticker",
+    "invalid trade date",
+    "trade date after filing date",
+    "future trade date",
+    "missing filing date",
+    "duplicate",
+    "non-stock/unsupported asset",
+    "parse failure",
+  ];
+  for (const reason of reasonOrder) {
+    const count = (stats.rejectionReasons.get(reason) ?? 0) + (reason === "parse failure" ? parseFailureCount : 0);
+    console.log(`   - ${reason}: ${count}`);
+  }
+  console.log(`🧪 rows inserted: ${stats.inserted}`);
+  console.log(`🧪 rows updated: ${stats.updated}`);
+  console.log(`🧪 rows skipped as exact duplicates: ${stats.skippedUnchanged}`);
+  console.log("🧪 Import volume loss checkpoints:");
+  const discoveredFilingsTotal = [...filingsDiscoveredByYear.values()].reduce((sum, value) => sum + value, 0);
+  console.log(`   - discovery: ${discoveredFilingsTotal}`);
+  console.log(`   - PDF download: attempted=${pdfsAttempted}, downloaded=${pdfsDownloaded}`);
+  console.log(`   - text extraction: with_text=${pdfsWithExtractedText}`);
+  console.log(`   - row parsing: parsed_transaction_rows=${parsedTransactionRows}`);
+  console.log(`   - validation rejection: ${totalRejectedByValidationAndDuplicate - (stats.rejectionReasons.get("duplicate") ?? 0)}`);
+  console.log(`   - duplicate skipping: ${stats.rejectionReasons.get("duplicate") ?? 0}`);
 
   console.log(
     `✅ Import done. Inserted ${stats.inserted}, updated ${stats.updated}, skipped unchanged ${stats.skippedUnchanged}.`
