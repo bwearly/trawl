@@ -32,6 +32,11 @@ type YahooPriceRow = {
   volume: number | null;
 };
 
+type TickerWindow = {
+  ticker: string;
+  earliestAnchorDate: Date;
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -45,13 +50,26 @@ function normalizeYahooSymbol(symbol: string) {
   }
 }
 
-async function fetchDailyHistory(symbol: string): Promise<YahooPriceRow[]> {
+function startOfUtcDay(date: Date) {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+async function fetchDailyHistory(
+  symbol: string,
+  period1: Date
+): Promise<YahooPriceRow[]> {
   const end = new Date();
-  const start = new Date();
-  start.setUTCFullYear(end.getUTCFullYear() - 1);
 
   const result = (await yahooFinance.chart(symbol, {
-    period1: start,
+    period1,
     period2: end,
     interval: "1d",
   })) as YahooChartResultArray;
@@ -74,25 +92,51 @@ async function main() {
   console.log("Importing price history from Yahoo Finance...");
 
   const disclosureRows = await db
-    .select({ ticker: disclosures.ticker })
+    .select({
+      ticker: disclosures.ticker,
+      tradeDate: disclosures.tradeDate,
+      filingDate: disclosures.filingDate,
+    })
     .from(disclosures);
 
-  const tickers = Array.from(
-    new Set(
-      disclosureRows
-        .map((row) => row.ticker)
-        .filter((ticker): ticker is string => Boolean(ticker))
-    )
+  const tickerWindows = new Map<string, Date>();
+
+  for (const row of disclosureRows) {
+    const ticker = row.ticker?.trim().toUpperCase();
+    if (!ticker) continue;
+
+    const anchorDate = row.tradeDate ?? row.filingDate;
+    if (!anchorDate) continue;
+
+    const normalizedAnchor = startOfUtcDay(anchorDate);
+    const existing = tickerWindows.get(ticker);
+    if (!existing || normalizedAnchor < existing) {
+      tickerWindows.set(ticker, normalizedAnchor);
+    }
+  }
+
+  const tickers: TickerWindow[] = Array.from(tickerWindows.entries()).map(
+    ([ticker, earliestAnchorDate]) => ({
+      ticker,
+      earliestAnchorDate,
+    })
   );
 
-  console.log(`Found ${tickers.length} unique tickers: ${tickers.join(", ")}`);
+  console.log(
+    `Found ${tickers.length} unique tickers: ${tickers
+      .map((entry) => entry.ticker)
+      .join(", ")}`
+  );
 
-  for (const ticker of tickers) {
+  for (const { ticker, earliestAnchorDate } of tickers) {
     const yahooSymbol = normalizeYahooSymbol(ticker);
+    const periodStart = addDays(earliestAnchorDate, -10);
 
-    console.log(`Fetching ${ticker} (Yahoo: ${yahooSymbol})...`);
+    console.log(
+      `Fetching ${ticker} (Yahoo: ${yahooSymbol}) from ${periodStart.toISOString().slice(0, 10)}...`
+    );
 
-    const quotes = await fetchDailyHistory(yahooSymbol);
+    const quotes = await fetchDailyHistory(yahooSymbol, periodStart);
 
     await db.delete(priceHistory).where(eq(priceHistory.ticker, ticker));
 

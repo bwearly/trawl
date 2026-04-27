@@ -3,20 +3,30 @@ config({ path: ".env.local" });
 
 import { db } from "../lib/db";
 import {
+  shouldGenerateAlert,
+} from "../lib/domain/alerts/should-generate-alert";
+import {
   disclosurePerformanceWindows,
   disclosures,
   politicians,
+  priceHistory,
   researchSignals,
 } from "../lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 type EvaluatedSignalRow = {
   signalId: number;
+  disclosureId: number;
+  politicianId: number;
+  signalStatus: string;
   ticker: string;
   score: number;
   tradeType: string;
   politicianName: string;
   party: string | null;
+  tradeDate: Date | null;
+  filingDate: Date | null;
+  filingLagDays: number | null;
   return7d: number | null;
   return30d: number | null;
   spyReturn7d: number | null;
@@ -67,6 +77,11 @@ type TradeTypeStats = {
   stats: SummaryStats;
 };
 
+type AlertBlockedByStats = {
+  blockedBy: string;
+  count: number;
+};
+
 type FactorBandLabel = "Low" | "Medium" | "High" | "Missing";
 
 type FactorBandStats = {
@@ -98,7 +113,7 @@ const FACTOR_BAND_THRESHOLDS: Record<FactorName, FactorBandThresholds> = {
   momentumScore: {
     lowUpperExclusive: 5,
     mediumUpperInclusive: 10,
-    rangeLabel: "0-15",
+    rangeLabel: "0-22",
   },
   historicalPoliticianScore: {
     lowUpperExclusive: 6,
@@ -206,11 +221,17 @@ async function loadSignals(): Promise<EvaluatedSignalRow[]> {
   const rows = await db
     .select({
       signalId: researchSignals.id,
+      disclosureId: disclosures.id,
+      politicianId: researchSignals.politicianId,
+      signalStatus: researchSignals.signalStatus,
       ticker: researchSignals.ticker,
       score: researchSignals.score,
       tradeType: disclosures.tradeType,
       politicianName: politicians.fullName,
       party: politicians.party,
+      tradeDate: disclosures.tradeDate,
+      filingDate: disclosures.filingDate,
+      filingLagDays: disclosures.filingLagDays,
       return7d: disclosurePerformanceWindows.return7d,
       return30d: disclosurePerformanceWindows.return30d,
       spyReturn7d: disclosurePerformanceWindows.spyReturn7d,
@@ -234,11 +255,17 @@ async function loadSignals(): Promise<EvaluatedSignalRow[]> {
 
   return rows.map((row) => ({
     signalId: row.signalId,
+    disclosureId: row.disclosureId,
+    politicianId: row.politicianId,
+    signalStatus: row.signalStatus,
     ticker: row.ticker,
     score: Number(row.score),
     tradeType: row.tradeType,
     politicianName: row.politicianName,
     party: row.party,
+    tradeDate: row.tradeDate,
+    filingDate: row.filingDate,
+    filingLagDays: row.filingLagDays,
     return7d: parseNumeric(row.return7d),
     return30d: parseNumeric(row.return30d),
     spyReturn7d: parseNumeric(row.spyReturn7d),
@@ -252,6 +279,219 @@ async function loadSignals(): Promise<EvaluatedSignalRow[]> {
     clusterScore: parseNumeric(row.clusterScore),
     userRelevanceScore: parseNumeric(row.userRelevanceScore),
   }));
+}
+
+function startOfUtcDay(date: Date) {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function computeConfidencePenalty(
+  row: EvaluatedSignalRow,
+  historicalSampleSize: number
+): number {
+  let confidencePenalty = 0;
+
+  if (historicalSampleSize === 0) confidencePenalty += 4;
+  else if (historicalSampleSize === 1) confidencePenalty += 3;
+  else if (historicalSampleSize === 2) confidencePenalty += 2;
+  else if (historicalSampleSize <= 4) confidencePenalty += 1;
+
+  if (row.return30d == null || row.spyReturn30d == null) confidencePenalty += 3;
+  if (row.return7d == null || row.spyReturn7d == null) confidencePenalty += 2;
+
+  return confidencePenalty;
+}
+
+function evaluateAlertBlockedBy(rows: EvaluatedSignalRow[]): AlertBlockedByStats[] {
+  const counts = new Map<string, number>();
+  const byPolitician = new Map<number, EvaluatedSignalRow[]>();
+
+  for (const row of rows) {
+    const existing = byPolitician.get(row.politicianId) ?? [];
+    existing.push(row);
+    byPolitician.set(row.politicianId, existing);
+  }
+
+  for (const [, politicianRows] of byPolitician) {
+    politicianRows.sort((a, b) => a.disclosureId - b.disclosureId);
+    const priorAlphas: number[] = [];
+
+    for (const row of politicianRows) {
+      const confidencePenalty = computeConfidencePenalty(row, priorAlphas.length);
+
+      const eligibility = shouldGenerateAlert({
+        signalStatus: row.signalStatus,
+        tradeType: row.tradeType,
+        adjustedScore: row.score,
+        confidencePenalty,
+        filingLagDays: row.filingLagDays,
+      });
+
+      const blockedBy = eligibility.blockedBy ?? "eligible";
+      counts.set(blockedBy, (counts.get(blockedBy) ?? 0) + 1);
+
+      const alpha30d = calcAlpha(row.return30d, row.spyReturn30d);
+      const alpha7d = calcAlpha(row.return7d, row.spyReturn7d);
+      const chosenAlpha = alpha30d ?? alpha7d;
+
+      if (chosenAlpha != null) {
+        priorAlphas.push(chosenAlpha);
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([blockedBy, count]) => ({ blockedBy, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+async function printDiagnostics(rows: EvaluatedSignalRow[]) {
+  const today = startOfUtcDay(new Date());
+  const latestPriceRows = await db
+    .select({
+      ticker: priceHistory.ticker,
+      latestDate: sql<Date>`max(${priceHistory.date})`,
+    })
+    .from(priceHistory)
+    .groupBy(priceHistory.ticker);
+
+  const latestPriceDateByTicker = new Map<string, Date>();
+  for (const row of latestPriceRows) {
+    latestPriceDateByTicker.set(row.ticker.trim().toUpperCase(), row.latestDate);
+  }
+
+  const spyLatestDate = latestPriceDateByTicker.get("SPY");
+  const missingPriceByTicker = new Map<string, number>();
+  const invalidOrFutureTradeDate = {
+    missingAnchorDate: 0,
+    tradeDateAfterFilingDate: 0,
+    futureTradeDate: 0,
+    total: 0,
+  };
+  const tooRecentCounts = {
+    window7d: 0,
+    window30d: 0,
+  };
+
+  const filingLags = rows
+    .map((row) => row.filingLagDays)
+    .filter((lag): lag is number => lag != null);
+
+  for (const row of rows) {
+    const normalizedTicker = row.ticker.trim().toUpperCase();
+    const tradeAnchor = row.tradeDate ?? row.filingDate;
+
+    if (!latestPriceDateByTicker.has(normalizedTicker)) {
+      missingPriceByTicker.set(
+        normalizedTicker,
+        (missingPriceByTicker.get(normalizedTicker) ?? 0) + 1
+      );
+    }
+
+    let hasInvalid = false;
+    if (!tradeAnchor) {
+      invalidOrFutureTradeDate.missingAnchorDate += 1;
+      hasInvalid = true;
+    }
+
+    if (row.tradeDate && row.filingDate && row.tradeDate > row.filingDate) {
+      invalidOrFutureTradeDate.tradeDateAfterFilingDate += 1;
+      hasInvalid = true;
+    }
+
+    if (row.tradeDate && startOfUtcDay(row.tradeDate) > today) {
+      invalidOrFutureTradeDate.futureTradeDate += 1;
+      hasInvalid = true;
+    }
+
+    if (hasInvalid) {
+      invalidOrFutureTradeDate.total += 1;
+    }
+
+    if (!tradeAnchor) continue;
+
+    const anchor = startOfUtcDay(tradeAnchor);
+    const tickerLatestDate = latestPriceDateByTicker.get(normalizedTicker);
+    const required7d = addDays(anchor, 7);
+    const required30d = addDays(anchor, 30);
+
+    if (
+      !tickerLatestDate ||
+      tickerLatestDate < required7d ||
+      (spyLatestDate != null && spyLatestDate < required7d)
+    ) {
+      tooRecentCounts.window7d += 1;
+    }
+
+    if (
+      !tickerLatestDate ||
+      tickerLatestDate < required30d ||
+      (spyLatestDate != null && spyLatestDate < required30d)
+    ) {
+      tooRecentCounts.window30d += 1;
+    }
+  }
+
+  const momentumValues = rows
+    .map((row) => row.momentumScore)
+    .filter((score): score is number => score != null);
+
+  const minLag = filingLags.length > 0 ? Math.min(...filingLags) : null;
+  const maxLag = filingLags.length > 0 ? Math.max(...filingLags) : null;
+  const avgLag = average(filingLags);
+  const minMomentum =
+    momentumValues.length > 0 ? Math.min(...momentumValues) : null;
+  const maxMomentum =
+    momentumValues.length > 0 ? Math.max(...momentumValues) : null;
+
+  const alertBlockedByStats = evaluateAlertBlockedBy(rows);
+
+  console.log("=== DIAGNOSTICS ===\n");
+  console.log("Disclosures missing price history rows (by ticker):");
+  if (missingPriceByTicker.size === 0) {
+    console.log("  None");
+  } else {
+    Array.from(missingPriceByTicker.entries())
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([ticker, count]) => console.log(`  ${ticker}: ${count}`));
+  }
+
+  console.log("\nDisclosures too recent for windows:");
+  console.log(`  7d window unavailable: ${tooRecentCounts.window7d}`);
+  console.log(`  30d window unavailable: ${tooRecentCounts.window30d}`);
+
+  console.log("\nInvalid/future trade date diagnostics:");
+  console.log(`  Missing trade+filing anchor date: ${invalidOrFutureTradeDate.missingAnchorDate}`);
+  console.log(`  Trade date after filing date: ${invalidOrFutureTradeDate.tradeDateAfterFilingDate}`);
+  console.log(`  Future trade dates: ${invalidOrFutureTradeDate.futureTradeDate}`);
+  console.log(`  Total affected disclosures: ${invalidOrFutureTradeDate.total}`);
+
+  console.log("\nFiling lag (days):");
+  console.log(`  min=${minLag ?? "—"} max=${maxLag ?? "—"} avg=${avgLag ?? "—"}`);
+
+  console.log("\nMomentum score range:");
+  console.log(`  min=${minMomentum ?? "—"} max=${maxMomentum ?? "—"}`);
+
+  console.log("\nSignal count by alertBlockedBy:");
+  for (const row of alertBlockedByStats) {
+    console.log(`  ${row.blockedBy}: ${row.count}`);
+  }
+
+  if (minLag != null && minLag < 0) {
+    console.log(
+      `\nWARNING: Found negative filing lag values (min=${minLag}). Investigate trade/filing date parsing.`
+    );
+  }
+
+  console.log("");
 }
 
 function evaluateBuckets(rows: EvaluatedSignalRow[]): BucketStats[] {
@@ -466,6 +706,7 @@ async function main() {
   printFactorBandReport(factorBandStats);
   printMomentumExtremes(rows);
   printBestAndWorstSignals(rows);
+  await printDiagnostics(rows);
 
   console.log("Finished evaluating signals.");
 }
