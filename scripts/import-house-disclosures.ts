@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -955,17 +955,10 @@ function parsePtrTransactionsFromPdfText(params: {
 
   const dedupedCandidates = new Map<string, { row: NormalizedDisclosure; score: number }>();
   for (const row of candidateRows) {
-    const tradeDateKey = row.tradeDate.toISOString().slice(0, 10);
-    const filingDateKey = row.filingDate ? row.filingDate.toISOString().slice(0, 10) : "null";
-    const ownerComponent = row.ownerType === "unknown" ? "unreliable_owner" : row.ownerType;
-    const stableKey = [
-      row.ticker ?? "null",
-      row.tradeType,
-      tradeDateKey,
-      filingDateKey,
-      row.amountRangeLabel ?? "null",
-      ownerComponent,
-    ].join("::");
+    const stableKey = buildDisclosureNaturalKeyFromNormalized(
+      row.politicianName.trim().toUpperCase(),
+      row
+    );
     const nextScore = scoreAssetNameQuality(row.assetName);
     const existing = dedupedCandidates.get(stableKey);
     if (!existing || nextScore > existing.score) {
@@ -1242,22 +1235,33 @@ async function isDuplicateDisclosure(
   politicianId: number,
   normalized: NormalizedDisclosure
 ): Promise<boolean> {
+  const normalizedNaturalKey = buildDisclosureNaturalKeyFromNormalized(String(politicianId), normalized);
   const existing = await db
-    .select({ id: disclosures.id })
+    .select({
+      id: disclosures.id,
+      politicianId: disclosures.politicianId,
+      ticker: disclosures.ticker,
+      tradeType: disclosures.tradeType,
+      tradeDate: disclosures.tradeDate,
+      filingDate: disclosures.filingDate,
+      amountRangeLabel: disclosures.amountRangeLabel,
+    })
     .from(disclosures)
     .where(
       and(
         eq(disclosures.politicianId, politicianId),
-        eq(disclosures.assetName, normalized.assetName),
         eq(disclosures.tradeType, normalized.tradeType),
         eq(disclosures.tradeDate, normalized.tradeDate),
         normalized.filingDate ? eq(disclosures.filingDate, normalized.filingDate) : isNull(disclosures.filingDate),
-        normalized.ticker ? eq(disclosures.ticker, normalized.ticker) : isNull(disclosures.ticker)
+        normalized.ticker ? eq(disclosures.ticker, normalized.ticker) : isNull(disclosures.ticker),
+        normalized.amountRangeLabel
+          ? eq(disclosures.amountRangeLabel, normalized.amountRangeLabel)
+          : isNull(disclosures.amountRangeLabel)
       )
     )
-    .limit(1);
+    .limit(5);
 
-  return Boolean(existing[0]);
+  return existing.some((row) => buildDisclosureNaturalKeyFromDbRow(row) === normalizedNaturalKey);
 }
 
 async function findExistingHouseDisclosureForUpsert(
@@ -1265,23 +1269,49 @@ async function findExistingHouseDisclosureForUpsert(
   normalized: NormalizedDisclosure
 ): Promise<number | null> {
   const existing = await db
-    .select({ id: disclosures.id })
+    .select({
+      id: disclosures.id,
+      politicianId: disclosures.politicianId,
+      ticker: disclosures.ticker,
+      tradeType: disclosures.tradeType,
+      tradeDate: disclosures.tradeDate,
+      filingDate: disclosures.filingDate,
+      amountRangeLabel: disclosures.amountRangeLabel,
+      assetName: disclosures.assetName,
+    })
     .from(disclosures)
     .where(
       and(
         eq(disclosures.sourceLabel, HOUSE_SOURCE_LABEL),
         eq(disclosures.politicianId, politicianId),
-        eq(disclosures.assetName, normalized.assetName),
         eq(disclosures.tradeType, normalized.tradeType),
         eq(disclosures.tradeDate, normalized.tradeDate),
+        normalized.ticker ? eq(disclosures.ticker, normalized.ticker) : isNull(disclosures.ticker),
         normalized.filingDate
           ? eq(disclosures.filingDate, normalized.filingDate)
-          : isNull(disclosures.filingDate)
+          : isNull(disclosures.filingDate),
+        normalized.amountRangeLabel
+          ? eq(disclosures.amountRangeLabel, normalized.amountRangeLabel)
+          : isNull(disclosures.amountRangeLabel)
       )
     )
-    .limit(1);
+    .limit(10);
 
-  return existing[0]?.id ?? null;
+  const targetKey = buildDisclosureNaturalKeyFromNormalized(String(politicianId), normalized);
+  const matches = existing.filter((row) => buildDisclosureNaturalKeyFromDbRow(row) === targetKey);
+  if (matches.length === 0) return null;
+
+  let bestId = matches[0]!.id;
+  let bestScore = scoreAssetNameQuality(matches[0]!.assetName);
+  for (const row of matches.slice(1)) {
+    const score = scoreAssetNameQuality(row.assetName);
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = row.id;
+    }
+  }
+
+  return bestId;
 }
 
 function chunkArray<T>(entries: T[], chunkSize: number): T[][] {
@@ -1311,6 +1341,45 @@ function sanitizeDisclosureForImport(row: NormalizedDisclosure): NormalizedDiscl
     party: sanitizeParsedText(row.party),
     state: sanitizeParsedText(row.state),
   };
+}
+
+function buildDisclosureNaturalKeyFromNormalized(
+  politicianKey: string,
+  normalized: Pick<
+    NormalizedDisclosure,
+    "ticker" | "tradeType" | "tradeDate" | "filingDate" | "amountRangeLabel"
+  >
+): string {
+  const tradeDate = normalized.tradeDate.toISOString().slice(0, 10);
+  const filingDate = normalized.filingDate ? normalized.filingDate.toISOString().slice(0, 10) : "null";
+  return [
+    politicianKey,
+    normalized.ticker ?? "null",
+    normalized.tradeType,
+    tradeDate,
+    filingDate,
+    normalized.amountRangeLabel ?? "null",
+  ].join("::");
+}
+
+function buildDisclosureNaturalKeyFromDbRow(row: {
+  politicianId: number;
+  ticker: string | null;
+  tradeType: string;
+  tradeDate: Date | null;
+  filingDate: Date | null;
+  amountRangeLabel: string | null;
+}): string | null {
+  if (!(row.tradeDate instanceof Date)) return null;
+  const filingDate = row.filingDate instanceof Date ? row.filingDate.toISOString().slice(0, 10) : "null";
+  return [
+    row.politicianId,
+    row.ticker?.trim().toUpperCase() ?? "null",
+    row.tradeType,
+    row.tradeDate.toISOString().slice(0, 10),
+    filingDate,
+    row.amountRangeLabel ?? "null",
+  ].join("::");
 }
 
 async function resetHouseImportedRowsForLocalDev(): Promise<void> {
@@ -1362,6 +1431,94 @@ async function resetHouseImportedRowsForLocalDev(): Promise<void> {
 
   console.log(
     `♻️ RESET_HOUSE_IMPORT complete. Deleted ${houseDisclosureIds.length} House disclosures and ${houseSignalIds.length} dependent research signals.`
+  );
+}
+
+async function cleanupHouseDisclosureDuplicates(): Promise<void> {
+  const duplicateGroups = await db.execute(sql`
+    with duplicate_groups as (
+      select
+        d.politician_id,
+        upper(coalesce(d.ticker, 'NULL')) as ticker_key,
+        d.trade_type,
+        d.trade_date::date as trade_date_key,
+        d.filing_date::date as filing_date_key,
+        coalesce(d.amount_range_label, 'NULL') as amount_key,
+        array_agg(d.id order by d.id asc) as disclosure_ids,
+        count(*) as duplicate_count
+      from disclosures d
+      where d.source_label = ${HOUSE_SOURCE_LABEL}
+      group by
+        d.politician_id,
+        upper(coalesce(d.ticker, 'NULL')),
+        d.trade_type,
+        d.trade_date::date,
+        d.filing_date::date,
+        coalesce(d.amount_range_label, 'NULL')
+      having count(*) > 1
+    )
+    select disclosure_ids from duplicate_groups;
+  `);
+
+  const groups = duplicateGroups.rows as Array<{ disclosure_ids: number[] }>;
+  if (groups.length === 0) {
+    console.log("🧹 Duplicate cleanup skipped: no duplicate House disclosure groups found.");
+    return;
+  }
+
+  let deletedDisclosures = 0;
+  let deletedSignals = 0;
+  let deletedPerformanceRows = 0;
+
+  for (const group of groups) {
+    const ids = group.disclosure_ids;
+    if (!Array.isArray(ids) || ids.length <= 1) continue;
+
+    const disclosureRows = await db
+      .select({ id: disclosures.id, assetName: disclosures.assetName })
+      .from(disclosures)
+      .where(inArray(disclosures.id, ids));
+
+    let keepId = disclosureRows[0]?.id;
+    let keepScore = scoreAssetNameQuality(disclosureRows[0]?.assetName ?? "");
+    for (const row of disclosureRows.slice(1)) {
+      const score = scoreAssetNameQuality(row.assetName);
+      if (score > keepScore) {
+        keepScore = score;
+        keepId = row.id;
+      }
+    }
+
+    const removeIds = ids.filter((id) => id !== keepId);
+    if (removeIds.length === 0) continue;
+
+    const signalRows = await db
+      .select({ id: researchSignals.id })
+      .from(researchSignals)
+      .where(inArray(researchSignals.disclosureId, removeIds));
+    const signalIds = signalRows.map((row) => row.id);
+
+    for (const batch of chunkArray(signalIds, 1000)) {
+      if (batch.length === 0) continue;
+      await db.delete(alerts).where(inArray(alerts.researchSignalId, batch));
+      await db.delete(researchSignals).where(inArray(researchSignals.id, batch));
+      deletedSignals += batch.length;
+    }
+
+    for (const batch of chunkArray(removeIds, 1000)) {
+      if (batch.length === 0) continue;
+      await db.delete(alerts).where(inArray(alerts.disclosureId, batch));
+      await db
+        .delete(disclosurePerformanceWindows)
+        .where(inArray(disclosurePerformanceWindows.disclosureId, batch));
+      await db.delete(disclosures).where(inArray(disclosures.id, batch));
+      deletedDisclosures += batch.length;
+      deletedPerformanceRows += batch.length;
+    }
+  }
+
+  console.log(
+    `🧹 Duplicate cleanup complete. Deleted duplicate disclosures=${deletedDisclosures}, research_signals=${deletedSignals}, performance_rows≈${deletedPerformanceRows}.`
   );
 }
 
@@ -1521,6 +1678,7 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
 async function main() {
   const years = parseYearsArg();
   const shouldResetBeforeImport = process.env.RESET_HOUSE_IMPORT === "true";
+  const shouldCleanupDuplicates = process.argv.slice(2).includes("--cleanup-duplicates");
 
   if (years.length === 0) {
     throw new Error("No valid years provided. Use --years=2026 or similar.");
@@ -1811,6 +1969,9 @@ async function main() {
   }
 
   const stats = await importNormalizedDisclosures(normalizedRows);
+  if (shouldCleanupDuplicates) {
+    await cleanupHouseDisclosureDuplicates();
+  }
   const totalRejectedByValidationAndDuplicate =
     [...stats.rejectionReasons.entries()].reduce((sum, [, count]) => sum + count, 0) + parseFailureCount;
 
