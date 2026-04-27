@@ -126,17 +126,98 @@ type PtrCandidateRecord = {
 };
 
 const ALLOWED_SINGLE_LETTER_TICKERS = new Set(["F", "T", "U", "V", "C", "D", "K", "O", "S"]);
+const DISALLOWED_STATE_TICKER_TOKENS = new Set([
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "IA",
+  "ID",
+  "IL",
+  "IN",
+  "KS",
+  "KY",
+  "LA",
+  "MA",
+  "MD",
+  "ME",
+  "MI",
+  "MN",
+  "MO",
+  "MS",
+  "MT",
+  "NC",
+  "ND",
+  "NE",
+  "NH",
+  "NJ",
+  "NM",
+  "NV",
+  "NY",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VA",
+  "VT",
+  "WA",
+  "WI",
+  "WV",
+  "WY",
+  "DC",
+]);
+const DISALLOWED_ENTITY_TICKER_TOKENS = new Set([
+  "LLC",
+  "LLP",
+  "LP",
+  "INC",
+  "CORP",
+  "CO",
+  "LTD",
+  "PLC",
+  "TPK",
+  "AUTH",
+  "MUNI",
+  "BOND",
+  "NOTE",
+]);
 
 const UNSUPPORTED_ASSET_PATTERNS: RegExp[] = [
+  /\bmunicipal\b/i,
+  /\bmuni\b/i,
+  /\brevenue\b/i,
+  /\bturnpike\b/i,
+  /\bauthority\b/i,
+  /\bschool\s+district\b/i,
+  /\bcounty\b/i,
+  /\bcity\s+of\b/i,
+  /\bstate\s+of\b/i,
   /shares\s+jt\s+virginia\s+state\s+housing\s+development/i,
   /\bhousing\s+development\b/i,
   /\bbond\b/i,
   /\bnote\b/i,
   /\bmaturity\b/i,
   /\bcoupon\b/i,
+  /\b\d{1,2}\.\d{1,2}%\b/,
   /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/,
   /\b\d+(?:\.\d+)?%\b/,
 ];
+
+let rejectedFallbackTickerLogCount = 0;
+const MAX_REJECTED_FALLBACK_TICKER_LOGS = 40;
 
 function sanitizeParsedText(raw: string | null | undefined): string | null {
   if (raw == null) return null;
@@ -160,6 +241,27 @@ function hasUnsupportedAssetTerms(assetName: string, debugRawLine: string | null
 
 function isAllowedTickerToken(token: string): boolean {
   return token.length !== 1 || ALLOWED_SINGLE_LETTER_TICKERS.has(token);
+}
+
+function hasStockContext(text: string): boolean {
+  return /\b(stock|common stock|shares?|class [a-z]|nyse|nasdaq|amex|ticker|symbol|etf|fund)\b/i.test(text);
+}
+
+function isDisallowedFallbackTickerToken(token: string): boolean {
+  return DISALLOWED_STATE_TICKER_TOKENS.has(token) || DISALLOWED_ENTITY_TICKER_TOKENS.has(token);
+}
+
+function logRejectedFallbackTicker(
+  candidateTicker: string,
+  reasonRejected: string,
+  rawLine: string,
+  assetName: string
+): void {
+  if (rejectedFallbackTickerLogCount >= MAX_REJECTED_FALLBACK_TICKER_LOGS) return;
+  console.log(
+    `⚠️ Rejected fallback ticker[${rejectedFallbackTickerLogCount + 1}] candidate="${candidateTicker}" reason="${reasonRejected}" raw="${sanitizeParsedText(rawLine) ?? "(none)"}" asset="${sanitizeParsedText(assetName) ?? "(none)"}"`
+  );
+  rejectedFallbackTickerLogCount += 1;
 }
 
 function getArgValue(flag: string): string | undefined {
@@ -465,12 +567,28 @@ function isValidTickerToken(token: string): boolean {
 }
 
 function extractTickerFromPtrLine(line: string, assetName: string): string | null {
+  const combinedContext = `${assetName} ${line}`;
+  const unsupportedContext = hasUnsupportedAssetTerms(assetName, line);
   const parentheticalCandidates = [...line.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
     .map((match) => match[1]?.trim() ?? "")
     .filter(Boolean);
 
   for (const candidate of parentheticalCandidates) {
     const compact = candidate.replace(/-/g, "");
+    if (!isValidTickerToken(compact)) continue;
+    if (!isAllowedTickerToken(compact)) continue;
+    if (isDisallowedFallbackTickerToken(compact)) {
+      logRejectedFallbackTicker(compact, "disallowed parenthetical token", line, assetName);
+      continue;
+    }
+    if (unsupportedContext && !hasStockContext(combinedContext)) {
+      logRejectedFallbackTicker(compact, "parenthetical ticker in unsupported asset context", line, assetName);
+      continue;
+    }
+    if (compact.length === 1 && !hasStockContext(combinedContext)) {
+      logRejectedFallbackTicker(compact, "single-letter parenthetical ticker without stock context", line, assetName);
+      continue;
+    }
     if (isValidTickerToken(compact) && isAllowedTickerToken(compact)) {
       return compact;
     }
@@ -490,9 +608,24 @@ function extractTickerFromPtrLine(line: string, assetName: string): string | nul
   for (const token of tokens) {
     const compact = token.replace(/-/g, "");
     if (!isValidTickerToken(compact)) continue;
-    if (!isAllowedTickerToken(compact)) continue;
+    if (!isAllowedTickerToken(compact)) {
+      logRejectedFallbackTicker(compact, "ticker token not allowed", line, assetName);
+      continue;
+    }
+    if (isDisallowedFallbackTickerToken(compact)) {
+      logRejectedFallbackTicker(compact, "disallowed token (state/entity suffix)", line, assetName);
+      continue;
+    }
     if (/^\d/.test(compact)) continue;
     if (["OVER", "UNDER", "PRICE", "CASH", "SALE", "PURCH", "SP", "JT", "DC"].includes(compact)) continue;
+    if (compact.length === 1 && !hasStockContext(combinedContext)) {
+      logRejectedFallbackTicker(compact, "single-letter ticker without clear stock context", line, assetName);
+      continue;
+    }
+    if (unsupportedContext) {
+      logRejectedFallbackTicker(compact, "unsupported asset context", line, assetName);
+      continue;
+    }
     return compact;
   }
 
