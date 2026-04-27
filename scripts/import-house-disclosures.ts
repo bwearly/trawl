@@ -97,7 +97,6 @@ type PtrRowSkipReason =
   | "missing_trade_date"
   | "missing_trade_type"
   | "missing_asset_name"
-  | "missing_politician_name"
   | "ambiguous_line";
 
 type PtrAssetParseFailureReason =
@@ -116,6 +115,14 @@ type PtrBeforeAfterSample = {
   line: string;
   before: string;
   after: string;
+};
+
+type PtrCandidateRecord = {
+  assetText: string;
+  tradeTypeRaw: string;
+  dates: string[];
+  amountText: string;
+  rawText: string;
 };
 
 function getArgValue(flag: string): string | undefined {
@@ -517,6 +524,81 @@ function buildPoliticianNameFromHouseRow(row: HouseRow): string | null {
   return combined.length > 0 ? combined : null;
 }
 
+function normalizePtrLine(line: string): string {
+  return line
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitPtrLineOnTypeTokens(line: string): string[] {
+  const out: string[] = [];
+  const compact = normalizePtrLine(line);
+  if (!compact) return out;
+  out.push(compact);
+
+  const splitWithDelimitedSingleLetter = compact.replace(/\b([PSE])\b(?=\S)/g, "$1 ");
+  if (splitWithDelimitedSingleLetter !== compact) {
+    out.push(normalizePtrLine(splitWithDelimitedSingleLetter));
+  }
+
+  const splitDateTypeDate = compact.replace(
+    /(\d{1,2}\/\d{1,2}\/\d{2,4})([PSE])(\d{1,2}\/\d{1,2}\/\d{2,4})/g,
+    "$1 $2 $3"
+  );
+  if (splitDateTypeDate !== compact) {
+    out.push(normalizePtrLine(splitDateTypeDate));
+  }
+
+  return [...new Set(out)].filter(Boolean);
+}
+
+function buildPtrCandidates(lines: string[]): PtrCandidateRecord[] {
+  const candidates: PtrCandidateRecord[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const windowEnd = Math.min(lines.length - 1, i + 6);
+    const segments: string[] = [];
+    for (let j = i; j <= windowEnd; j += 1) {
+      segments.push(lines[j]);
+      const mergedVariants = splitPtrLineOnTypeTokens(segments.join(" "));
+      for (const merged of mergedVariants) {
+        const amountText = normalizeAmountInput(extractLikelyAmountText(merged));
+        if (!amountText) continue;
+        const txMatch = merged.match(/\b(Purchase|Sale|Exchange|P|S|E)\b/i);
+        if (!txMatch) continue;
+        const dates = [...merged.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)].map((match) => match[0]);
+        if (dates.length === 0) continue;
+        const amountIndex = merged.indexOf(amountText);
+        const txIndex = txMatch.index ?? -1;
+        if (txIndex < 0 || amountIndex < 0) continue;
+        const cutoff = Math.min(txIndex, amountIndex);
+        const assetText = cleanAssetName(merged.slice(0, cutoff));
+        if (!assetText) continue;
+        candidates.push({
+          assetText,
+          tradeTypeRaw: txMatch[1],
+          dates: dates.slice(0, 2),
+          amountText,
+          rawText: merged,
+        });
+      }
+    }
+  }
+
+  const deduped = new Map<string, PtrCandidateRecord>();
+  for (const candidate of candidates) {
+    const key = [
+      candidate.assetText.toLowerCase(),
+      candidate.tradeTypeRaw.toLowerCase(),
+      candidate.dates.join("|"),
+      candidate.amountText,
+    ].join("::");
+    if (!deduped.has(key)) deduped.set(key, candidate);
+  }
+  return [...deduped.values()];
+}
+
 function parsePtrTransactionsFromPdfText(params: {
   text: string;
   sourceRow: HouseRow;
@@ -532,7 +614,7 @@ function parsePtrTransactionsFromPdfText(params: {
   const { text, sourceRow, sourceUrl } = params;
   const lines = text
     .split(/\r?\n/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
+    .map(normalizePtrLine)
     .filter((line) => line.length > 0);
 
   const skipReasons = new Map<PtrRowSkipReason, number>();
@@ -540,64 +622,41 @@ function parsePtrTransactionsFromPdfText(params: {
   const normalized: NormalizedDisclosure[] = [];
   const suspiciousAssetSamples: PtrSuspiciousAssetSample[] = [];
   const beforeAfterSamples: PtrBeforeAfterSample[] = [];
-  const politicianName = buildPoliticianNameFromHouseRow(sourceRow);
+  const politicianName = buildPoliticianNameFromHouseRow(sourceRow) ?? "Unknown House Member";
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
   const state = getValue(sourceRow, ["state"]);
   const now = new Date();
   let debugRowsLogged = 0;
 
-  let transactionLikeLineCount = 0;
+  const candidates = buildPtrCandidates(lines);
+  const transactionLikeLineCount = candidates.length;
 
-  for (const line of lines) {
-    const hasDate = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(line);
-    const transactionTypeMatch = line.match(/\b(Purchase|Sale|Exchange)\b/i);
-    const hasTradeType = Boolean(transactionTypeMatch);
-    const hasAmount = Boolean(extractLikelyAmountText(line));
-    if (!(hasDate && hasTradeType && hasAmount)) {
-      continue;
-    }
-
-    transactionLikeLineCount += 1;
-
-    if (!politicianName) {
-      skipReasons.set("missing_politician_name", (skipReasons.get("missing_politician_name") ?? 0) + 1);
-      continue;
-    }
-
-    const dates = [...line.matchAll(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g)].map((match) => match[0]);
-    const parsedTradeDate = parseDate(dates[0] ?? null);
+  for (const candidate of candidates) {
+    const parsedTradeDate = parseDate(candidate.dates[0] ?? null);
     if (!parsedTradeDate) {
       skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
       continue;
     }
 
-    const tradeTypeMatch = line.match(/\b(Purchase|Sale|Exchange)\b/i);
-    if (!tradeTypeMatch) {
+    const tradeTypeMatch = candidate.tradeTypeRaw.match(/(Purchase|Sale|Exchange|P|S|E)/i);
+    if (!tradeTypeMatch || !tradeTypeMatch[1]) {
       skipReasons.set("missing_trade_type", (skipReasons.get("missing_trade_type") ?? 0) + 1);
       continue;
     }
 
-    const amountText = normalizeAmountInput(extractLikelyAmountText(line));
+    const amountText = normalizeAmountInput(candidate.amountText);
     const amount = normalizeAmountRange(amountText);
 
+    const line = candidate.rawText;
     const legacyAssetName = buildLegacyPtrAssetCandidate(line);
-    const transactionTypeIndex = tradeTypeMatch.index ?? -1;
-    const beforeTx = transactionTypeIndex >= 0 ? line.slice(0, transactionTypeIndex) : "";
-    const afterTx =
-      transactionTypeIndex >= 0
-        ? line.slice(transactionTypeIndex + tradeTypeMatch[0].length).trim()
-        : "";
-    const assetName = cleanAssetName(beforeTx);
+    const assetName = cleanAssetName(candidate.assetText);
     if (!assetName) {
       assetFailureReasons.set(
         "missing_asset_span",
         (assetFailureReasons.get("missing_asset_span") ?? 0) + 1
       );
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
-      console.log(
-        `🧪 PTR asset extraction failed (missing span): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
-      );
       continue;
     }
 
@@ -615,9 +674,6 @@ function parsePtrTransactionsFromPdfText(params: {
         });
       }
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
-      console.log(
-        `🧪 PTR asset extraction failed (amount-like): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
-      );
       continue;
     }
 
@@ -635,9 +691,6 @@ function parsePtrTransactionsFromPdfText(params: {
         });
       }
       skipReasons.set("missing_asset_name", (skipReasons.get("missing_asset_name") ?? 0) + 1);
-      console.log(
-        `🧪 PTR asset extraction failed (too short): line="${line}" extractedAsset="${assetName}" afterTx="${afterTx}"`
-      );
       continue;
     }
 
@@ -650,13 +703,13 @@ function parsePtrTransactionsFromPdfText(params: {
       continue;
     }
 
-    if (!filingDate || !isValidTradingDate(filingDate) || isFutureDate(filingDate, now)) {
-      skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
-      continue;
-    }
-
     let tradeDate = parsedTradeDate;
-    if (!isValidTradingDate(tradeDate) || isFutureDate(tradeDate, now) || tradeDate.getTime() > filingDate.getTime()) {
+    if (
+      filingDate &&
+      isValidTradingDate(filingDate) &&
+      !isFutureDate(filingDate, now) &&
+      (!isValidTradingDate(tradeDate) || isFutureDate(tradeDate, now) || tradeDate.getTime() > filingDate.getTime())
+    ) {
       tradeDate = filingDate;
     }
 
@@ -664,7 +717,7 @@ function parsePtrTransactionsFromPdfText(params: {
       ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
-    if (filingLagDays == null || filingLagDays < 0) {
+    if (filingLagDays != null && filingLagDays < 0) {
       skipReasons.set("missing_trade_date", (skipReasons.get("missing_trade_date") ?? 0) + 1);
       continue;
     }
@@ -681,7 +734,7 @@ function parsePtrTransactionsFromPdfText(params: {
 
     if (debugRowsLogged < 20) {
       console.log(
-        `🧪 PTR debug row[${debugRowsLogged + 1}] raw="${line}" ticker="${resolvedTicker.ticker ?? "null"}" tradeDate="${tradeDate.toISOString().slice(0, 10)}" filingDate="${filingDate.toISOString().slice(0, 10)}" owner="${ownerType}" tradeType="${tradeType}"`
+        `🧪 PTR debug row[${debugRowsLogged + 1}] raw="${line}" ticker="${resolvedTicker.ticker ?? "null"}" tradeDate="${tradeDate.toISOString().slice(0, 10)}" filingDate="${filingDate ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${ownerType}" tradeType="${tradeType}"`
       );
       debugRowsLogged += 1;
     }
@@ -1248,8 +1301,10 @@ async function main() {
   let pdfsDownloaded = 0;
   let pdfsWithExtractedText = 0;
   let parsedTransactionRows = 0;
+  let transactionCandidatesBeforeNormalization = 0;
   let parseFailureCount = 0;
   let rejectedRows = 0;
+  let ptrTextStructureDebugLogged = 0;
 
   for (const year of years) {
     const fetchResult = await fetchYearRows(year);
@@ -1354,12 +1409,42 @@ async function main() {
       pdfsWithExtractedText += 1;
       ptrPdfExtracted += 1;
 
+      if (ptrTextStructureDebugLogged < 5) {
+        const debugLines = extractedText
+          .split(/\r?\n/)
+          .map(normalizePtrLine)
+          .filter(Boolean);
+        const first80 = debugLines.slice(0, 80);
+        const interestingPatterns = [
+          /Purchase/i,
+          /Sale/i,
+          /Exchange/i,
+          /\bP\b/,
+          /\bS\b/,
+          /\bE\b/,
+          /\$1,001/i,
+          /\$15,000/i,
+        ];
+        const matching = debugLines.filter((line) => interestingPatterns.some((pattern) => pattern.test(line)));
+        console.log(`🧪 PTR text structure sample[${ptrTextStructureDebugLogged + 1}] DocID=${docId}`);
+        console.log(`   first 80 non-empty lines (showing ${first80.length}):`);
+        first80.forEach((line, lineIndex) => {
+          console.log(`   [${lineIndex + 1}] ${line}`);
+        });
+        console.log(`   lines matching transaction/amount hints (showing ${Math.min(40, matching.length)}):`);
+        matching.slice(0, 40).forEach((line, lineIndex) => {
+          console.log(`   [${lineIndex + 1}] ${line}`);
+        });
+        ptrTextStructureDebugLogged += 1;
+      }
+
       const parsed = parsePtrTransactionsFromPdfText({
         text: extractedText,
         sourceRow: row,
         sourceUrl: pdfFetch.finalUrl,
       });
 
+      transactionCandidatesBeforeNormalization += parsed.transactionLikeLineCount;
       ptrTransactionLikeLines += parsed.transactionLikeLineCount;
       ptrNormalizedRows += parsed.normalized.length;
       parseFailureCount += Math.max(0, parsed.transactionLikeLineCount - parsed.normalized.length);
@@ -1457,6 +1542,7 @@ async function main() {
   console.log(`   - PDFs attempted: ${pdfsAttempted}`);
   console.log(`   - PDFs successfully downloaded: ${pdfsDownloaded}`);
   console.log(`   - PDFs with extracted text: ${pdfsWithExtractedText}`);
+  console.log(`   - parsed transaction rows (before normalization): ${transactionCandidatesBeforeNormalization}`);
   console.log(`   - parsed transaction rows: ${parsedTransactionRows}`);
   console.log(`   - parse failures: ${parseFailureCount}`);
   console.log("🧪 Normalization failure reasons:");
@@ -1492,6 +1578,9 @@ async function main() {
     const count = (stats.rejectionReasons.get(reason) ?? 0) + (reason === "parse failure" ? parseFailureCount : 0);
     console.log(`   - ${reason}: ${count}`);
   }
+  console.log(
+    `🧪 PTR parsed rows before vs after normalization: before=${transactionCandidatesBeforeNormalization}, after=${parsedTransactionRows}`
+  );
   console.log(`🧪 rows inserted: ${stats.inserted}`);
   console.log(`🧪 rows updated: ${stats.updated}`);
   console.log(`🧪 rows skipped as exact duplicates: ${stats.skippedUnchanged}`);
