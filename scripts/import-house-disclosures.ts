@@ -310,7 +310,6 @@ async function extractPdfTextBuffer(buffer: Buffer): Promise<{
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength),
-      disableWorker: true,
       useWorkerFetch: false,
       isEvalSupported: false,
       stopAtErrors: false,
