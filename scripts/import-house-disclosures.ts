@@ -1603,6 +1603,11 @@ async function cleanupHouseDisclosureDuplicates(): Promise<void> {
 }
 
 async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promise<ImportStats> {
+  const debugHouseImport = process.env.DEBUG_HOUSE_IMPORT === "true";
+  const maxRejectedSampleLogs = debugHouseImport ? 20 : 3;
+  const maxAcceptedSampleLogs = debugHouseImport ? 20 : 3;
+  const maxStValidationLogs = debugHouseImport ? 50 : 0;
+  const maxRejectedStSamplesPerReason = debugHouseImport ? 30 : 0;
   const stats: ImportStats = {
     inserted: 0,
     updated: 0,
@@ -1622,8 +1627,17 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
   };
 
   const now = new Date();
+  const totalRows = rows.length;
+  let processedRows = 0;
+  const logProgressIfNeeded = () => {
+    if (processedRows % 250 !== 0) return;
+    console.log(
+      `📈 Import progress: processed=${processedRows}/${totalRows}, inserted=${stats.inserted}, updated=${stats.updated}, rejected=${stats.skippedInvalid}, skipped=${stats.skippedUnchanged}`
+    );
+  };
 
   for (const rawRow of rows) {
+    processedRows += 1;
     const row = sanitizeDisclosureForImport(rawRow);
     const tradeDate = row.tradeDate;
     const filingDate = row.filingDate;
@@ -1669,7 +1683,7 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
       reason = "non-stock/unsupported asset";
     }
 
-    if (isStockCategory && stDebugLogCount < 50) {
+    if (isStockCategory && stDebugLogCount < maxStValidationLogs) {
       console.log(
         `🧪 ST validation sample[${stDebugLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" ticker="${row.ticker ?? "null"}" assetCategory="${row.assetCategory}" assetType="${row.assetType}" unsupportedReason="${unsupportedReason ?? "null"}" finalReason="${reason ?? "accepted"}" isUnsupportedAsset=${isUnsupportedAsset} hasTicker=${hasTicker} validTradeDate=${hasValidTradeDate} validFilingDate=${hasValidFilingDate} tradeDateLeqFilingDate=${hasValidTradeDate && hasValidFilingDate ? String(!isTradeAfterFiling) : "false"}`
       );
@@ -1677,13 +1691,14 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     }
 
     if (
+      debugHouseImport &&
       isStockCategory &&
       hasTicker &&
       hasValidTradeDate &&
       hasValidFilingDate &&
-      !isFutureTrade &&
       !isTradeAfterFiling &&
-      !isValid
+      unsupportedReason === null &&
+      reason !== null
     ) {
       console.log(
         `🚨 ST debug assertion failed: row should be valid but is not. unsupportedReason="${unsupportedReason ?? "null"}" raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" ticker="${row.ticker ?? "null"}" assetType="${row.assetType}" finalReason="${reason ?? "null"}"`
@@ -1698,15 +1713,15 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
         (stats.rejectedByAssetCategory.get(row.assetCategory) ?? 0) + 1
       );
 
-      if (rejectedLogCount < 20) {
+      if (rejectedLogCount < maxRejectedSampleLogs) {
         console.log(
           `⚠️ Rejected row[${rejectedLogCount + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${tradeDate instanceof Date ? tradeDate.toISOString().slice(0, 10) : "null"}" filingDate="${filingDate instanceof Date ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
       }
-      if (row.assetCategory === "ST") {
+      if (row.assetCategory === "ST" && maxRejectedStSamplesPerReason > 0) {
         const existing = rejectedStSamplesByReason.get(reason) ?? [];
-        if (existing.length < 30) {
+        if (existing.length < maxRejectedStSamplesPerReason) {
           existing.push(
             `⚠️ Rejected ST sample[${existing.length + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" assetCategory="${row.assetCategory}" ticker="${row.ticker ?? "null"}" assetType="${row.assetType}" unsupportedReason="${unsupportedReason ?? "null"}" tradeType="${row.tradeType}" tradeDate="${tradeDate instanceof Date ? tradeDate.toISOString().slice(0, 10) : "null"}" filingDate="${filingDate instanceof Date ? filingDate.toISOString().slice(0, 10) : "null"}"`
           );
@@ -1714,6 +1729,7 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
         }
       }
 
+      logProgressIfNeeded();
       continue;
     }
 
@@ -1727,6 +1743,7 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     if (filingLagDays < 0) {
       stats.skippedInvalid += 1;
       incrementRejectReason("trade date after filing date");
+      logProgressIfNeeded();
       continue;
     }
 
@@ -1750,17 +1767,18 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
         (stats.rejectedByAssetCategory.get(row.assetCategory) ?? 0) + 1
       );
 
-      if (rejectedLogCount < 20) {
+      if (rejectedLogCount < maxRejectedSampleLogs) {
         console.log(
           `⚠️ Rejected row[${rejectedLogCount + 1}] reason="duplicate" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${validTradeDate.toISOString().slice(0, 10)}" filingDate="${validFilingDate.toISOString().slice(0, 10)}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
       }
 
+      logProgressIfNeeded();
       continue;
     }
 
-    if (acceptedLogCount < 20) {
+    if (acceptedLogCount < maxAcceptedSampleLogs) {
       console.log(
         `✅ Accepted row[${acceptedLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${validTradeDate.toISOString().slice(0, 10)}" filingDate="${validFilingDate.toISOString().slice(0, 10)}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
       );
@@ -1815,13 +1833,17 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
 
       stats.inserted += 1;
     }
+
+    logProgressIfNeeded();
   }
 
-  for (const [reason, samples] of rejectedStSamplesByReason.entries()) {
-    if (samples.length === 0) continue;
-    console.log(`🧪 Rejected ST sample rows for reason="${reason}" (showing ${samples.length}):`);
-    for (const sample of samples) {
-      console.log(sample);
+  if (debugHouseImport) {
+    for (const [reason, samples] of rejectedStSamplesByReason.entries()) {
+      if (samples.length === 0) continue;
+      console.log(`🧪 Rejected ST sample rows for reason="${reason}" (showing ${samples.length}):`);
+      for (const sample of samples) {
+        console.log(sample);
+      }
     }
   }
 
