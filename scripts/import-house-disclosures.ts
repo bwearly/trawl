@@ -200,25 +200,26 @@ const DISALLOWED_ENTITY_TICKER_TOKENS = new Set([
   "NOTE",
 ]);
 
-const UNSUPPORTED_ASSET_PATTERNS: RegExp[] = [
-  /\bmunicipal\b/i,
-  /\bmuni\b/i,
-  /\brevenue\b/i,
-  /\bturnpike\b/i,
-  /\bauthority\b/i,
-  /\bschool\s+district\b/i,
-  /\bcounty\b/i,
-  /\bcity\s+of\b/i,
-  /\bstate\s+of\b/i,
-  /shares\s+jt\s+virginia\s+state\s+housing\s+development/i,
-  /\bhousing\s+development\b/i,
-  /\bbond\b/i,
-  /\bnote\b/i,
-  /\bmaturity\b/i,
-  /\bcoupon\b/i,
-  /\b\d{1,2}\.\d{1,2}%\b/,
-  /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/,
-  /\b\d+(?:\.\d+)?%\b/,
+const UNSUPPORTED_ASSET_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /\bmunicipal\b/i, reason: "municipal" },
+  { pattern: /\bmuni\b/i, reason: "municipal" },
+  { pattern: /\brevenue\b/i, reason: "municipal revenue" },
+  { pattern: /\bturnpike\b/i, reason: "municipal/authority" },
+  { pattern: /\bauthority\b/i, reason: "municipal/authority" },
+  { pattern: /\bschool\s+district\b/i, reason: "municipal/school district" },
+  { pattern: /\bcounty\b/i, reason: "municipal/county" },
+  { pattern: /\bcity\s+of\b/i, reason: "municipal/city" },
+  { pattern: /\bstate\s+of\b/i, reason: "municipal/state" },
+  {
+    pattern: /shares\s+jt\s+virginia\s+state\s+housing\s+development/i,
+    reason: "housing development instrument",
+  },
+  { pattern: /\bhousing\s+development\b/i, reason: "housing development instrument" },
+  { pattern: /\bbond\b/i, reason: "bond" },
+  { pattern: /\bnote\b/i, reason: "note" },
+  { pattern: /\bmaturity\b/i, reason: "maturity" },
+  { pattern: /\bcoupon\b/i, reason: "coupon" },
+  { pattern: /\btreasury\b/i, reason: "treasury" },
 ];
 
 let rejectedFallbackTickerLogCount = 0;
@@ -255,9 +256,25 @@ function isLikelyPtrAssetStartLine(line: string): boolean {
   return false;
 }
 
+function getUnsupportedAssetReason(
+  assetName: string,
+  debugRawLine: string | null,
+  assetCategory: NormalizedDisclosure["assetCategory"],
+  assetType: string
+): string | null {
+  if (assetCategory !== "ST") return `asset category ${assetCategory}`;
+  if (isAmountLikeAssetName(assetName)) return "amount-like asset name";
+  if (assetType === "etf") return "etf/fund/index asset type";
+  if (assetType === "option") return "option asset type";
+
+  const combined = `${assetName} ${debugRawLine ?? ""}`;
+  const matched = UNSUPPORTED_ASSET_PATTERNS.find(({ pattern }) => pattern.test(combined));
+  return matched?.reason ?? null;
+}
+
 function hasUnsupportedAssetTerms(assetName: string, debugRawLine: string | null): boolean {
   const combined = `${assetName} ${debugRawLine ?? ""}`;
-  return UNSUPPORTED_ASSET_PATTERNS.some((pattern) => pattern.test(combined));
+  return UNSUPPORTED_ASSET_PATTERNS.some(({ pattern }) => pattern.test(combined));
 }
 
 function isAllowedTickerToken(token: string): boolean {
@@ -594,7 +611,7 @@ function extractTickerFromPtrLine(
 ): string | null {
   const combinedContext = `${assetName} ${line}`;
   const unsupportedContext = hasUnsupportedAssetTerms(assetName, line);
-  const parentheticalCandidates = [...line.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
+  const parentheticalCandidates = [...`${assetName} ${line}`.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
     .map((match) => match[1]?.trim() ?? "")
     .filter(Boolean);
 
@@ -633,6 +650,11 @@ function extractTickerFromPtrLine(
   const tokens = [...fallbackText.matchAll(/\b[A-Z][A-Z0-9.\-]{0,4}\b/g)]
     .map((match) => match[0]?.trim().toUpperCase() ?? "")
     .filter(Boolean);
+  const trailingTickerCandidate =
+    assetName.match(/\b([A-Z]{1,5}(?:\.[A-Z])?)\s*$/)?.[1]?.trim().toUpperCase() ?? null;
+  if (trailingTickerCandidate) {
+    tokens.unshift(trailingTickerCandidate);
+  }
 
   for (const token of tokens) {
     const compact = token.replace(/-/g, "");
@@ -651,7 +673,7 @@ function extractTickerFromPtrLine(
       logRejectedFallbackTicker(compact, "single-letter ticker without clear stock context", line, assetName);
       continue;
     }
-    if (unsupportedContext) {
+    if (unsupportedContext && !hasStockContext(combinedContext)) {
       logRejectedFallbackTicker(compact, "unsupported asset context", line, assetName);
       continue;
     }
@@ -1379,9 +1401,10 @@ function chunkArray<T>(entries: T[], chunkSize: number): T[][] {
 
 function sanitizeDisclosureForImport(row: NormalizedDisclosure): NormalizedDisclosure {
   const sanitizedTicker = sanitizeParsedText(row.ticker)?.toUpperCase() ?? null;
-  const normalizedAssetCategory = extractAssetCategoryFromText(
-    `${row.assetCategory ?? ""} ${row.assetName} ${row.debugRawLine ?? ""}`
-  );
+  const normalizedAssetCategory =
+    row.assetCategory && row.assetCategory !== "unknown"
+      ? row.assetCategory
+      : extractAssetCategoryFromText(`${row.assetName} ${row.debugRawLine ?? ""}`);
   return {
     ...row,
     politicianName: sanitizeParsedTextOrEmpty(row.politicianName),
@@ -1591,6 +1614,8 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
   };
   let rejectedLogCount = 0;
   let acceptedLogCount = 0;
+  const rejectedStSamplesByReason = new Map<ImportRejectedReason, string[]>();
+  let stDebugLogCount = 0;
 
   const incrementRejectReason = (reason: ImportRejectedReason) => {
     stats.rejectionReasons.set(reason, (stats.rejectionReasons.get(reason) ?? 0) + 1);
@@ -1602,24 +1627,67 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     const row = sanitizeDisclosureForImport(rawRow);
     const tradeDate = row.tradeDate;
     const filingDate = row.filingDate;
-    const isUnsupportedByTerms = hasUnsupportedAssetTerms(row.assetName, row.debugRawLine ?? null);
-    const isUnsupportedByType = row.assetType !== "stock";
-    const isUnsupportedAsset = isUnsupportedByType || isUnsupportedByTerms || row.assetCategory !== "ST";
+    const unsupportedReason = getUnsupportedAssetReason(
+      row.assetName,
+      row.debugRawLine ?? null,
+      row.assetCategory,
+      row.assetType
+    );
+    const isUnsupportedAsset = unsupportedReason !== null;
+    const hasTicker = Boolean(row.ticker);
+    const isStockCategory = row.assetCategory === "ST";
+    const hasValidTradeDate = tradeDate instanceof Date && isValidTradingDate(tradeDate);
+    const hasValidFilingDate = filingDate instanceof Date && isValidTradingDate(filingDate);
+    const isFutureTrade = hasValidTradeDate ? isFutureDate(tradeDate, now) : false;
+    const isTradeAfterFiling = hasValidTradeDate && hasValidFilingDate ? tradeDate.getTime() > filingDate.getTime() : false;
+    const isValid =
+      isStockCategory &&
+      hasTicker &&
+      hasValidTradeDate &&
+      hasValidFilingDate &&
+      !isFutureTrade &&
+      !isTradeAfterFiling &&
+      !isUnsupportedAsset;
 
     let reason: ImportRejectedReason | null = null;
 
-    if (!row.ticker) {
+    if (!hasTicker) {
       reason = "missing ticker";
-    } else if (isUnsupportedAsset) {
+    } else if (!isStockCategory || isUnsupportedAsset) {
       reason = "non-stock/unsupported asset";
-    } else if (!(tradeDate instanceof Date) || !isValidTradingDate(tradeDate)) {
+    } else if (!hasValidTradeDate) {
       reason = "invalid trade date";
-    } else if (!(filingDate instanceof Date) || !isValidTradingDate(filingDate)) {
+    } else if (!hasValidFilingDate) {
       reason = "missing filing date";
-    } else if (isFutureDate(tradeDate, now)) {
+    } else if (isFutureTrade) {
       reason = "future trade date";
-    } else if (tradeDate.getTime() > filingDate.getTime()) {
+    } else if (isTradeAfterFiling) {
       reason = "trade date after filing date";
+    }
+
+    if (!reason && !isValid) {
+      reason = "non-stock/unsupported asset";
+    }
+
+    if (isStockCategory && stDebugLogCount < 50) {
+      console.log(
+        `🧪 ST validation sample[${stDebugLogCount + 1}] raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" ticker="${row.ticker ?? "null"}" assetCategory="${row.assetCategory}" assetType="${row.assetType}" unsupportedReason="${unsupportedReason ?? "null"}" finalReason="${reason ?? "accepted"}" isUnsupportedAsset=${isUnsupportedAsset} hasTicker=${hasTicker} validTradeDate=${hasValidTradeDate} validFilingDate=${hasValidFilingDate} tradeDateLeqFilingDate=${hasValidTradeDate && hasValidFilingDate ? String(!isTradeAfterFiling) : "false"}`
+      );
+      stDebugLogCount += 1;
+    }
+
+    if (
+      isStockCategory &&
+      hasTicker &&
+      hasValidTradeDate &&
+      hasValidFilingDate &&
+      !isFutureTrade &&
+      !isTradeAfterFiling &&
+      !isValid
+    ) {
+      console.log(
+        `🚨 ST debug assertion failed: row should be valid but is not. unsupportedReason="${unsupportedReason ?? "null"}" raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" ticker="${row.ticker ?? "null"}" assetType="${row.assetType}" finalReason="${reason ?? "null"}"`
+      );
     }
 
     if (reason) {
@@ -1635,6 +1703,15 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
           `⚠️ Rejected row[${rejectedLogCount + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" parsedTicker="${row.ticker ?? "null"}" parsedAsset="${row.assetName}" parsedTradeDate="${tradeDate instanceof Date ? tradeDate.toISOString().slice(0, 10) : "null"}" filingDate="${filingDate instanceof Date ? filingDate.toISOString().slice(0, 10) : "null"}" owner="${row.ownerType}" tradeType="${row.tradeType}"`
         );
         rejectedLogCount += 1;
+      }
+      if (row.assetCategory === "ST") {
+        const existing = rejectedStSamplesByReason.get(reason) ?? [];
+        if (existing.length < 30) {
+          existing.push(
+            `⚠️ Rejected ST sample[${existing.length + 1}] reason="${reason}" raw="${row.debugRawLine ?? "(none)"}" assetName="${row.assetName}" assetCategory="${row.assetCategory}" ticker="${row.ticker ?? "null"}" assetType="${row.assetType}" unsupportedReason="${unsupportedReason ?? "null"}" tradeType="${row.tradeType}" tradeDate="${tradeDate instanceof Date ? tradeDate.toISOString().slice(0, 10) : "null"}" filingDate="${filingDate instanceof Date ? filingDate.toISOString().slice(0, 10) : "null"}"`
+          );
+          rejectedStSamplesByReason.set(reason, existing);
+        }
       }
 
       continue;
@@ -1737,6 +1814,14 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
       });
 
       stats.inserted += 1;
+    }
+  }
+
+  for (const [reason, samples] of rejectedStSamplesByReason.entries()) {
+    if (samples.length === 0) continue;
+    console.log(`🧪 Rejected ST sample rows for reason="${reason}" (showing ${samples.length}):`);
+    for (const sample of samples) {
+      console.log(sample);
     }
   }
 
