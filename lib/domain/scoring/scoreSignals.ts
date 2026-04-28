@@ -1,4 +1,5 @@
 import { SCORE_MAX, SCORE_WEIGHTS } from "./weights";
+import { getFilingLagPenalty } from "@/lib/domain/signals/filing-freshness";
 
 export type ScoreSignalInput = {
   tradeType: string;
@@ -90,9 +91,7 @@ function scoreTradeSize(amountMin: number | null, amountMax: number | null): num
 function scoreFilingFreshness(filingLagDays: number | null): number {
   if (filingLagDays == null) return 0;
 
-  if (filingLagDays <= 7) return SCORE_WEIGHTS.filingFreshness;
-  if (filingLagDays <= 14) return 4;
-  if (filingLagDays <= 30) return 2;
+  if (filingLagDays <= 15) return SCORE_WEIGHTS.filingFreshness;
   if (filingLagDays <= 45) return 1;
 
   return 0;
@@ -346,9 +345,12 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     breakdown.clusterScore +
     breakdown.userRelevanceScore;
 
+  const filingLagPenalty = getFilingLagPenalty(input.filingLagDays);
   const eliteUpsideBonus = calculateEliteUpsideBonus(input, breakdown);
 
-  const totalScore = round2(clamp(rawTotal + eliteUpsideBonus, 0, SCORE_MAX));
+  const totalScore = round2(
+    clamp(rawTotal - filingLagPenalty + eliteUpsideBonus, 0, SCORE_MAX)
+  );
   const primaryReason = getPrimaryReason(breakdown, input);
   const reasonSummary = getReasonSummary(breakdown, input, eliteUpsideBonus);
 

@@ -76,7 +76,9 @@ export function getSignalTakeaways(input: GetSignalTakeawaysInput): string[] {
     if (input.filingLagDays <= 45) {
       takeaways.push(`Filing arrived ${input.filingLagDays} days after trade, still reasonably timely.`);
     } else if (input.filingLagDays > 90) {
-      takeaways.push(`Filed ${input.filingLagDays} days after trade, which reduces timeliness.`);
+      takeaways.push(
+        `Reported ${input.filingLagDays} days after trade, so this signal may be less actionable.`
+      );
     }
   }
 

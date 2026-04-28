@@ -5,6 +5,7 @@ import WatchButton from "@/components/watchlist/WatchButton";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
+import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
 
 type SignalCardProps = {
   signalId: number;
@@ -53,6 +54,14 @@ function getScoreStyles(score: string) {
   return "bg-rose-50 text-rose-700 ring-rose-200";
 }
 
+function getFreshnessStyles(label: string) {
+  if (label === "Fresh") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (label === "Normal") return "bg-slate-100 text-slate-700 ring-slate-200";
+  if (label === "Delayed") return "bg-amber-50 text-amber-700 ring-amber-200";
+  if (label === "Stale") return "bg-rose-50 text-rose-700 ring-rose-200";
+  return "bg-gray-100 text-gray-700 ring-gray-200";
+}
+
 export default function SignalCard({
   signalId,
   ticker,
@@ -74,6 +83,7 @@ export default function SignalCard({
   reasonSummary,
   initialIsWatchingTicker = false,
 }: SignalCardProps) {
+  const freshnessLabel = getFilingFreshnessLabel(filingLagDays);
   const alertTier = getSignalAlertTier({
     score,
     signalStatus,
@@ -100,6 +110,13 @@ export default function SignalCard({
               historicalSampleSize={historicalSampleSize}
               filingLagDays={filingLagDays}
             />
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getFreshnessStyles(
+                freshnessLabel
+              )}`}
+            >
+              {freshnessLabel}
+            </span>
           </div>
         </div>
 

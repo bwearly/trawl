@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   disclosurePerformanceWindows,
@@ -7,12 +7,24 @@ import {
   politicians,
   researchSignals,
 } from "@/lib/db/schema";
+import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
 
 export type SignalFilters = {
   minScore: "0" | "50" | "70" | "80";
   tradeType: "all" | "purchase" | "sale" | "exchange";
   party: "all" | "Democrat" | "Republican" | "Independent";
-  sort: "score" | "newest";
+  ticker: string;
+  politician: string;
+  freshness: "all" | "fresh" | "normal" | "delayed" | "stale" | "unknown";
+  sort:
+    | "score"
+    | "newest"
+    | "filingLagAsc"
+    | "filingLagDesc"
+    | "ticker"
+    | "politician"
+    | "tradeType"
+    | "freshness";
 };
 
 export type SignalRow = {
@@ -30,6 +42,7 @@ export type SignalRow = {
   tradeDate: Date | null;
   filingDate: Date | null;
   filingLagDays: number | null;
+  filingFreshnessLabel: "Fresh" | "Normal" | "Delayed" | "Stale" | "Unknown";
   return7d: string | null;
   return30d: string | null;
   historicalSampleSize: number | null;
@@ -50,12 +63,32 @@ const PARTY_OPTIONS = new Set<SignalFilters["party"]>([
   "Republican",
   "Independent",
 ]);
-const SORT_OPTIONS = new Set<SignalFilters["sort"]>(["score", "newest"]);
+const FRESHNESS_OPTIONS = new Set<SignalFilters["freshness"]>([
+  "all",
+  "fresh",
+  "normal",
+  "delayed",
+  "stale",
+  "unknown",
+]);
+const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
+  "score",
+  "newest",
+  "filingLagAsc",
+  "filingLagDesc",
+  "ticker",
+  "politician",
+  "tradeType",
+  "freshness",
+]);
 
 export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
   minScore: "0",
   tradeType: "all",
   party: "all",
+  ticker: "",
+  politician: "",
+  freshness: "all",
   sort: "score",
 };
 
@@ -75,11 +108,17 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
   const sort = SORT_OPTIONS.has(raw.sort as SignalFilters["sort"])
     ? (raw.sort as SignalFilters["sort"])
     : DEFAULT_SIGNAL_FILTERS.sort;
+  const freshness = FRESHNESS_OPTIONS.has(raw.freshness as SignalFilters["freshness"])
+    ? (raw.freshness as SignalFilters["freshness"])
+    : DEFAULT_SIGNAL_FILTERS.freshness;
 
   return {
     minScore,
     tradeType,
     party,
+    ticker: raw.ticker?.trim() ?? DEFAULT_SIGNAL_FILTERS.ticker,
+    politician: raw.politician?.trim() ?? DEFAULT_SIGNAL_FILTERS.politician,
+    freshness,
     sort,
   };
 }
@@ -98,6 +137,23 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
 
   if (filters.party !== "all") {
     whereFilters.push(eq(politicians.party, filters.party));
+  }
+  if (filters.ticker) {
+    whereFilters.push(ilike(researchSignals.ticker, `%${filters.ticker}%`));
+  }
+  if (filters.politician) {
+    whereFilters.push(ilike(politicians.fullName, `%${filters.politician}%`));
+  }
+  if (filters.freshness === "fresh") {
+    whereFilters.push(sql`${disclosures.filingLagDays} <= 15`);
+  } else if (filters.freshness === "normal") {
+    whereFilters.push(sql`${disclosures.filingLagDays} > 15 and ${disclosures.filingLagDays} <= 45`);
+  } else if (filters.freshness === "delayed") {
+    whereFilters.push(sql`${disclosures.filingLagDays} > 45 and ${disclosures.filingLagDays} <= 90`);
+  } else if (filters.freshness === "stale") {
+    whereFilters.push(sql`${disclosures.filingLagDays} > 90`);
+  } else if (filters.freshness === "unknown") {
+    whereFilters.push(isNull(disclosures.filingLagDays));
   }
 
   return db
@@ -134,6 +190,23 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
     .orderBy(
       filters.sort === "newest"
         ? desc(researchSignals.signalDate)
-        : desc(researchSignals.score)
+        : filters.sort === "filingLagAsc" || filters.sort === "freshness"
+        ? asc(disclosures.filingLagDays)
+        : filters.sort === "filingLagDesc"
+        ? desc(disclosures.filingLagDays)
+        : filters.sort === "ticker"
+        ? asc(researchSignals.ticker)
+        : filters.sort === "politician"
+        ? asc(politicians.fullName)
+        : filters.sort === "tradeType"
+        ? asc(disclosures.tradeType)
+        : desc(researchSignals.score),
+      desc(researchSignals.signalDate)
+    )
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        filingFreshnessLabel: getFilingFreshnessLabel(row.filingLagDays),
+      }))
     );
 }
