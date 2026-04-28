@@ -2,7 +2,7 @@ export const ALERT_ELIGIBILITY_THRESHOLDS = {
   minAdjustedScore: 65,
   highConvictionScore: 75,
   maxConfidencePenalty: 4,
-  maxFilingLagDays: 90,
+  maxFilingLagDays: 180,
 } as const;
 
 export type AlertTier = "normal" | "high_conviction";

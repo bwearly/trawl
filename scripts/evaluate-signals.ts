@@ -4,7 +4,9 @@ config({ path: ".env.local" });
 import { db } from "../lib/db";
 import {
   shouldGenerateAlert,
+  ALERT_ELIGIBILITY_THRESHOLDS,
 } from "../lib/domain/alerts/should-generate-alert";
+import { getFilingFreshnessLabel, type FilingFreshnessLabel } from "../lib/domain/signals/filing-freshness";
 import {
   disclosurePerformanceWindows,
   disclosures,
@@ -453,6 +455,19 @@ async function printDiagnostics(rows: EvaluatedSignalRow[]) {
     momentumValues.length > 0 ? Math.max(...momentumValues) : null;
 
   const alertBlockedByStats = evaluateAlertBlockedBy(rows);
+  const freshnessCounts = new Map<FilingFreshnessLabel, number>();
+  let excludedForExtremeLag = 0;
+
+  for (const row of rows) {
+    const freshness = getFilingFreshnessLabel(row.filingLagDays);
+    freshnessCounts.set(freshness, (freshnessCounts.get(freshness) ?? 0) + 1);
+    if (
+      row.filingLagDays != null &&
+      row.filingLagDays > ALERT_ELIGIBILITY_THRESHOLDS.maxFilingLagDays
+    ) {
+      excludedForExtremeLag += 1;
+    }
+  }
 
   console.log("=== DIAGNOSTICS ===\n");
   console.log("Disclosures missing price history rows (by ticker):");
@@ -476,6 +491,14 @@ async function printDiagnostics(rows: EvaluatedSignalRow[]) {
 
   console.log("\nFiling lag (days):");
   console.log(`  min=${minLag ?? "—"} max=${maxLag ?? "—"} avg=${avgLag ?? "—"}`);
+  console.log(
+    `  excluded from alert eligibility due to lag > ${ALERT_ELIGIBILITY_THRESHOLDS.maxFilingLagDays} days: ${excludedForExtremeLag}`
+  );
+
+  console.log("\nSignal count by freshness label:");
+  for (const label of ["Fresh", "Normal", "Delayed", "Stale", "Historical", "Unknown"] as const) {
+    console.log(`  ${label}: ${freshnessCounts.get(label) ?? 0}`);
+  }
 
   console.log("\nMomentum score range:");
   console.log(`  min=${minMomentum ?? "—"} max=${maxMomentum ?? "—"}`);

@@ -361,6 +361,7 @@ export default function SignalFilters({
               <option value="normal">Normal</option>
               <option value="delayed">Delayed</option>
               <option value="stale">Stale</option>
+              <option value="historical">Historical</option>
               <option value="unknown">Unknown</option>
             </select>
           </label>
