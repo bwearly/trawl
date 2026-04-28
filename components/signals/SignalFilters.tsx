@@ -50,6 +50,9 @@ export default function SignalFilters({
   const [minScore, setMinScore] = useState(initialFilters.minScore);
   const [tradeType, setTradeType] = useState(initialFilters.tradeType);
   const [party, setParty] = useState(initialFilters.party);
+  const [ticker, setTicker] = useState(initialFilters.ticker);
+  const [politician, setPolitician] = useState(initialFilters.politician);
+  const [freshness, setFreshness] = useState(initialFilters.freshness);
   const [sort, setSort] = useState(initialFilters.sort);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -81,6 +84,9 @@ export default function SignalFilters({
           minScore,
           tradeType,
           party,
+          ticker,
+          politician,
+          freshness,
           sort,
         });
 
@@ -109,7 +115,17 @@ export default function SignalFilters({
     return () => {
       controller.abort();
     };
-  }, [minScore, tradeType, party, sort, onResultsChange, onLoadingChange]);
+  }, [
+    minScore,
+    tradeType,
+    party,
+    ticker,
+    politician,
+    freshness,
+    sort,
+    onResultsChange,
+    onLoadingChange,
+  ]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -302,6 +318,55 @@ export default function SignalFilters({
 
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
+              Ticker contains
+            </span>
+            <input
+              value={ticker}
+              onChange={(event) => setTicker(event.target.value)}
+              disabled={isLoading}
+              placeholder="e.g. NVDA"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-gray-700">
+              Politician contains
+            </span>
+            <input
+              value={politician}
+              onChange={(event) => setPolitician(event.target.value)}
+              disabled={isLoading}
+              placeholder="e.g. Pelosi"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-gray-700">
+              Filing freshness
+            </span>
+            <select
+              value={freshness}
+              onChange={(event) =>
+                setFreshness(
+                  event.target.value as SignalFiltersType["freshness"]
+                )
+              }
+              disabled={isLoading}
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+            >
+              <option value="all">All</option>
+              <option value="fresh">Fresh</option>
+              <option value="normal">Normal</option>
+              <option value="delayed">Delayed</option>
+              <option value="stale">Stale</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-gray-700">
               Trade type
             </span>
             <select
@@ -354,6 +419,12 @@ export default function SignalFilters({
             >
               <option value="score">Highest score</option>
               <option value="newest">Newest signal</option>
+              <option value="filingLagAsc">Filing lag: shortest</option>
+              <option value="filingLagDesc">Filing lag: longest</option>
+              <option value="freshness">Freshness (fresh → stale)</option>
+              <option value="ticker">Ticker (A → Z)</option>
+              <option value="politician">Politician (A → Z)</option>
+              <option value="tradeType">Trade type (A → Z)</option>
             </select>
           </label>
         </div>

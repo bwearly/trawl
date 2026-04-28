@@ -11,6 +11,9 @@ type SearchParams = {
   minScore?: string | string[];
   tradeType?: string | string[];
   party?: string | string[];
+  ticker?: string | string[];
+  politician?: string | string[];
+  freshness?: string | string[];
   sort?: string | string[];
 };
 
@@ -31,6 +34,9 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     minScore: firstParam(params.minScore),
     tradeType: firstParam(params.tradeType),
     party: firstParam(params.party),
+    ticker: firstParam(params.ticker),
+    politician: firstParam(params.politician),
+    freshness: firstParam(params.freshness),
     sort: firstParam(params.sort),
   });
 
