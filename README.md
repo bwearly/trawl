@@ -1,81 +1,36 @@
-# Trawl
-
-Congressional disclosure ingestion + signal scoring app built with Next.js.
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 
+First, run the development server:
+
 ```bash
-npm install
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Useful Scripts
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-- `npm run house:import -- --years=2026,2025,2024` — imports House disclosures for specific years.
-- `npm run prices:import` — imports ticker + SPY price history.
-- `npm run performance:backfill` — computes disclosure return windows.
-- `npm run politicians:backfill` — refreshes politician-level historical stats.
-- `npm run signals:recalculate` — recomputes signal component scores and rationales.
-- `npm run alerts:backfill` — regenerates historical alerts from current signal state.
-- `npm run signals:evaluate` — prints score bucket/performance diagnostics.
-- `npm run pipeline:daily` — runs the full daily pipeline (recent House years + all core backfills).
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Daily Automation
+## Learn More
 
-`npm run pipeline:daily` executes:
+To learn more about Next.js, take a look at the following resources:
 
-1. House import for current year and prior 2 years.
-2. Price import.
-3. Performance backfill.
-4. Politician stats backfill.
-5. Signal recalculation.
-6. Alert backfill.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Cron examples (no secrets wired)
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-Use whichever scheduler you already trust in your deployment environment.
+## Deploy on Vercel
 
-#### Linux cron
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-```cron
-# 9:10 UTC daily
-10 9 * * * cd /path/to/trawl && npm run pipeline:daily >> /var/log/trawl-pipeline.log 2>&1
-```
-
-#### Vercel Cron
-
-Create an API route or server action that triggers this pipeline in your job runtime, then add:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/daily-pipeline",
-      "schedule": "10 9 * * *"
-    }
-  ]
-}
-```
-
-#### GitHub Actions schedule
-
-```yaml
-on:
-  schedule:
-    - cron: "10 9 * * *"
-
-jobs:
-  daily-pipeline:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npm run pipeline:daily
-```
-
-Keep secrets/env vars in your scheduler's secure settings; this repo intentionally does not hardwire production credentials.
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

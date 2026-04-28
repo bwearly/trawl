@@ -20,7 +20,8 @@
     "pipeline:daily": "tsx scripts/daily-pipeline.ts",
     "house:import": "tsx scripts/import-house-disclosures.ts",
     "house:reset-import": "RESET_HOUSE_IMPORT=true tsx scripts/import-house-disclosures.ts",
-    "house:diagnose": "tsx scripts/diagnose-house-import.ts"
+    "house:diagnose": "tsx scripts/diagnose-house-import.ts",
+    "daily:pipeline": "tsx scripts/daily-pipeline.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

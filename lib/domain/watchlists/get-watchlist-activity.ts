@@ -246,20 +246,23 @@ export async function getWatchlistActivity(userId: string): Promise<WatchlistAct
     return [];
   }
 
-  const recentCutoff = toRecentDate(RECENT_ACTIVITY_DAYS);
+    const recentCutoff = toRecentDate(RECENT_ACTIVITY_DAYS);
   const whereClauses = [gte(researchSignals.signalDate, recentCutoff)];
 
-  if (watchedTickers.length > 0 && watchedPoliticianIds.length > 0) {
-    whereClauses.push(
-      or(
-        inArray(researchSignals.ticker, watchedTickers),
-        inArray(researchSignals.politicianId, watchedPoliticianIds)
-      )
-    );
-  } else if (watchedTickers.length > 0) {
-    whereClauses.push(inArray(researchSignals.ticker, watchedTickers));
-  } else if (watchedPoliticianIds.length > 0) {
-    whereClauses.push(inArray(researchSignals.politicianId, watchedPoliticianIds));
+  const watchlistCondition =
+    watchedTickers.length > 0 && watchedPoliticianIds.length > 0
+      ? or(
+          inArray(researchSignals.ticker, watchedTickers),
+          inArray(researchSignals.politicianId, watchedPoliticianIds)
+        )
+      : watchedTickers.length > 0
+        ? inArray(researchSignals.ticker, watchedTickers)
+        : watchedPoliticianIds.length > 0
+          ? inArray(researchSignals.politicianId, watchedPoliticianIds)
+          : undefined;
+
+  if (watchlistCondition) {
+    whereClauses.push(watchlistCondition);
   }
 
   const rows = await db
