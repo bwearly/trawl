@@ -15,6 +15,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 - `npm run house:import -- --years=2026,2025,2024` — imports House disclosures for specific years.
 - `npm run prices:import` — imports ticker + SPY price history.
+  - Price symbol aliases handled during import: `APPL → AAPL`, `BRKB → BRK.B` (Yahoo `BRK-B`), and `BF.B/BF-B` normalization.
+  - Unresolved/failed symbols are written to `tmp/price-import-unresolved-symbols.json` for separate review.
 - `npm run performance:backfill` — computes disclosure return windows.
 - `npm run politicians:backfill` — refreshes politician-level historical stats.
 - `npm run signals:recalculate` — recomputes signal component scores and rationales.

@@ -59,6 +59,7 @@ function getFreshnessStyles(label: string) {
   if (label === "Normal") return "bg-slate-100 text-slate-700 ring-slate-200";
   if (label === "Delayed") return "bg-amber-50 text-amber-700 ring-amber-200";
   if (label === "Stale") return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (label === "Historical") return "bg-gray-200 text-gray-700 ring-gray-300";
   return "bg-gray-100 text-gray-700 ring-gray-200";
 }
 
@@ -84,6 +85,8 @@ export default function SignalCard({
   initialIsWatchingTicker = false,
 }: SignalCardProps) {
   const freshnessLabel = getFilingFreshnessLabel(filingLagDays);
+  const freshnessBadgeCopy =
+    freshnessLabel === "Historical" ? "Historical / Not actionable" : freshnessLabel;
   const alertTier = getSignalAlertTier({
     score,
     signalStatus,
@@ -115,7 +118,7 @@ export default function SignalCard({
                 freshnessLabel
               )}`}
             >
-              {freshnessLabel}
+              {freshnessBadgeCopy}
             </span>
           </div>
         </div>

@@ -15,7 +15,14 @@ export type SignalFilters = {
   party: "all" | "Democrat" | "Republican" | "Independent";
   ticker: string;
   politician: string;
-  freshness: "all" | "fresh" | "normal" | "delayed" | "stale" | "unknown";
+  freshness:
+    | "all"
+    | "fresh"
+    | "normal"
+    | "delayed"
+    | "stale"
+    | "historical"
+    | "unknown";
   sort:
     | "score"
     | "newest"
@@ -42,7 +49,7 @@ export type SignalRow = {
   tradeDate: Date | null;
   filingDate: Date | null;
   filingLagDays: number | null;
-  filingFreshnessLabel: "Fresh" | "Normal" | "Delayed" | "Stale" | "Unknown";
+  filingFreshnessLabel: "Fresh" | "Normal" | "Delayed" | "Stale" | "Historical" | "Unknown";
   return7d: string | null;
   return30d: string | null;
   historicalSampleSize: number | null;
@@ -69,6 +76,7 @@ const FRESHNESS_OPTIONS = new Set<SignalFilters["freshness"]>([
   "normal",
   "delayed",
   "stale",
+  "historical",
   "unknown",
 ]);
 const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
@@ -151,7 +159,9 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
   } else if (filters.freshness === "delayed") {
     whereFilters.push(sql`${disclosures.filingLagDays} > 45 and ${disclosures.filingLagDays} <= 90`);
   } else if (filters.freshness === "stale") {
-    whereFilters.push(sql`${disclosures.filingLagDays} > 90`);
+    whereFilters.push(sql`${disclosures.filingLagDays} > 90 and ${disclosures.filingLagDays} <= 365`);
+  } else if (filters.freshness === "historical") {
+    whereFilters.push(sql`${disclosures.filingLagDays} > 365`);
   } else if (filters.freshness === "unknown") {
     whereFilters.push(isNull(disclosures.filingLagDays));
   }

@@ -5,6 +5,7 @@ import YahooFinance from "yahoo-finance2";
 import { db } from "../lib/db";
 import { disclosures, priceHistory } from "../lib/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { writeFileSync } from "node:fs";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -57,7 +58,10 @@ function sleep(ms: number) {
 function normalizeYahooSymbol(symbol: string) {
   const trimmed = symbol.trim().toUpperCase();
 
+  if (trimmed === "APPL") return "AAPL";
+  if (trimmed === "BRKB") return "BRK-B";
   if (trimmed === "BRK.B" || trimmed === "BRK-B") return "BRK-B";
+  if (trimmed === "BF.B" || trimmed === "BF-B") return "BF-B";
 
   return trimmed;
 }
@@ -65,7 +69,10 @@ function normalizeYahooSymbol(symbol: string) {
 function normalizeTickerForStorage(symbol: string) {
   const trimmed = symbol.trim().toUpperCase();
 
+  if (trimmed === "APPL") return "AAPL";
+  if (trimmed === "BRKB") return "BRK.B";
   if (trimmed === "BRK-B") return "BRK.B";
+  if (trimmed === "BF-B") return "BF.B";
 
   return trimmed;
 }
@@ -288,6 +295,12 @@ async function main() {
   console.log(`  - tickers failed: ${failedTickers.length}`);
 
   if (failedTickers.length > 0) {
+    writeFileSync(
+      "tmp/price-import-unresolved-symbols.json",
+      `${JSON.stringify(failedTickers, null, 2)}\n`,
+      "utf8"
+    );
+    console.log("  - unresolved symbol report: tmp/price-import-unresolved-symbols.json");
     console.log("  - failure reason per ticker:");
     for (const failure of failedTickers) {
       console.log(
