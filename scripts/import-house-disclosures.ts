@@ -60,6 +60,7 @@ type NormalizedDisclosure = {
   ticker: string | null;
   assetName: string;
   assetType: string;
+  assetCategory: "ST" | "OT" | "PS" | "GS" | "CS" | "unknown";
   tradeType: "purchase" | "sale" | "exchange";
   ownerType: "self" | "spouse" | "dependent" | "joint" | "unknown";
   amountRangeLabel: string | null;
@@ -81,6 +82,8 @@ type ImportStats = {
   skippedUnchanged: number;
   skippedInvalid: number;
   rejectionReasons: Map<ImportRejectedReason, number>;
+  acceptedByAssetCategory: Map<NormalizedDisclosure["assetCategory"], number>;
+  rejectedByAssetCategory: Map<NormalizedDisclosure["assetCategory"], number>;
 };
 
 type ImportRejectedReason =
@@ -97,7 +100,8 @@ type PtrRowSkipReason =
   | "missing_trade_date"
   | "missing_trade_type"
   | "missing_asset_name"
-  | "ambiguous_line";
+  | "ambiguous_line"
+  | "non_stock_category";
 
 type PtrAssetParseFailureReason =
   | "missing_asset_span"
@@ -123,6 +127,7 @@ type PtrCandidateRecord = {
   dates: string[];
   amountText: string;
   rawText: string;
+  assetCategory: NormalizedDisclosure["assetCategory"];
 };
 
 const ALLOWED_SINGLE_LETTER_TICKERS = new Set(["F", "T", "U", "V", "C", "D", "K", "O", "S"]);
@@ -230,8 +235,24 @@ function sanitizeParsedTextOrEmpty(raw: string | null | undefined): string {
   return sanitizeParsedText(raw) ?? "";
 }
 
-function hasClearTickerInParentheses(text: string): boolean {
-  return /\(([A-Z]{2,5}(?:\.[A-Z])?|[FTUVCDKOS])\)/.test(text.toUpperCase());
+function extractAssetCategoryFromText(text: string): NormalizedDisclosure["assetCategory"] {
+  if (/\[(ST|OT|PS|GS|CS)\]/i.test(text)) {
+    const match = text.match(/\[(ST|OT|PS|GS|CS)\]/i)?.[1]?.toUpperCase();
+    if (match === "ST" || match === "OT" || match === "PS" || match === "GS" || match === "CS") {
+      return match;
+    }
+  }
+  if (/\bcommon\s+stock\b/i.test(text)) return "ST";
+  return "unknown";
+}
+
+function isLikelyPtrAssetStartLine(line: string): boolean {
+  if (!line) return false;
+  if (/shares?\s+sold\s*@/i.test(line)) return false;
+  if (/\([A-Z][A-Z.\-]{0,7}\)\s*\[ST\]/.test(line)) return true;
+  if (/\[ST\]/i.test(line)) return true;
+  if (/\bcommon\s+stock\b/i.test(line)) return true;
+  return false;
 }
 
 function hasUnsupportedAssetTerms(assetName: string, debugRawLine: string | null): boolean {
@@ -566,7 +587,11 @@ function isValidTickerToken(token: string): boolean {
   return /^[A-Z]{1,5}(?:\.[A-Z])?$/.test(token);
 }
 
-function extractTickerFromPtrLine(line: string, assetName: string): string | null {
+function extractTickerFromPtrLine(
+  line: string,
+  assetName: string,
+  assetCategory: NormalizedDisclosure["assetCategory"]
+): string | null {
   const combinedContext = `${assetName} ${line}`;
   const unsupportedContext = hasUnsupportedAssetTerms(assetName, line);
   const parentheticalCandidates = [...line.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
@@ -592,6 +617,10 @@ function extractTickerFromPtrLine(line: string, assetName: string): string | nul
     if (isValidTickerToken(compact) && isAllowedTickerToken(compact)) {
       return compact;
     }
+  }
+
+  if (assetCategory !== "ST") {
+    return null;
   }
 
   const fallbackText = `${assetName} ${line
@@ -653,6 +682,9 @@ function isAmountLikeAssetName(value: string): boolean {
   if (/^\$?[\d,\s]+(?:-\s*\$?[\d,\s]+)?$/i.test(normalized)) {
     return true;
   }
+  if (/^[\d,\s]+\s*[A-Z]{1,2}$/i.test(normalized)) {
+    return true;
+  }
 
   const stripped = normalized
     .toUpperCase()
@@ -677,12 +709,15 @@ function buildLegacyPtrAssetCandidate(line: string): string {
 function cleanAssetName(raw: string): string {
   return sanitizeParsedTextOrEmpty(raw)
     .replace(/^\s*(SP|SPOUSE|JT|JOINT|DC|DEPENDENT|CHILD|SELF)\b[:\-\s]*/i, "")
+    .replace(/^\s*(Date|Amount|Cap\.?\s*Gains\s*>\s*\$200\?|Gains\s*>\s*\$200\?|\$200\?|SP|JT)\b[:\-\s]*/gi, "")
     .replace(/^\s*(?:Amount\s+Cap\.?\s*Gains\s*>\s*\$200\?\s*)/i, "")
     .replace(/^\s*(?:Cap\.?\s*)?Gains\s*>\s*\$200\?\s*/i, "")
     .replace(/^\s*\$200\?\s*/i, "")
     .replace(/^\s*Date\s+Amount\b[:\-\s]*/i, "")
     .replace(/\(partial\)/gi, " ")
     .replace(/\[ST\s*$/i, " ")
+    .replace(/\s*\[(ST|OT|PS|GS|CS)\]\s*$/i, " ")
+    .replace(/\s*\([A-Z][A-Z.\-]{0,7}\)\s*$/g, " ")
     .replace(/\bCommon\s+Stock\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -748,10 +783,18 @@ function buildPtrCandidates(lines: string[]): PtrCandidateRecord[] {
   const candidates: PtrCandidateRecord[] = [];
 
   for (let i = 0; i < lines.length; i += 1) {
-    const windowEnd = Math.min(lines.length - 1, i + 6);
+    const startLine = lines[i];
+    if (!isLikelyPtrAssetStartLine(startLine)) continue;
+
+    const assetCategory = extractAssetCategoryFromText(startLine);
+    const windowEnd = Math.min(lines.length - 1, i + 3);
     const segments: string[] = [];
-    for (let j = i; j <= windowEnd; j += 1) {
-      segments.push(lines[j]);
+    let matched = false;
+    for (let j = i; j <= windowEnd && !matched; j += 1) {
+      const nextLine = lines[j];
+      if (j > i && isLikelyPtrAssetStartLine(nextLine)) break;
+      if (/shares?\s+sold\s*@/i.test(nextLine)) break;
+      segments.push(nextLine);
       const mergedVariants = splitPtrLineOnTypeTokens(segments.join(" "));
       for (const merged of mergedVariants) {
         const amountText = normalizeAmountInput(extractLikelyAmountText(merged));
@@ -772,7 +815,10 @@ function buildPtrCandidates(lines: string[]): PtrCandidateRecord[] {
           dates: dates.slice(0, 2),
           amountText,
           rawText: merged,
+          assetCategory,
         });
+        matched = true;
+        break;
       }
     }
   }
@@ -908,7 +954,12 @@ function parsePtrTransactionsFromPdfText(params: {
       continue;
     }
 
-    const rawTicker = extractTickerFromPtrLine(line, assetName);
+    if (candidate.assetCategory !== "ST") {
+      skipReasons.set("non_stock_category", (skipReasons.get("non_stock_category") ?? 0) + 1);
+      continue;
+    }
+
+    const rawTicker = extractTickerFromPtrLine(line, assetName, candidate.assetCategory);
 
     const resolvedTicker = resolveHouseTicker({
       rawTicker,
@@ -937,6 +988,7 @@ function parsePtrTransactionsFromPdfText(params: {
       ticker: finalTicker,
       assetName: sanitizedAssetName,
       assetType: inferAssetType(sanitizedAssetName),
+      assetCategory: candidate.assetCategory,
       tradeType,
       ownerType,
       amountRangeLabel: sanitizeParsedText(amount.label),
@@ -1057,6 +1109,7 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
     ticker: finalTicker,
     assetName: sanitizeParsedTextOrEmpty(assetName),
     assetType: inferAssetType(assetName),
+    assetCategory: extractAssetCategoryFromText(assetName),
     tradeType: normalizeTradeType(getValue(row, ["type", "transaction type", "tx type"])),
     ownerType: normalizeOwnerType(getValue(row, ["owner", "owner type"])),
     amountRangeLabel: sanitizeParsedText(amount.label),
@@ -1326,6 +1379,9 @@ function chunkArray<T>(entries: T[], chunkSize: number): T[][] {
 
 function sanitizeDisclosureForImport(row: NormalizedDisclosure): NormalizedDisclosure {
   const sanitizedTicker = sanitizeParsedText(row.ticker)?.toUpperCase() ?? null;
+  const normalizedAssetCategory = extractAssetCategoryFromText(
+    `${row.assetCategory ?? ""} ${row.assetName} ${row.debugRawLine ?? ""}`
+  );
   return {
     ...row,
     politicianName: sanitizeParsedTextOrEmpty(row.politicianName),
@@ -1337,6 +1393,7 @@ function sanitizeDisclosureForImport(row: NormalizedDisclosure): NormalizedDiscl
     sourceUrl: sanitizeParsedText(row.sourceUrl),
     sourceLabel: sanitizeParsedTextOrEmpty(row.sourceLabel),
     normalizedAssetName: sanitizeParsedTextOrEmpty(row.normalizedAssetName),
+    assetCategory: normalizedAssetCategory,
     debugRawLine: sanitizeParsedText(row.debugRawLine),
     party: sanitizeParsedText(row.party),
     state: sanitizeParsedText(row.state),
@@ -1529,6 +1586,8 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     skippedUnchanged: 0,
     skippedInvalid: 0,
     rejectionReasons: new Map<ImportRejectedReason, number>(),
+    acceptedByAssetCategory: new Map(),
+    rejectedByAssetCategory: new Map(),
   };
   let rejectedLogCount = 0;
   let acceptedLogCount = 0;
@@ -1543,12 +1602,9 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     const row = sanitizeDisclosureForImport(rawRow);
     const tradeDate = row.tradeDate;
     const filingDate = row.filingDate;
-    const clearTickerParenthetical =
-      hasClearTickerInParentheses(row.assetName) || hasClearTickerInParentheses(row.debugRawLine ?? "");
-    const isUnsupportedByTerms =
-      hasUnsupportedAssetTerms(row.assetName, row.debugRawLine ?? null) && !clearTickerParenthetical;
-    const isUnsupportedByType = row.assetType !== "stock" && !clearTickerParenthetical;
-    const isUnsupportedAsset = isUnsupportedByType || isUnsupportedByTerms;
+    const isUnsupportedByTerms = hasUnsupportedAssetTerms(row.assetName, row.debugRawLine ?? null);
+    const isUnsupportedByType = row.assetType !== "stock";
+    const isUnsupportedAsset = isUnsupportedByType || isUnsupportedByTerms || row.assetCategory !== "ST";
 
     let reason: ImportRejectedReason | null = null;
 
@@ -1569,6 +1625,10 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     if (reason) {
       stats.skippedInvalid += 1;
       incrementRejectReason(reason);
+      stats.rejectedByAssetCategory.set(
+        row.assetCategory,
+        (stats.rejectedByAssetCategory.get(row.assetCategory) ?? 0) + 1
+      );
 
       if (rejectedLogCount < 20) {
         console.log(
@@ -1608,6 +1668,10 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
     if (duplicate) {
       stats.skippedUnchanged += 1;
       incrementRejectReason("duplicate");
+      stats.rejectedByAssetCategory.set(
+        row.assetCategory,
+        (stats.rejectedByAssetCategory.get(row.assetCategory) ?? 0) + 1
+      );
 
       if (rejectedLogCount < 20) {
         console.log(
@@ -1625,6 +1689,10 @@ async function importNormalizedDisclosures(rows: NormalizedDisclosure[]): Promis
       );
       acceptedLogCount += 1;
     }
+    stats.acceptedByAssetCategory.set(
+      row.assetCategory,
+      (stats.acceptedByAssetCategory.get(row.assetCategory) ?? 0) + 1
+    );
 
     const existingHouseDisclosureId = await findExistingHouseDisclosureForUpsert(
       politicianId,
@@ -1706,6 +1774,7 @@ async function main() {
   let parseFailureCount = 0;
   let rejectedRows = 0;
   let ptrTextStructureDebugLogged = 0;
+  const ptrCandidateCountByPdf: Array<{ year: number; docId: string; count: number }> = [];
 
   for (const year of years) {
     const fetchResult = await fetchYearRows(year);
@@ -1872,6 +1941,11 @@ async function main() {
       }
       normalizedRows.push(...parsed.normalized);
       parsedTransactionRows += parsed.normalized.length;
+      ptrCandidateCountByPdf.push({
+        year,
+        docId,
+        count: parsed.transactionLikeLineCount,
+      });
 
       console.log(
         `      reconstructed candidates before dedupe=${parsed.transactionLikeLineCount}, after dedupe=${parsed.candidateCountAfterDedupe}, duplicate candidates removed=${parsed.duplicateCandidatesRemoved}, normalized disclosures=${parsed.normalized.length}`
@@ -1954,6 +2028,19 @@ async function main() {
   console.log(`   - duplicate PTR candidates removed pre-normalization: ${duplicateCandidatesRemoved}`);
   console.log(`   - parsed transaction rows: ${parsedTransactionRows}`);
   console.log(`   - parse failures: ${parseFailureCount}`);
+  if (ptrCandidateCountByPdf.length > 0) {
+    const counts = ptrCandidateCountByPdf.map((entry) => entry.count);
+    const min = Math.min(...counts);
+    const max = Math.max(...counts);
+    const avg = counts.reduce((sum, value) => sum + value, 0) / counts.length;
+    console.log(
+      `   - PTR candidates per PDF: min=${min}, max=${max}, avg=${avg.toFixed(2)} across ${ptrCandidateCountByPdf.length} PDFs`
+    );
+    console.log("   - top 10 PDFs by PTR candidate count:");
+    for (const entry of [...ptrCandidateCountByPdf].sort((a, b) => b.count - a.count).slice(0, 10)) {
+      console.log(`     • ${entry.year}/${entry.docId}: ${entry.count}`);
+    }
+  }
   console.log("🧪 Normalization failure reasons:");
   for (const [reason, count] of [...failureReasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`   - ${reason}: ${count}`);
@@ -1989,6 +2076,14 @@ async function main() {
   for (const reason of reasonOrder) {
     const count = (stats.rejectionReasons.get(reason) ?? 0) + (reason === "parse failure" ? parseFailureCount : 0);
     console.log(`   - ${reason}: ${count}`);
+  }
+  console.log("🧪 Accepted rows by asset category:");
+  for (const category of ["ST", "OT", "PS", "GS", "CS", "unknown"] as const) {
+    console.log(`   - ${category}: ${stats.acceptedByAssetCategory.get(category) ?? 0}`);
+  }
+  console.log("🧪 Rejected rows by asset category:");
+  for (const category of ["ST", "OT", "PS", "GS", "CS", "unknown"] as const) {
+    console.log(`   - ${category}: ${stats.rejectedByAssetCategory.get(category) ?? 0}`);
   }
   console.log(
     `🧪 PTR parsed rows before dedupe vs after dedupe vs after normalization: before=${transactionCandidatesBeforeNormalization}, after_dedupe=${transactionCandidatesAfterDedupe}, after_normalization=${parsedTransactionRows}`
