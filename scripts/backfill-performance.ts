@@ -8,27 +8,11 @@ import {
   disclosures,
   priceHistory,
 } from "../lib/db/schema";
-
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function calcReturnPercent(start: number, end: number) {
-  if (start === 0) return 0;
-  return round2(((end - start) / start) * 100);
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-function startOfUtcDay(date: Date) {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  );
-}
+import {
+  addCalendarDays,
+  calcReturnPercent,
+  startOfUtcDay,
+} from "../lib/domain/pipeline/performance";
 
 async function getClosestPriceOnOrAfter(ticker: string, targetDate: Date) {
   const normalizedTarget = startOfUtcDay(targetDate);
@@ -130,19 +114,19 @@ async function main() {
 
     const future7d = await resolveFuturePrice(
       normalizedTicker,
-      addDays(tradeAnchorDate, 7),
+      addCalendarDays(tradeAnchorDate, 7),
       false
     );
 
     const future30d = await resolveFuturePrice(
       normalizedTicker,
-      addDays(tradeAnchorDate, 30),
+      addCalendarDays(tradeAnchorDate, 30),
       false
     );
 
     const future90d = await resolveFuturePrice(
       normalizedTicker,
-      addDays(tradeAnchorDate, 90),
+      addCalendarDays(tradeAnchorDate, 90),
       false
     );
 
@@ -151,19 +135,19 @@ async function main() {
 
     const spyFuture7d = await resolveFuturePrice(
       "SPY",
-      addDays(tradeAnchorDate, 7),
+      addCalendarDays(tradeAnchorDate, 7),
       false
     );
 
     const spyFuture30d = await resolveFuturePrice(
       "SPY",
-      addDays(tradeAnchorDate, 30),
+      addCalendarDays(tradeAnchorDate, 30),
       false
     );
 
     const spyFuture90d = await resolveFuturePrice(
       "SPY",
-      addDays(tradeAnchorDate, 90),
+      addCalendarDays(tradeAnchorDate, 90),
       false
     );
 
