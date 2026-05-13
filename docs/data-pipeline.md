@@ -81,3 +81,9 @@ jobs:
 ```
 
 Keep secrets/env vars in your scheduler's secure settings; this repo intentionally does not hardwire production credentials.
+
+## Auth migration note (current status)
+
+- Package installation for Auth.js is currently blocked in this environment (`npm` registry 403), so `next-auth` is not wired yet.
+- Intended first implementation is `next-auth` with a Credentials provider and JWT sessions to avoid immediate DB schema changes.
+- `getCurrentUserId()` is the migration seam: it should later resolve authenticated session user ID first, and fallback to `"demo-user"` when no session exists.

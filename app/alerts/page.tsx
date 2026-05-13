@@ -1,8 +1,7 @@
 import Link from "next/link";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getAlerts } from "@/lib/domain/alerts/alerts";
 import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
-
-const DEMO_USER_ID = "demo-user";
 
 function formatDate(value: Date | string | null) {
   if (!value) return "—";
@@ -48,7 +47,7 @@ function getAlertTypeLabel(type: string) {
 }
 
 export default async function AlertsPage() {
-  const rows = await getAlerts(DEMO_USER_ID);
+  const rows = await getAlerts(getCurrentUserId());
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">

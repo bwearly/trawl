@@ -1,12 +1,11 @@
 import Link from "next/link";
 import WatchlistContent from "@/components/watchlist/WatchlistContent";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import {
   getWatchlistActivity,
   type WatchlistActivityItem,
 } from "@/lib/domain/watchlists/get-watchlist-activity";
 import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
-
-const DEMO_USER_ID = "demo-user";
 
 function formatRelativeDate(value: Date) {
   const deltaMs = Date.now() - value.getTime();
@@ -34,9 +33,10 @@ function getActivityHref(item: WatchlistActivityItem) {
 }
 
 export default async function WatchlistPage() {
+  const userId = getCurrentUserId();
   const [data, activity] = await Promise.all([
-    getWatchlist(DEMO_USER_ID),
-    getWatchlistActivity(DEMO_USER_ID),
+    getWatchlist(userId),
+    getWatchlistActivity(userId),
   ]);
   const totalWatched = data.politicians.length + data.tickers.length;
 

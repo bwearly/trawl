@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SignalsFeedClient from "@/components/signals/SignalsFeedClient";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getUnreadAlertsCount } from "@/lib/domain/alerts/alerts";
 import {
   getSignals,
@@ -21,13 +22,12 @@ type SignalsPageProps = {
   searchParams: Promise<SearchParams>;
 };
 
-const DEMO_USER_ID = "demo-user";
-
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
 export default async function SignalsPage({ searchParams }: SignalsPageProps) {
+  const userId = getCurrentUserId();
   const params = await searchParams;
 
   const initialFilters = parseSignalFilters({
@@ -42,8 +42,8 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
 
   const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([
     getSignals(initialFilters),
-    getUnreadAlertsCount(DEMO_USER_ID),
-    getWatchedTickers(DEMO_USER_ID),
+    getUnreadAlertsCount(userId),
+    getWatchedTickers(userId),
   ]);
 
   return (

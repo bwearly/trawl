@@ -213,17 +213,16 @@ export async function generateAlertsForSignal(
 }
 
 /**
- * MVP helper:
- * Generate alerts for all existing signals that do not already have alerts
- * for the demo user's watched items.
+ * Backfill historical alerts for a specific user based on that user's
+ * current watchlist items.
  */
-export async function backfillAlertsForDemoUser() {
+export async function backfillAlertsForUser(userId: string) {
   const watchlistRows = await db
     .select({
       id: watchlists.id,
     })
     .from(watchlists)
-    .where(eq(watchlists.userId, DEMO_USER_ID))
+    .where(eq(watchlists.userId, userId))
     .limit(1);
 
   const watchlist = watchlistRows[0];
@@ -284,4 +283,11 @@ export async function backfillAlertsForDemoUser() {
   }
 
   return { processedSignals: signalRows.length };
+}
+
+/**
+ * Demo-only compatibility helper used by existing scripts.
+ */
+export async function backfillAlertsForDemoUser() {
+  return backfillAlertsForUser(DEMO_USER_ID);
 }
