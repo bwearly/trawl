@@ -5,7 +5,7 @@ import {
   politicians,
   researchSignals,
 } from "@/lib/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;

@@ -13,7 +13,6 @@ type AlertPreferences = {
 };
 
 export default function AlertPreferencesForm() {
-  const [preferences, setPreferences] = useState<AlertPreferences | null>(null);
   const [minScore, setMinScore] = useState("0");
   const [enableWatchedTickerAlerts, setEnableWatchedTickerAlerts] =
     useState(true);
@@ -41,7 +40,6 @@ export default function AlertPreferencesForm() {
 
         if (!isMounted) return;
 
-        setPreferences(data);
         setMinScore(String(data.minScore ?? 0));
         setEnableWatchedTickerAlerts(data.enableWatchedTickerAlerts);
         setEnableWatchedPoliticianAlerts(data.enableWatchedPoliticianAlerts);
@@ -87,7 +85,6 @@ export default function AlertPreferencesForm() {
       }
 
       const updated = (await response.json()) as AlertPreferences;
-      setPreferences(updated);
       setMinScore(String(updated.minScore ?? 0));
       setEnableWatchedTickerAlerts(updated.enableWatchedTickerAlerts);
       setEnableWatchedPoliticianAlerts(updated.enableWatchedPoliticianAlerts);

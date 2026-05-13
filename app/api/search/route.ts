@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { asc, desc, ilike, or, sql } from "drizzle-orm";
 import { disclosures, politicians } from "@/lib/db/schema";
 import { db } from "@/lib/db";
 
