@@ -6,6 +6,10 @@ import { db } from "../lib/db";
 import { disclosures, priceHistory } from "../lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { writeFileSync } from "node:fs";
+import {
+  normalizeTickerForStorage,
+  normalizeYahooSymbol,
+} from "../lib/domain/pipeline/normalization";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -53,28 +57,6 @@ type TickerFetchResult = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeYahooSymbol(symbol: string) {
-  const trimmed = symbol.trim().toUpperCase();
-
-  if (trimmed === "APPL") return "AAPL";
-  if (trimmed === "BRKB") return "BRK-B";
-  if (trimmed === "BRK.B" || trimmed === "BRK-B") return "BRK-B";
-  if (trimmed === "BF.B" || trimmed === "BF-B") return "BF-B";
-
-  return trimmed;
-}
-
-function normalizeTickerForStorage(symbol: string) {
-  const trimmed = symbol.trim().toUpperCase();
-
-  if (trimmed === "APPL") return "AAPL";
-  if (trimmed === "BRKB") return "BRK.B";
-  if (trimmed === "BRK-B") return "BRK.B";
-  if (trimmed === "BF-B") return "BF.B";
-
-  return trimmed;
 }
 
 function startOfUtcDay(date: Date) {

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { resolveHouseTicker, type TickerResolutionSource } from "./lib/house-asset-resolution";
+import { normalizeTradeType } from "../lib/domain/pipeline/normalization";
 import { db } from "../lib/db";
 import { alerts, disclosurePerformanceWindows, disclosures, politicians, researchSignals } from "../lib/db/schema";
 
@@ -397,17 +398,6 @@ function normalizeParty(raw: string | null): string | null {
   if (value === "R" || value === "REPUBLICAN") return "Republican";
   if (value === "I" || value === "INDEPENDENT") return "Independent";
   return raw.trim();
-}
-
-function normalizeTradeType(raw: string | null): NormalizedDisclosure["tradeType"] {
-  const value = (raw ?? "").trim().toUpperCase();
-  if (value === "P" || value.includes("PURCHASE") || value.includes("BUY")) {
-    return "purchase";
-  }
-  if (value === "S" || value.includes("SALE") || value.includes("SELL")) {
-    return "sale";
-  }
-  return "exchange";
 }
 
 function normalizeOwnerType(raw: string | null): NormalizedDisclosure["ownerType"] {
