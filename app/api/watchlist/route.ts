@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
-
-const DEMO_USER_ID = "demo-user";
 
 export async function GET() {
   try {
-    const data = await getWatchlist(DEMO_USER_ID);
+    const data = await getWatchlist(getCurrentUserId());
     return NextResponse.json(data);
   } catch (error) {
     console.error("Failed to load watchlist:", error);

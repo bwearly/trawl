@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import {
   getOrCreateAlertPreferences,
   updateAlertPreferences,
 } from "@/lib/domain/alerts/preferences";
 
-const DEMO_USER_ID = "demo-user";
-
 export async function GET() {
   try {
-    const preferences = await getOrCreateAlertPreferences(DEMO_USER_ID);
+    const preferences = await getOrCreateAlertPreferences(getCurrentUserId());
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Failed to load alert preferences:", error);
@@ -45,7 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updated = await updateAlertPreferences(DEMO_USER_ID, {
+    const updated = await updateAlertPreferences(getCurrentUserId(), {
       minScore,
       enableWatchedTickerAlerts,
       enableWatchedPoliticianAlerts,

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, asc, eq, gte } from "drizzle-orm";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { db } from "@/lib/db";
 import {
   disclosurePerformanceWindows,
@@ -20,8 +21,6 @@ import {
   isPoliticianWatched,
   isTickerWatched,
 } from "@/lib/domain/watchlists/watchlists";
-
-const DEMO_USER_ID = "demo-user";
 
 function formatCurrency(value: string | null) {
   if (value == null) return "—";
@@ -67,6 +66,7 @@ export default async function SignalDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const userId = getCurrentUserId();
   const { id } = await params;
   const signalId = Number(id);
 
@@ -228,9 +228,9 @@ export default async function SignalDetailPage({
   const [initialIsWatchingTicker, initialIsWatchingPolitician] =
     await Promise.all([
       normalizedTicker
-        ? isTickerWatched(DEMO_USER_ID, normalizedTicker)
+        ? isTickerWatched(userId, normalizedTicker)
         : Promise.resolve(false),
-      isPoliticianWatched(DEMO_USER_ID, signal.politicianId),
+      isPoliticianWatched(userId, signal.politicianId),
     ]);
 
   return (

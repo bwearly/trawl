@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { markAlertAsRead } from "@/lib/domain/alerts/alerts";
-
-const DEMO_USER_ID = "demo-user";
 
 type RouteContext = {
   params: Promise<{
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       );
     }
 
-    await markAlertAsRead(DEMO_USER_ID, alertId);
+    await markAlertAsRead(getCurrentUserId(), alertId);
 
     return NextResponse.redirect(new URL("/alerts", request.url), {
       status: 303,

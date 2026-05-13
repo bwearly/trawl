@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getTickerDetail } from "@/lib/domain/tickers/get-ticker-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
 import { isTickerWatched } from "@/lib/domain/watchlists/watchlists";
@@ -74,14 +75,14 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function TickerDetailPage({ params }: PageProps) {
-  const DEMO_USER_ID = "demo-user";
+  const userId = getCurrentUserId();
   const { symbol } = await params;
   const data = await getTickerDetail(symbol);
 
   if (!data) {
     notFound();
   }
-  const initialIsWatching = await isTickerWatched(DEMO_USER_ID, data.ticker);
+  const initialIsWatching = await isTickerWatched(userId, data.ticker);
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
   const avgAlpha30d = formatPercent(data.stats.avgAlpha30d);

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getPoliticianDetail } from "@/lib/domain/politicians/get-politicians-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
 import { isPoliticianWatched } from "@/lib/domain/watchlists/watchlists";
@@ -79,7 +80,7 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function PoliticianDetailPage({ params }: PageProps) {
-  const DEMO_USER_ID = "demo-user";
+  const userId = getCurrentUserId();
   const { id } = await params;
   const politicianId = Number(id);
 
@@ -93,7 +94,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
     notFound();
   }
   const initialIsWatching = await isPoliticianWatched(
-    DEMO_USER_ID,
+    userId,
     data.politician.id
   );
 

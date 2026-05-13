@@ -131,11 +131,13 @@ export default function SignalFilters({
     const trimmed = searchQuery.trim();
 
     if (trimmed.length < 2) {
-      setSearchResults({
-        politicians: [],
-        tickers: [],
+      queueMicrotask(() => {
+        setSearchResults({
+          politicians: [],
+          tickers: [],
+        });
+        setIsSearchLoading(false);
       });
-      setIsSearchLoading(false);
       return;
     }
 

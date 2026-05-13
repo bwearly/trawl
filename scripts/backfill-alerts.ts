@@ -1,9 +1,11 @@
-import { backfillAlertsForDemoUser } from "@/lib/domain/alerts/alerts";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { backfillAlertsForUser } from "@/lib/domain/alerts/alerts";
 
 async function main() {
-  console.log("Backfilling alerts for demo user...");
+  const userId = getCurrentUserId();
+  console.log(`Backfilling alerts for user: ${userId}`);
 
-  const result = await backfillAlertsForDemoUser();
+  const result = await backfillAlertsForUser(userId);
 
   console.log("Finished backfilling alerts.");
   console.log(result);

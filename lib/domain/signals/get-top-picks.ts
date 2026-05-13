@@ -18,7 +18,7 @@ export async function getTopPicks(limit = 6) {
       primaryReason: researchSignals.primaryReason,
       reasonSummary: researchSignals.reasonSummary,
       politicianName: politicians.fullName,
-      politicanId: politicians.id,
+      politicianId: politicians.id,
       tradeType: disclosures.tradeType,
       ownerType: disclosures.ownerType,
       amountRangeLabel: disclosures.amountRangeLabel,

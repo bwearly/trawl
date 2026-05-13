@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import {
   addPoliticianToWatchlist,
   removePoliticianFromWatchlist,
 } from "@/lib/domain/watchlists/watchlists";
-
-const DEMO_USER_ID = "demo-user";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await addPoliticianToWatchlist(DEMO_USER_ID, politicianId);
+    await addPoliticianToWatchlist(getCurrentUserId(), politicianId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -42,7 +41,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await removePoliticianFromWatchlist(DEMO_USER_ID, politicianId);
+    await removePoliticianFromWatchlist(getCurrentUserId(), politicianId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

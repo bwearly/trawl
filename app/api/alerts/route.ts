@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { markAllAlertsAsRead } from "@/lib/domain/alerts/alerts";
-
-const DEMO_USER_ID = "demo-user";
 
 export async function POST(request: NextRequest) {
   try {
-    await markAllAlertsAsRead(DEMO_USER_ID);
+    await markAllAlertsAsRead(getCurrentUserId());
 
     return NextResponse.redirect(new URL("/alerts", request.url), {
       status: 303,
