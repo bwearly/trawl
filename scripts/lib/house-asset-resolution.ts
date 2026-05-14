@@ -54,6 +54,18 @@ export const HOUSE_ASSET_NAME_TO_TICKER: Record<string, string> = {
   "VERACYTE INC": "VCYT",
 };
 
+
+const NON_TICKER_ASSET_NAME_DENYLIST = new Set([
+  "INTEREST",
+  "ISSUED",
+  "SHARES",
+  "NEW",
+]);
+
+function isNonTickerAssetNameNoise(canonicalAssetName: string): boolean {
+  return NON_TICKER_ASSET_NAME_DENYLIST.has(canonicalAssetName.trim().toUpperCase());
+}
+
 const TRAILING_EQUITY_SUFFIXES: RegExp[] = [
   /\s+COMMON STOCK$/i,
   /\s+CS$/i,
@@ -126,6 +138,8 @@ function normalizeExplicitTicker(rawTicker: string | null): string | null {
 }
 
 function resolveTickerFromPatterns(rawAssetName: string, canonicalAssetName: string): string | null {
+  if (isNonTickerAssetNameNoise(canonicalAssetName)) return null;
+
   const isAppellPete = /\bAPPELL\s+PETE\b/i.test(rawAssetName) || /\bAPPELL\s+PETE\b/i.test(canonicalAssetName);
   const inlineTickerMatch = rawAssetName.match(/\b(?:TICKER|SYMBOL)\s*[:\-]\s*([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b/i);
   if (inlineTickerMatch?.[1]) {
