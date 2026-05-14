@@ -1,7 +1,14 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getAlerts } from "@/lib/domain/alerts/alerts";
 import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
+
+export const metadata: Metadata = {
+  title: "Alerts | Trawl",
+  description:
+    "Review watchlist alerts for new matched signals and control notification preferences for tickers and politicians.",
+};
 
 function formatDate(value: Date | string | null) {
   if (!value) return "—";

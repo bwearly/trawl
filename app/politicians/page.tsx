@@ -1,5 +1,12 @@
 import { getPoliticianLeaderboard } from "@/lib/domain/politicians/get-politicians-leaderboard";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Politician Performance | Trawl",
+  description:
+    "Compare politicians by historical post-disclosure alpha, win rate, and activity to prioritize further research.",
+};
 
 
 function formatPercent(value: number | null) {

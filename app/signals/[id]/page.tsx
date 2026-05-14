@@ -71,7 +71,34 @@ export default async function SignalDetailPage({
   const signalId = Number(id);
 
   if (!Number.isFinite(signalId)) {
-    return <div className="p-6">Invalid signal ID.</div>;
+    return (
+      <main className="min-h-screen bg-gray-50 p-6">
+        <div className="mx-auto max-w-3xl">
+          <section className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-950">
+              Invalid signal link
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              This signal URL appears to be incomplete or malformed.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+              <Link
+                href="/signals"
+                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+              >
+                Back to signals
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Go home
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   const result = await db
@@ -114,7 +141,34 @@ export default async function SignalDetailPage({
   const signal = result[0];
 
   if (!signal) {
-    return <div className="p-6">Signal not found.</div>;
+    return (
+      <main className="min-h-screen bg-gray-50 p-6">
+        <div className="mx-auto max-w-3xl">
+          <section className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-950">
+              Signal not found
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              This signal may have been removed, or the link may be out of date.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+              <Link
+                href="/signals"
+                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+              >
+                Browse signals
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Go home
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   const normalizedTicker = signal.ticker ?? null;
@@ -483,8 +537,9 @@ export default async function SignalDetailPage({
                 Score Breakdown
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                This section can become more detailed as your scoring model gets
-                smarter.
+                The signal score combines trade direction, filing freshness,
+                historical politician context, trade size, and
+                benchmark-relative performance when available.
               </p>
 
               <div className="mt-5 space-y-4">
@@ -495,15 +550,10 @@ export default async function SignalDetailPage({
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-dashed border-gray-200 p-4 text-sm text-gray-500">
-                  Add score drivers here next:
-                  <ul className="mt-2 space-y-1">
-                    <li>• Politician historical hit rate</li>
-                    <li>• Trade size / conviction weighting</li>
-                    <li>• Cluster activity on the ticker</li>
-                    <li>• Recent post-disclosure performance</li>
-                    <li>• Outperformance vs SPY</li>
-                  </ul>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  Higher scores indicate stronger research priority based on
+                  current evidence. Scores are informational and not investment
+                  advice.
                 </div>
               </div>
             </section>

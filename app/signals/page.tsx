@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import SignalsFeedClient from "@/components/signals/SignalsFeedClient";
 import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import { getUnreadAlertsCount } from "@/lib/domain/alerts/alerts";
@@ -7,6 +8,12 @@ import {
   parseSignalFilters,
 } from "@/lib/domain/signals/signals";
 import { getWatchedTickers } from "@/lib/domain/watchlists/watchlists";
+
+export const metadata: Metadata = {
+  title: "Research Signals | Trawl",
+  description:
+    "Browse ranked congressional trade research signals, filter by freshness and score, and review actionable filing context.",
+};
 
 type SearchParams = {
   minScore?: string | string[];

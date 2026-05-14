@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import WatchlistContent from "@/components/watchlist/WatchlistContent";
 import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
 import {
@@ -6,6 +7,12 @@ import {
   type WatchlistActivityItem,
 } from "@/lib/domain/watchlists/get-watchlist-activity";
 import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
+
+export const metadata: Metadata = {
+  title: "Watchlist | Trawl",
+  description:
+    "Track saved politicians and tickers, monitor recent activity, and jump back into high-priority disclosures.",
+};
 
 function formatRelativeDate(value: Date) {
   const deltaMs = Date.now() - value.getTime();
