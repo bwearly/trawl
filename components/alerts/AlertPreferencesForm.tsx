@@ -43,8 +43,7 @@ export default function AlertPreferencesForm() {
         setMinScore(String(data.minScore ?? 0));
         setEnableWatchedTickerAlerts(data.enableWatchedTickerAlerts);
         setEnableWatchedPoliticianAlerts(data.enableWatchedPoliticianAlerts);
-      } catch (error) {
-        console.error(error);
+      } catch {
         if (isMounted) {
           setMessage("Could not load alert preferences.");
         }
@@ -89,8 +88,7 @@ export default function AlertPreferencesForm() {
       setEnableWatchedTickerAlerts(updated.enableWatchedTickerAlerts);
       setEnableWatchedPoliticianAlerts(updated.enableWatchedPoliticianAlerts);
       setMessage("Preferences saved.");
-    } catch (error) {
-      console.error(error);
+    } catch {
       setMessage("Could not save preferences.");
     } finally {
       setIsSaving(false);

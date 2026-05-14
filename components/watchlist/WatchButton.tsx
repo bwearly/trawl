@@ -57,8 +57,7 @@ export default function WatchButton({
       const nextValue = !isWatching;
       setIsWatching(nextValue);
       onChange?.(nextValue);
-    } catch (error) {
-      console.error(error);
+    } catch {
       setErrorMessage("Couldn’t update watchlist. Please try again.");
     } finally {
       setIsLoading(false);

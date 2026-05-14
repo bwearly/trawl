@@ -54,7 +54,7 @@ function getAlertTypeLabel(type: string) {
 }
 
 export default async function AlertsPage() {
-  const rows = await getAlerts(getCurrentUserId());
+  const rows = await getAlerts(await getCurrentUserId());
   const unreadCount = rows.filter((row) => !row.isRead).length;
   const readCount = rows.length - unreadCount;
 

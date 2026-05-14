@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import DevIdentitySwitcher from "@/components/dev/DevIdentitySwitcher";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -47,6 +48,8 @@ export default function GlobalNav() {
             );
           })}
         </nav>
+
+        <DevIdentitySwitcher />
       </div>
     </header>
   );

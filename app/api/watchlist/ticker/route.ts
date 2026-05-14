@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await addTickerToWatchlist(getCurrentUserId(), ticker);
+    await addTickerToWatchlist(await getCurrentUserId(), ticker);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -41,7 +41,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await removeTickerFromWatchlist(getCurrentUserId(), ticker);
+    await removeTickerFromWatchlist(await getCurrentUserId(), ticker);
 
     return NextResponse.json({ success: true });
   } catch (error) {

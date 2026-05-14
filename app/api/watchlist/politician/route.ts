@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await addPoliticianToWatchlist(getCurrentUserId(), politicianId);
+    await addPoliticianToWatchlist(await getCurrentUserId(), politicianId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -41,7 +41,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await removePoliticianFromWatchlist(getCurrentUserId(), politicianId);
+    await removePoliticianFromWatchlist(await getCurrentUserId(), politicianId);
 
     return NextResponse.json({ success: true });
   } catch (error) {
