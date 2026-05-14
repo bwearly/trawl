@@ -43,8 +43,8 @@ export function classifyMissingPriceTicker(input: MissingPriceClassificationInpu
   }
 
   if (
-    hasAssetPattern(/\binterest\b/, /\bissued\b/) ||
-    (reason === "invalid_symbol" && hasAssetPattern(/\bshares\b/, /^new$/))
+    hasAssetPattern(/\bappell pete corp\b/, /\binterest\b/, /\bissued\b/) ||
+    hasAssetPattern(/\bshares\b/, /^new$/)
   ) {
     return {
       classification: "likely_false_positive_parser_noise",
@@ -59,8 +59,15 @@ export function classifyMissingPriceTicker(input: MissingPriceClassificationInpu
     };
   }
 
+  if (hasAssetPattern(/\bkellanova\b/, /\bchampionx corporation\b/)) {
+    return {
+      classification: "expected_delisted_or_acquired",
+      classificationReason: "Likely lifecycle transition (renamed/delisted/acquired) based on asset name pattern.",
+    };
+  }
+
   if (reason === "invalid_symbol") {
-    if (hasAssetPattern(/\bkellanova\b/, /\bchampionx\b/)) {
+    if (hasAssetPattern(/\bchampionx\b/)) {
       return {
         classification: "expected_delisted_or_acquired",
         classificationReason: "Likely lifecycle transition (renamed/delisted/acquired) based on invalid symbol and asset name.",

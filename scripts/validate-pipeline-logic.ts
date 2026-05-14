@@ -194,6 +194,15 @@ function runMissingPriceClassificationValidations() {
     importFailureDetail: "No data found, symbol may be delisted",
   });
   assertAllowed("APPL/Appell Pete classification", appl.classification, ["likely_false_positive_parser_noise", "manual_review"]);
+  const applNullReason = classifyMissingPriceTicker({
+    rawTicker: "APPL",
+    storageTicker: "AAPL",
+    yahooLookupTicker: "AAPL",
+    sampleAssetNames: ["Appell Pete Corp"],
+    importFailureReason: null,
+    importFailureDetail: null,
+  });
+  assertEqual(c, "APPL/Appell Pete + null reason classification", applNullReason.classification, "likely_false_positive_parser_noise");
 
   const fei = classifyMissingPriceTicker({
     rawTicker: "FEI",
@@ -244,6 +253,45 @@ function runMissingPriceClassificationValidations() {
     importFailureDetail: "No data found",
   });
   assertAllowed("K + Kellanova classification", k.classification, ["expected_delisted_or_acquired", "manual_review"]);
+  const kNullReason = classifyMissingPriceTicker({
+    rawTicker: "K",
+    storageTicker: "K",
+    yahooLookupTicker: "K",
+    sampleAssetNames: ["Kellanova"],
+    importFailureReason: null,
+    importFailureDetail: null,
+  });
+  assertAllowed("K + Kellanova + null reason classification", kNullReason.classification, ["expected_delisted_or_acquired", "manual_review"]);
+
+  const chxNullReason = classifyMissingPriceTicker({
+    rawTicker: "CHX",
+    storageTicker: "CHX",
+    yahooLookupTicker: "CHX",
+    sampleAssetNames: ["ChampionX Corporation"],
+    importFailureReason: null,
+    importFailureDetail: null,
+  });
+  assertAllowed("CHX + ChampionX Corporation + null reason classification", chxNullReason.classification, ["expected_delisted_or_acquired", "manual_review"]);
+
+  const magNullReason = classifyMissingPriceTicker({
+    rawTicker: "MAG",
+    storageTicker: "MAG",
+    yahooLookupTicker: "MAG",
+    sampleAssetNames: ["Shares"],
+    importFailureReason: null,
+    importFailureDetail: null,
+  });
+  assertAllowed("MAG + Shares + null reason classification", magNullReason.classification, ["likely_false_positive_parser_noise", "manual_review"]);
+
+  const newNullReason = classifyMissingPriceTicker({
+    rawTicker: "NEW",
+    storageTicker: "NEW",
+    yahooLookupTicker: "NEW",
+    sampleAssetNames: ["NEW"],
+    importFailureReason: null,
+    importFailureDetail: null,
+  });
+  assertAllowed("NEW + NEW + null reason classification", newNullReason.classification, ["likely_false_positive_parser_noise", "manual_review"]);
 
   const dfs = classifyMissingPriceTicker({
     rawTicker: "DFS",
