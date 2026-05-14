@@ -25,7 +25,8 @@
     "pipeline:validate": "tsx scripts/validate-pipeline-logic.ts",
     "pipeline:health": "tsx scripts/pipeline-health.ts",
     "disclosures:repair-tickers": "tsx scripts/repair-disclosure-tickers.ts",
-    "prices:review-missing": "tsx scripts/review-missing-price-tickers.ts"
+    "prices:review-missing": "tsx scripts/review-missing-price-tickers.ts",
+    "db:remove-seed": "tsx scripts/remove-seeded-records.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
