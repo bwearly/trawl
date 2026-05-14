@@ -57,6 +57,13 @@
       "when": 1776449778739,
       "tag": "0007_classy_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778794160882,
+      "tag": "0008_jittery_toad_men",
+      "breakpoints": true
     }
   ]
 }

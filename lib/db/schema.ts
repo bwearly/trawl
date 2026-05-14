@@ -259,6 +259,72 @@ export const alerts = pgTable(
   })
 );
 
+
+export const notificationJobs = pgTable(
+  "notification_jobs",
+  {
+    id: serial("id").primaryKey(),
+
+    alertId: integer("alert_id").references(() => alerts.id),
+    userId: text("user_id").notNull(),
+
+    channel: text("channel").notNull().default("email"),
+    recipient: text("recipient"),
+
+    status: text("status").notNull().default("queued"),
+
+    idempotencyKey: text("idempotency_key").notNull(),
+
+    attemptCount: integer("attempt_count").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+
+    scheduledFor: timestamp("scheduled_for").notNull().defaultNow(),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    sentAt: timestamp("sent_at"),
+
+    providerMessageId: text("provider_message_id"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("notification_jobs_user_id_idx").on(table.userId),
+    statusIdx: index("notification_jobs_status_idx").on(table.status),
+    scheduledForIdx: index("notification_jobs_scheduled_for_idx").on(table.scheduledFor),
+    alertIdIdx: index("notification_jobs_alert_id_idx").on(table.alertId),
+    idempotencyKeyUnique: uniqueIndex("notification_jobs_idempotency_key_idx").on(
+      table.idempotencyKey
+    ),
+  })
+);
+
+export const notificationEvents = pgTable(
+  "notification_events",
+  {
+    id: serial("id").primaryKey(),
+
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => notificationJobs.id),
+    alertId: integer("alert_id").references(() => alerts.id),
+    userId: text("user_id").notNull(),
+
+    channel: text("channel").notNull().default("email"),
+    eventType: text("event_type").notNull(),
+    message: text("message"),
+    metadata: text("metadata"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    jobIdIdx: index("notification_events_job_id_idx").on(table.jobId),
+    userIdIdx: index("notification_events_user_id_idx").on(table.userId),
+    eventTypeIdx: index("notification_events_event_type_idx").on(table.eventType),
+  })
+);
+
 export const alertPreferences = pgTable(
   "alert_preferences",
   {
