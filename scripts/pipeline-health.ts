@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { count, desc, sql } from "drizzle-orm";
+import { existsSync, readFileSync } from "node:fs";
 import { db } from "../lib/db";
 import {
   alertPreferences,
@@ -11,6 +12,7 @@ import {
   watchlistItems,
   watchlists,
 } from "../lib/db/schema";
+import { normalizeTickerForStorage, normalizeYahooSymbol } from "../lib/domain/pipeline/normalization";
 
 type HealthSummary = {
   generatedAt: string;
@@ -21,6 +23,13 @@ type HealthSummary = {
   alerts: Record<string, unknown>;
   watchlists: Record<string, unknown>;
   warnings: string[];
+};
+
+type PriceImportFailure = {
+  ticker: string;
+  yahooSymbol: string;
+  reason: string;
+  detail: string;
 };
 
 const pct = (n: number, d: number) => (d > 0 ? Number(((n / d) * 100).toFixed(2)) : 0);
@@ -84,6 +93,33 @@ async function main() {
     order by count(*) desc, upper(d.ticker)
     limit 20
   `));
+
+  const unresolvedPriceImportPath = "tmp/price-import-unresolved-symbols.json";
+  const unresolvedPriceImport: PriceImportFailure[] = existsSync(unresolvedPriceImportPath)
+    ? JSON.parse(readFileSync(unresolvedPriceImportPath, "utf8")) as PriceImportFailure[]
+    : [];
+  const unresolvedByTicker = new Map(
+    unresolvedPriceImport.map((row) => [normalizeTickerForStorage(row.ticker), row])
+  );
+  const missingTickersForDiagnostics = missingPriceTickers.rows
+    .map((row) => String((row as { ticker: string }).ticker))
+    .filter((ticker) => ticker.length > 0);
+  const missingTickerDiagnostics = missingTickersForDiagnostics.length > 0
+    ? await withTimeout("missing price ticker diagnostics", async () =>
+        db.execute(sql`
+          select
+            upper(d.ticker) as ticker,
+            count(*)::int as disclosure_count,
+            min(coalesce(d.trade_date, d.filing_date))::date as first_disclosure_date,
+            max(coalesce(d.trade_date, d.filing_date))::date as last_disclosure_date,
+            array_remove((array_agg(distinct d.politician_name order by d.politician_name))[1:3], null) as sample_politicians,
+            array_remove((array_agg(distinct d.asset_name order by d.asset_name))[1:3], null) as sample_asset_names
+          from ${disclosures} d
+          where upper(d.ticker) in (${sql.join(missingTickersForDiagnostics.map((ticker) => sql`${ticker}`), sql`, `)})
+          group by upper(d.ticker)
+        `)
+      )
+    : { rows: [] };
   console.log("[price history coverage] complete.");
 
   console.log("[performance window coverage] starting...");
@@ -235,6 +271,30 @@ async function main() {
       distinctDisclosureTickers: Number(disclosureTickerTotals?.distinctDisclosureTickers ?? 0),
       distinctPriceTickers: Number(priceTotals?.distinctPriceTickers ?? 0),
       disclosureTickersMissingPriceHistory: missingPriceTickers.rows,
+      missingPriceTickerDiagnostics: missingTickerDiagnostics.rows.map((row) => {
+        const typed = row as {
+          ticker: string;
+          disclosure_count: number;
+          first_disclosure_date: string | null;
+          last_disclosure_date: string | null;
+          sample_politicians: string[] | null;
+          sample_asset_names: string[] | null;
+        };
+        const ticker = normalizeTickerForStorage(String(typed.ticker ?? ""));
+        const unresolved = unresolvedByTicker.get(ticker);
+
+        return {
+          storageTicker: ticker,
+          yahooLookupTicker: normalizeYahooSymbol(ticker),
+          disclosureCount: Number(typed.disclosure_count ?? 0),
+          firstDisclosureDate: typed.first_disclosure_date,
+          lastDisclosureDate: typed.last_disclosure_date,
+          samplePoliticians: typed.sample_politicians ?? [],
+          sampleAssetNames: typed.sample_asset_names ?? [],
+          importFailureReason: unresolved?.reason ?? null,
+          importFailureDetail: unresolved?.detail ?? null,
+        };
+      }),
       spyPriceRowCount: Number(priceTotals?.spyRows ?? 0),
       earliestPriceDate: priceTotals?.earliestPriceDate ?? null,
       latestPriceDate: priceTotals?.latestPriceDate ?? null,
@@ -302,6 +362,16 @@ async function main() {
   console.log(`- distinct disclosure tickers: ${summary.priceHistory.distinctDisclosureTickers}`);
   console.log(`- distinct price tickers: ${summary.priceHistory.distinctPriceTickers}`);
   console.log(`- SPY rows: ${summary.priceHistory.spyPriceRowCount}`);
+  console.log("- top missing ticker diagnostics:");
+  for (const row of summary.priceHistory.missingPriceTickerDiagnostics as Array<Record<string, unknown>>) {
+    console.log(
+      `  * ${(row.storageTicker as string)} (Yahoo: ${(row.yahooLookupTicker as string)}) disclosures=${String(
+        row.disclosureCount
+      )} range=${String(row.firstDisclosureDate)}..${String(row.lastDisclosureDate)} reason=${String(
+        row.importFailureReason ?? "unknown"
+      )}`
+    );
+  }
 
   console.log("\n[Performance]");
   console.log(`- rows: ${summary.performance.totalPerformanceRows}`);

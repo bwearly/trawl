@@ -31,6 +31,7 @@ function assertTrue(category: string, test: string, condition: boolean, detail: 
 function runTickerNormalizationValidations() {
   const c = "ticker-normalization";
   assertEqual(c, "APPL storage", normalizeTickerForStorage("APPL"), "AAPL");
+  assertEqual(c, "appl storage case-insensitive", normalizeTickerForStorage(" appl "), "AAPL");
   assertEqual(c, "AAPL storage", normalizeTickerForStorage("AAPL"), "AAPL");
   assertEqual(c, "BRKB storage", normalizeTickerForStorage("BRKB"), "BRK.B");
   assertEqual(c, "BRK.B storage", normalizeTickerForStorage("BRK.B"), "BRK.B");
@@ -40,6 +41,7 @@ function runTickerNormalizationValidations() {
   assertEqual(c, "unknown storage predictable", normalizeTickerForStorage("XYZQ"), "XYZQ");
 
   assertEqual(c, "APPL yahoo", normalizeYahooSymbol("APPL"), "AAPL");
+  assertEqual(c, "appl yahoo case-insensitive", normalizeYahooSymbol(" appl "), "AAPL");
   assertEqual(c, "BRKB yahoo", normalizeYahooSymbol("BRKB"), "BRK-B");
   assertEqual(c, "BRK.B yahoo", normalizeYahooSymbol("BRK.B"), "BRK-B");
   assertEqual(c, "BRK-B yahoo", normalizeYahooSymbol("BRK-B"), "BRK-B");
