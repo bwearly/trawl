@@ -2,6 +2,7 @@ export function normalizeYahooSymbol(symbol: string) {
   const trimmed = symbol.trim().toUpperCase();
 
   if (trimmed === "APPL") return "AAPL";
+  if (trimmed === "FI") return "FISV";
   if (trimmed === "BRKB") return "BRK-B";
   if (trimmed === "BRK.B" || trimmed === "BRK-B") return "BRK-B";
   if (trimmed === "BF.B" || trimmed === "BF-B") return "BF-B";
@@ -13,6 +14,7 @@ export function normalizeTickerForStorage(symbol: string) {
   const trimmed = symbol.trim().toUpperCase();
 
   if (trimmed === "APPL") return "AAPL";
+  if (trimmed === "FISV") return "FI";
   if (trimmed === "BRKB") return "BRK.B";
   if (trimmed === "BRK-B") return "BRK.B";
   if (trimmed === "BF-B") return "BF.B";

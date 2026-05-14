@@ -1,4 +1,5 @@
 import { normalizeTickerForStorage, normalizeTradeType, normalizeYahooSymbol } from "../lib/domain/pipeline/normalization";
+import { resolveHouseTicker } from "./lib/house-asset-resolution";
 import { shouldGenerateAlert } from "../lib/domain/alerts/should-generate-alert";
 import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
 import {
@@ -47,6 +48,27 @@ function runTickerNormalizationValidations() {
   assertEqual(c, "BRK-B yahoo", normalizeYahooSymbol("BRK-B"), "BRK-B");
   assertEqual(c, "BF.B yahoo", normalizeYahooSymbol("BF.B"), "BF-B");
   assertEqual(c, "BF-B yahoo", normalizeYahooSymbol("BF-B"), "BF-B");
+}
+
+
+
+function runHouseAssetResolutionValidations() {
+  const c = "house-asset-resolution";
+
+  const att = resolveHouseTicker({ rawTicker: "AT", rawAssetName: "AT&T Inc" });
+  assertEqual(c, "AT&T explicit AT resolves to T", att.ticker, "T");
+  assertEqual(c, "AT&T uses mapping override", att.source, "mapping");
+
+  const fiserv = resolveHouseTicker({ rawTicker: null, rawAssetName: "Fiserv, Inc" });
+  assertEqual(c, "Fiserv maps to FI storage", fiserv.ticker, "FI");
+  assertEqual(c, "FI maps to FISV for Yahoo", normalizeYahooSymbol("FI"), "FISV");
+
+  assertEqual(c, "explicit APPL ticker normalizes to AAPL", normalizeTickerForStorage("APPL"), "AAPL");
+
+  const appellPete = resolveHouseTicker({ rawTicker: null, rawAssetName: "Appell Pete Corp" });
+  assertTrue(c, "Appell Pete does not map to AAPL", appellPete.ticker !== "AAPL", `unexpected ticker=${String(appellPete.ticker)}`);
+
+  assertEqual(c, "BF.B still maps to Yahoo BF-B", normalizeYahooSymbol("BF.B"), "BF-B");
 }
 
 function runTradeTypeValidations() {
@@ -150,7 +172,7 @@ function runPerformanceWindowValidations() {
 }
 
 function printSummary() {
-  const categories = ["ticker-normalization", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "performance-windows"];
+  const categories = ["ticker-normalization", "house-asset-resolution", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "performance-windows"];
   console.log("\nPipeline deterministic validation summary\n");
   for (const category of categories) {
     const categoryFailures = failures.filter((f) => f.category === category);
@@ -170,6 +192,7 @@ function printSummary() {
 
 function main() {
   runTickerNormalizationValidations();
+  runHouseAssetResolutionValidations();
   runTradeTypeValidations();
   runAlertEligibilityValidations();
   runScoringValidations();

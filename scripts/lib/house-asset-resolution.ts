@@ -31,6 +31,7 @@ export const HOUSE_ASSET_NAME_TO_TICKER: Record<string, string> = {
   "BERKSHIRE HATHAWAY INC CL B": "BRK.B",
   "BROWN AND BROWN INC COMMON STOCK": "BRO",
   "COINBASE GLOBAL INC": "COIN",
+  "FISERV INC": "FI",
   "CVS HEALTH CORP CS": "CVS",
   "EATON CORP PLC ORDINARY": "ETN",
   "IDEXX LABORATORIES INC": "IDXX",
@@ -151,7 +152,23 @@ export function resolveHouseTicker(params: {
   const normalization = normalizeAssetName(params.rawAssetName);
 
   const explicitTicker = normalizeExplicitTicker(params.rawTicker);
+  const mappedTicker =
+    HOUSE_ASSET_NAME_TO_TICKER[normalization.canonicalAssetName] ??
+    HOUSE_ASSET_NAME_TO_TICKER[
+      stripTrailingEquitySuffixForMatching(normalization.canonicalAssetName)
+    ];
+
+  // High-confidence override: House feeds have emitted `AT` for `AT&T Inc`.
+  // Preserve explicit tickers generally, but prefer curated mapping when these conflict.
   if (explicitTicker) {
+    if (explicitTicker === "AT" && mappedTicker === "T") {
+      return {
+        ticker: mappedTicker,
+        source: "mapping",
+        normalization,
+      };
+    }
+
     return {
       ticker: explicitTicker,
       source: "explicit",
@@ -159,11 +176,6 @@ export function resolveHouseTicker(params: {
     };
   }
 
-  const mappedTicker =
-    HOUSE_ASSET_NAME_TO_TICKER[normalization.canonicalAssetName] ??
-    HOUSE_ASSET_NAME_TO_TICKER[
-      stripTrailingEquitySuffixForMatching(normalization.canonicalAssetName)
-    ];
   if (mappedTicker) {
     return {
       ticker: mappedTicker,
