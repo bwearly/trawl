@@ -1,7 +1,13 @@
-import { getSignals, parseSignalFilters } from "@/lib/domain/signals/signals";
+import {
+  getSignals,
+  parseSignalFilters,
+  parseSignalSort,
+} from "@/lib/domain/signals/signals";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+
+  const sort = parseSignalSort(searchParams.get("sort") ?? undefined);
 
   const filters = parseSignalFilters({
     minScore: searchParams.get("minScore") ?? undefined,
@@ -10,7 +16,7 @@ export async function GET(request: Request) {
     ticker: searchParams.get("ticker") ?? undefined,
     politician: searchParams.get("politician") ?? undefined,
     freshness: searchParams.get("freshness") ?? undefined,
-    sort: searchParams.get("sort") ?? undefined,
+    sort,
   });
 
   const rows = await getSignals(filters);
