@@ -114,3 +114,25 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Alert email queue foundation (no live sending)
+
+This repository now includes a **notification queue foundation** for alert email delivery, but **live email delivery is intentionally disabled**.
+
+- Feature flag: `ALERT_EMAIL_QUEUE_ENABLED` (default behavior should be `false`).
+- When disabled, in-app alert creation and behavior remain unchanged.
+- No email provider SDK is configured yet.
+- The current notification sender is a **no-op sender** that never sends real email.
+
+### Queue processing
+
+- Run `npm run notifications:process` to process queued notification jobs in small batches.
+- Processor behavior is idempotent and safe to rerun.
+- Without a configured provider, jobs resolve via no-op/suppressed outcomes only.
+
+### Future requirements before live sending
+
+- Verified user email source/profile data.
+- Unsubscribe/suppression model.
+- Provider adapter implementation (e.g. Resend/SendGrid/Postmark/SES).
+- Delivery monitoring and failure handling policy.

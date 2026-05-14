@@ -9,6 +9,7 @@ import {
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getOrCreateAlertPreferences } from "@/lib/domain/alerts/preferences";
 import { shouldGenerateAlert } from "@/lib/domain/alerts/should-generate-alert";
+import { enqueueEmailNotificationJob } from "@/lib/domain/notifications/enqueue-notification";
 
 export type AlertRow = {
   id: number;
@@ -162,7 +163,7 @@ export async function generateAlertsForSignal(
   }
 
   if (eligibleTickerUserIds.length > 0) {
-    await db
+    const insertedTickerAlerts = await db
       .insert(alerts)
       .values(
         eligibleTickerUserIds.map((userId) => ({
@@ -179,11 +180,31 @@ export async function generateAlertsForSignal(
           isRead: false,
         }))
       )
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: alerts.id, userId: alerts.userId });
+
+    if (process.env.ALERT_EMAIL_QUEUE_ENABLED === "true") {
+      for (const alertRow of insertedTickerAlerts) {
+        try {
+          await enqueueEmailNotificationJob({
+            alertId: alertRow.id,
+            userId: alertRow.userId,
+            recipient: null,
+            idempotencyKey: `alert:${alertRow.id}:email`,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue ticker alert email notification", {
+            alertId: alertRow.id,
+            userId: alertRow.userId,
+            error,
+          });
+        }
+      }
+    }
   }
 
   if (eligiblePoliticianUserIds.length > 0) {
-    await db
+    const insertedPoliticianAlerts = await db
       .insert(alerts)
       .values(
         eligiblePoliticianUserIds.map((userId) => ({
@@ -200,7 +221,27 @@ export async function generateAlertsForSignal(
           isRead: false,
         }))
       )
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: alerts.id, userId: alerts.userId });
+
+    if (process.env.ALERT_EMAIL_QUEUE_ENABLED === "true") {
+      for (const alertRow of insertedPoliticianAlerts) {
+        try {
+          await enqueueEmailNotificationJob({
+            alertId: alertRow.id,
+            userId: alertRow.userId,
+            recipient: null,
+            idempotencyKey: `alert:${alertRow.id}:email`,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue politician alert email notification", {
+            alertId: alertRow.id,
+            userId: alertRow.userId,
+            error,
+          });
+        }
+      }
+    }
   }
 
   return {
