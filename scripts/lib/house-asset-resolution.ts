@@ -126,19 +126,25 @@ function normalizeExplicitTicker(rawTicker: string | null): string | null {
 }
 
 function resolveTickerFromPatterns(rawAssetName: string, canonicalAssetName: string): string | null {
+  const isAppellPete = /\bAPPELL\s+PETE\b/i.test(rawAssetName) || /\bAPPELL\s+PETE\b/i.test(canonicalAssetName);
   const inlineTickerMatch = rawAssetName.match(/\b(?:TICKER|SYMBOL)\s*[:\-]\s*([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b/i);
   if (inlineTickerMatch?.[1]) {
-    return inlineTickerMatch[1].toUpperCase();
+    const candidate = inlineTickerMatch[1].toUpperCase();
+    if (isAppellPete && (candidate === "APPL" || candidate === "AAPL")) return null;
+    return candidate;
   }
 
   const exchangeTickerMatch = rawAssetName.match(
     /\b(?:NYSE|NASDAQ|AMEX|NYSEARCA|OTC)\s*[:\-]\s*([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b/i
   );
   if (exchangeTickerMatch?.[1]) {
-    return exchangeTickerMatch[1].toUpperCase();
+    const candidate = exchangeTickerMatch[1].toUpperCase();
+    if (isAppellPete && (candidate === "APPL" || candidate === "AAPL")) return null;
+    return candidate;
   }
 
   if (/^[A-Z]{1,5}(?:\.[A-Z]{1,2})?$/.test(canonicalAssetName)) {
+    if (isAppellPete && (canonicalAssetName === "APPL" || canonicalAssetName === "AAPL")) return null;
     return canonicalAssetName;
   }
 

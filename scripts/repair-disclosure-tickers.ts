@@ -78,7 +78,7 @@ async function applyAttRepairs(): Promise<number> {
   return result.length;
 }
 
-async function getAppellPeteCandidates(): Promise<DisclosureCandidate[]> {
+async function getAppellPeteCandidatesByTicker(ticker: "APPL" | "AAPL"): Promise<DisclosureCandidate[]> {
   return db
     .select({
       id: disclosures.id,
@@ -90,7 +90,7 @@ async function getAppellPeteCandidates(): Promise<DisclosureCandidate[]> {
     })
     .from(disclosures)
     .where(
-      and(eq(disclosures.ticker, "AAPL"), ilike(disclosures.assetName, "%Appell Pete%"))
+      and(eq(disclosures.ticker, ticker), ilike(disclosures.assetName, "%Appell Pete%"))
     )
     .orderBy(disclosures.id);
 }
@@ -132,14 +132,18 @@ async function main(): Promise<void> {
     console.log("AT&T dry-run only: no updates applied.");
   }
 
-  const appellPeteCandidates = await getAppellPeteCandidates();
-  printSampleRows("Appell Pete AAPL false-positive", appellPeteCandidates);
+  const appellPeteApplCandidates = await getAppellPeteCandidatesByTicker("APPL");
+  const appellPeteAaplCandidates = await getAppellPeteCandidatesByTicker("AAPL");
+  printSampleRows("Appell Pete APPL candidates (raw ticker)", appellPeteApplCandidates);
+  printSampleRows("Appell Pete AAPL candidates (normalized/storage ticker)", appellPeteAaplCandidates);
+  const appellPeteTotal = appellPeteApplCandidates.length + appellPeteAaplCandidates.length;
+  console.log(`Appell Pete review status: manual-review candidates=${appellPeteTotal}`);
   if (APPLY_REPAIRS) {
     console.log(
-      "Appell Pete apply-mode action: SKIPPED (manual review required; no safe replacement ticker and ticker-null behavior not auto-enforced in this script)."
+      "Appell Pete apply-mode action: SKIPPED (manual review required; no safe replacement ticker is inferred in this script)."
     );
   } else {
-    console.log("Appell Pete dry-run only: report generated for manual review.");
+    console.log("Appell Pete dry-run action: MANUAL-REVIEW (candidate rows reported, no DB updates).");
   }
 
   const fiservCandidates = await getFiservDiagnostics();

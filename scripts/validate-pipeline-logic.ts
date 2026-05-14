@@ -48,6 +48,11 @@ function runTickerNormalizationValidations() {
   assertEqual(c, "BRK-B yahoo", normalizeYahooSymbol("BRK-B"), "BRK-B");
   assertEqual(c, "BF.B yahoo", normalizeYahooSymbol("BF.B"), "BF-B");
   assertEqual(c, "BF-B yahoo", normalizeYahooSymbol("BF-B"), "BF-B");
+  const rawTicker = "APPL";
+  const storageTicker = normalizeTickerForStorage(rawTicker);
+  assertEqual(c, "diagnostic preserves distinct raw ticker", rawTicker, "APPL");
+  assertEqual(c, "diagnostic normalized storage ticker", storageTicker, "AAPL");
+  assertTrue(c, "raw ticker differs from normalized storage ticker", rawTicker !== storageTicker, `${rawTicker} should differ from ${storageTicker}`);
 }
 
 

@@ -284,8 +284,10 @@ async function main() {
         };
         const ticker = normalizeTickerForStorage(String(typed.ticker ?? ""));
         const unresolved = unresolvedByTicker.get(ticker);
+        const rawTicker = String(typed.ticker ?? "").trim().toUpperCase();
 
         return {
+          rawTicker,
           storageTicker: ticker,
           yahooLookupTicker: normalizeYahooSymbol(ticker),
           disclosureCount: Number(typed.disclosure_count ?? 0),
