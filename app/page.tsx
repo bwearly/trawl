@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import SignalCard from "@/components/signals/SignalCard";
 import { getBiggestOutperformers } from "@/lib/domain/signals/get-biggest-outperformers";
 import { getRecentlyFiled } from "@/lib/domain/signals/get-recently-filed";
@@ -11,6 +12,191 @@ export const metadata: Metadata = {
     "Track congressional trade disclosures, find ranked opportunities, validate performance, and stay on top of watchlists and alerts.",
 };
 
+const marketRows = [
+  ["NVDA", "+2.14%"],
+  ["MSFT", "+0.82%"],
+  ["AAPL", "-0.31%"],
+  ["GOOGL", "+1.08%"],
+  ["AMZN", "+0.47%"],
+  ["META", "+1.72%"],
+  ["JPM", "-0.18%"],
+  ["PLTR", "+3.21%"],
+];
+
+function Sparkline({ variant = "up" }: { variant?: "up" | "down" | "steady" }) {
+  const path =
+    variant === "down"
+      ? "M4 18 C18 8 28 10 40 14 C52 18 66 24 80 22 C94 20 106 26 120 30"
+      : variant === "steady"
+        ? "M4 24 C20 20 31 25 44 22 C58 18 70 20 84 18 C98 16 110 17 124 14"
+        : "M4 30 C20 26 30 32 44 22 C58 12 70 18 82 10 C96 2 108 8 124 4";
+
+  return (
+    <svg
+      viewBox="0 0 128 36"
+      aria-hidden="true"
+      className="h-10 w-32 text-gray-900/80"
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="3"
+      />
+      <path
+        d={`${path} L124 36 L4 36 Z`}
+        fill="currentColor"
+        opacity="0.06"
+      />
+    </svg>
+  );
+}
+
+function MarketTickerTape() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-8 overflow-hidden opacity-90">
+      <div className="animate-[market-tape_32s_linear_infinite] flex w-max gap-3 whitespace-nowrap px-6">
+        {[...marketRows, ...marketRows].map(([ticker, move], index) => (
+          <span
+            key={`${ticker}-${index}`}
+            className="rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur"
+          >
+            {ticker} <span className={move.startsWith("+") ? "text-emerald-600" : "text-rose-600"}>{move}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TradingHeroGraphic() {
+  return (
+    <div className="relative min-h-[420px] overflow-hidden rounded-[2rem] border border-blue-100 bg-white p-5 shadow-2xl shadow-blue-100/70">
+      <MarketTickerTape />
+
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.16),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.14),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.9),transparent_48%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:36px_36px]" />
+
+      <div className="relative z-10 mt-16 grid gap-4">
+        <div className="animate-[float-panel_7s_ease-in-out_infinite] rounded-3xl border border-gray-200 bg-white/85 p-5 text-gray-950 shadow-xl shadow-blue-100/60 backdrop-blur-md">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                Live research board
+              </p>
+              <h3 className="mt-2 text-3xl font-bold tracking-tight">Signals moving today</h3>
+            </div>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+              Ranked
+            </span>
+          </div>
+
+          <div className="mt-6 rounded-2xl bg-blue-50/80 p-4 ring-1 ring-blue-100">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Congressional disclosure momentum</p>
+                <p className="mt-1 text-4xl font-bold tracking-tight">+18.7%</p>
+              </div>
+              <Sparkline />
+            </div>
+          </div>
+        </div>
+
+        <div className="ml-auto w-[88%] animate-[float-panel_8s_ease-in-out_infinite_1s] rounded-3xl border border-gray-200 bg-white/85 p-4 text-gray-950 shadow-xl shadow-blue-100/60 backdrop-blur-md">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-gray-600">Recently filed</span>
+            <span className="font-semibold text-amber-700">Fresh activity</span>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-gray-600">
+            <div className="rounded-2xl bg-white/85 p-3">
+              <p className="text-gray-950">Filings</p>
+              <p className="mt-1 text-lg font-bold">3677</p>
+            </div>
+            <div className="rounded-2xl bg-white/85 p-3">
+              <p className="text-gray-950">Signals</p>
+              <p className="mt-1 text-lg font-bold">100%</p>
+            </div>
+            <div className="rounded-2xl bg-white/85 p-3">
+              <p className="text-gray-950">Watch</p>
+              <p className="mt-1 text-lg font-bold">Alerts</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-[82%] animate-[float-panel_9s_ease-in-out_infinite_0.5s] rounded-3xl border border-gray-200 bg-white/85 p-4 text-gray-950 shadow-xl shadow-blue-100/60 backdrop-blur-md">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                Performance check
+              </p>
+              <p className="mt-1 text-sm text-gray-600">Compare moves against SPY.</p>
+            </div>
+            <Sparkline variant="steady" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionShell({
+  eyebrow,
+  title,
+  description,
+  href,
+  linkLabel,
+  accent,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+  accent: "blue" | "amber" | "emerald";
+  children: ReactNode;
+}) {
+  const styles = {
+    blue: "border-blue-200 bg-gradient-to-b from-blue-50 to-white text-blue-700",
+    amber: "border-amber-200 bg-gradient-to-b from-amber-50 to-white text-amber-700",
+    emerald: "border-emerald-200 bg-gradient-to-b from-emerald-50 to-white text-emerald-700",
+  }[accent];
+
+  return (
+    <section className={`rounded-3xl border p-6 shadow-sm ${styles}`}>
+      <div className="flex min-h-[168px] flex-col justify-between gap-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em]">
+            {eyebrow}
+          </p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-950">
+            {title}
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-gray-600">{description}</p>
+        </div>
+
+        <Link
+          href={href}
+          className="inline-flex w-fit items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 transition hover:bg-gray-50"
+        >
+          {linkLabel} →
+        </Link>
+      </div>
+
+      <div className="mt-5 space-y-4 text-gray-900">{children}</div>
+    </section>
+  );
+}
+
+function SignalEmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+      {label}
+    </div>
+  );
+}
+
 export default async function Home() {
   const [topPicks, recentlyFiled, biggestOutperformers] = await Promise.all([
     getTopPicks(4),
@@ -19,126 +205,137 @@ export default async function Home() {
   ]);
 
   return (
-    <main className="min-h-screen bg-gray-50 px-6 py-16">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <section className="rounded-3xl border border-gray-200 bg-white p-10 shadow-sm">
+    <main className="min-h-screen overflow-hidden bg-gray-50">
+      <style>{`
+        @keyframes market-tape {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @keyframes float-panel {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-12px); }
+        }
+      `}</style>
+
+      <section className="relative bg-gradient-to-br from-blue-50 via-white to-emerald-50 px-6 py-16 text-gray-950 sm:py-20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.14),transparent_26%)]" />
+        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
-              Trawl
+            <p className="inline-flex rounded-full border border-blue-100 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-700 shadow-sm backdrop-blur">
+              Trawl market desk
             </p>
 
-            <h1 className="mt-4 text-5xl font-bold tracking-tight text-gray-950">
-              Turn congressional filings into a daily investing research workflow
+            <h1 className="mt-6 text-5xl font-bold tracking-tight text-gray-950 sm:text-6xl">
+              A trading-style dashboard for congressional stock activity.
             </h1>
 
-            <p className="mt-6 text-lg leading-8 text-gray-600">
-              Trawl helps you find new congressional trades, prioritize the
-              strongest signals, and validate what has historically worked—all
-              in one place.
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600">
+              Watch disclosures hit the tape, compare trades against SPY, and
+              turn filings into a daily research workflow you can actually scan.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href="/signals"
-                className="rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-black"
+                className="rounded-xl bg-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-black"
               >
-                View signals
+                Open signal desk
               </Link>
 
               <Link
                 href="/politicians"
-                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-xl border border-gray-300 bg-white/70 px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-white"
               >
-                Politicians
+                View leaderboard
               </Link>
 
               <Link
                 href="/watchlist"
-                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-xl border border-gray-300 bg-white/70 px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-white"
               >
-                Watchlist
-              </Link>
-
-              <Link
-                href="/alerts"
-                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Alerts
+                Build watchlist
               </Link>
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-4 rounded-3xl border border-gray-200 bg-white p-8 shadow-sm md:grid-cols-[1.4fr_1fr]">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
-              Start here
+          <TradingHeroGraphic />
+        </div>
+      </section>
+
+      <section className="px-6 py-8">
+        <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
+          <Link
+            href="/signals"
+            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              Step 1
             </p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-950">
-              How to use Trawl in 3 steps
-            </h2>
-            <p className="mt-3 text-base text-gray-600">
-              Use this quick loop to go from discovery to monitoring.
+            <h3 className="mt-2 text-lg font-bold text-gray-950">Scan the tape</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Start with ranked research signals and sort by score, filing date,
+              freshness, or ticker.
             </p>
-          </div>
+          </Link>
 
-          <ol className="space-y-3 text-sm text-gray-700">
-            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <span className="font-semibold text-gray-900">1.</span> Open{" "}
-              <Link href="/signals" className="font-semibold text-gray-900 underline">
-                signals
-              </Link>{" "}
-              and review today&apos;s top-ranked ideas.
-            </li>
-            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <span className="font-semibold text-gray-900">2.</span> Save key
-              names in your{" "}
-              <Link
-                href="/watchlist"
-                className="font-semibold text-gray-900 underline"
-              >
-                watchlist
-              </Link>
-              .
-            </li>
-            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <span className="font-semibold text-gray-900">3.</span> Use{" "}
-              <Link href="/alerts" className="font-semibold text-gray-900 underline">
-                alerts
-              </Link>{" "}
-              to stay updated when new filings hit.
-            </li>
-          </ol>
-        </section>
+          <Link
+            href="/politicians"
+            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              Step 2
+            </p>
+            <h3 className="mt-2 text-lg font-bold text-gray-950">Find repeat patterns</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Compare politicians by win rate, alpha vs SPY, sample size, and
+              filing behavior.
+            </p>
+          </Link>
 
-        <section className="rounded-3xl border border-blue-200 bg-gradient-to-b from-blue-50 to-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <Link
+            href="/alerts"
+            className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+              Step 3
+            </p>
+            <h3 className="mt-2 text-lg font-bold text-gray-950">Track what matters</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Save tickers and politicians so new activity turns into alerts.
+            </p>
+          </Link>
+        </div>
+      </section>
+
+      <section className="px-6 pb-16">
+        <div className="mx-auto max-w-6xl space-y-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-700">
-                Top signals right now
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-gray-500">
+                Research feed
               </p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-                Top Picks Today
+                Three ways to read the market
               </h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                Strong current research signals, ranked so you can start with
-                the highest-priority opportunities.
-              </p>
             </div>
-
             <Link
               href="/signals"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+              className="text-sm font-semibold text-gray-600 hover:text-gray-950"
             >
-              View all signals →
+              View full signal feed →
             </Link>
           </div>
 
-          <div className="mt-6 space-y-4">
+          <SectionShell
+            eyebrow="Top signals"
+            title="Top Picks Today"
+            description="The highest-ranked current research signals, ready for quick review."
+            href="/signals"
+            linkLabel="Open desk"
+            accent="blue"
+          >
             {topPicks.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-blue-300 bg-white p-10 text-center text-sm text-gray-500">
-                No top picks available yet.
-              </div>
+              <SignalEmptyState label="No top picks available yet." />
             ) : (
               topPicks.map((signal, index) => (
                 <div key={signal.signalId}>
@@ -150,116 +347,39 @@ export default async function Home() {
                       #{index + 1}
                     </span>
                   </div>
-
-                  <SignalCard
-                    signalId={signal.signalId}
-                    ticker={signal.ticker}
-                    score={signal.score}
-                    signalStatus={signal.signalStatus}
-                    politicianId={signal.politicianId}
-                    politicianName={signal.politicianName}
-                    tradeType={signal.tradeType}
-                    ownerType={signal.ownerType}
-                    amountRangeLabel={signal.amountRangeLabel}
-                    tradeDate={signal.tradeDate}
-                    filingDate={signal.filingDate}
-                    filingLagDays={signal.filingLagDays}
-                    return7d={signal.return7d}
-                    return30d={signal.return30d}
-                    historicalSampleSize={signal.historicalSampleSize}
-                    sourceUrl={signal.sourceUrl}
-                    primaryReason={signal.primaryReason}
-                    reasonSummary={signal.reasonSummary}
-                  />
+                  <SignalCard {...signal} />
                 </div>
               ))
             )}
-          </div>
-        </section>
+          </SectionShell>
 
-        <section className="rounded-3xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">
-                Newest disclosures
-              </p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-                Recently Filed
-              </h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                The latest congressional disclosures, ordered by filing time.
-              </p>
-            </div>
-
-            <Link
-              href="/signals?sort=newest"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900"
-            >
-              View newest filings →
-            </Link>
-          </div>
-
-          <div className="mt-6 space-y-4">
+          <SectionShell
+            eyebrow="Fresh filings"
+            title="Recently Filed"
+            description="The newest congressional disclosures as they enter the research queue."
+            href="/signals?sort=newest"
+            linkLabel="Newest filings"
+            accent="amber"
+          >
             {recentlyFiled.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-10 text-center text-sm text-gray-500">
-                No recent filings available yet.
-              </div>
+              <SignalEmptyState label="No recent filings available yet." />
             ) : (
               recentlyFiled.map((signal) => (
-                <SignalCard
-                  key={signal.signalId}
-                  signalId={signal.signalId}
-                  ticker={signal.ticker}
-                  score={signal.score}
-                  signalStatus={signal.signalStatus}
-                  politicianId={signal.politicianId}
-                  politicianName={signal.politicianName}
-                  tradeType={signal.tradeType}
-                  ownerType={signal.ownerType}
-                  amountRangeLabel={signal.amountRangeLabel}
-                  tradeDate={signal.tradeDate}
-                  filingDate={signal.filingDate}
-                  filingLagDays={signal.filingLagDays}
-                  return7d={signal.return7d}
-                  return30d={signal.return30d}
-                  historicalSampleSize={signal.historicalSampleSize}
-                  sourceUrl={signal.sourceUrl}
-                  primaryReason={signal.primaryReason}
-                  reasonSummary={signal.reasonSummary}
-                />
+                <SignalCard key={signal.signalId} {...signal} />
               ))
             )}
-          </div>
-        </section>
+          </SectionShell>
 
-        <section className="rounded-3xl border border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-8 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                Proven follow-through
-              </p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-                Biggest Outperformers vs SPY
-              </h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                Historical performance leaders that beat SPY by the widest
-                margin.
-              </p>
-            </div>
-
-            <Link
-              href="/signals"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900"
-            >
-              View all signals →
-            </Link>
-          </div>
-
-          <div className="mt-6 space-y-4">
+          <SectionShell
+            eyebrow="Validation"
+            title="Outperformers vs SPY"
+            description="Historical follow-through where trade-linked moves beat the market benchmark."
+            href="/signals"
+            linkLabel="Compare signals"
+            accent="emerald"
+          >
             {biggestOutperformers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-emerald-300 bg-white p-10 text-center text-sm text-gray-500">
-                No outperformers with SPY comparison data yet.
-              </div>
+              <SignalEmptyState label="No outperformers with SPY comparison data yet." />
             ) : (
               biggestOutperformers.map((signal, index) => (
                 <div key={signal.signalId}>
@@ -273,33 +393,13 @@ export default async function Home() {
                       {signal.chosenAlpha.toFixed(2)}%
                     </span>
                   </div>
-
-                  <SignalCard
-                    signalId={signal.signalId}
-                    ticker={signal.ticker}
-                    score={signal.score}
-                    signalStatus={signal.signalStatus}
-                    politicianId={signal.politicianId}
-                    politicianName={signal.politicianName}
-                    tradeType={signal.tradeType}
-                    ownerType={signal.ownerType}
-                    amountRangeLabel={signal.amountRangeLabel}
-                    tradeDate={signal.tradeDate}
-                    filingDate={signal.filingDate}
-                    filingLagDays={signal.filingLagDays}
-                    return7d={signal.return7d}
-                    return30d={signal.return30d}
-                    historicalSampleSize={signal.historicalSampleSize}
-                    sourceUrl={signal.sourceUrl}
-                    primaryReason={signal.primaryReason}
-                    reasonSummary={signal.reasonSummary}
-                  />
+                  <SignalCard {...signal} />
                 </div>
               ))
             )}
-          </div>
-        </section>
-      </div>
+          </SectionShell>
+        </div>
+      </section>
     </main>
   );
 }
