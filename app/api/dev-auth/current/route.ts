@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  DEV_ALLOWED_USER_IDS,
-  DEV_AUTH_COOKIE_NAME,
-  resolveCurrentUserIdentity,
-} from "@/lib/auth/get-current-user-id";
+import { DEV_ALLOWED_USER_IDS, DEV_AUTH_COOKIE_NAME } from "@/lib/auth/auth-identity";
+import { resolveCurrentUserIdentity } from "@/lib/auth/get-current-user-id";
 
 export async function GET() {
   if (process.env.NODE_ENV === "production") {

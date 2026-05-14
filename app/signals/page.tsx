@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import SignalsFeedClient from "@/components/signals/SignalsFeedClient";
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getUnreadAlertsCount } from "@/lib/domain/alerts/alerts";
 import {
   getSignals,
@@ -35,7 +35,7 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 export default async function SignalsPage({ searchParams }: SignalsPageProps) {
-  const userId = await getCurrentUserId();
+  const identity = await getPersonalizedUserIdentity();
   const params = await searchParams;
 
   const sort = parseSignalSort(firstParam(params.sort));
@@ -52,8 +52,8 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
 
   const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([
     getSignals(initialFilters),
-    getUnreadAlertsCount(userId),
-    getWatchedTickers(userId),
+    identity ? getUnreadAlertsCount(identity.userId) : Promise.resolve(0),
+    identity ? getWatchedTickers(identity.userId) : Promise.resolve([]),
   ]);
 
   return (

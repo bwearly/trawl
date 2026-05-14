@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { requirePersonalizedUser } from "@/lib/auth/get-current-user-id";
 import {
   getOrCreateAlertPreferences,
   updateAlertPreferences,
@@ -7,9 +7,13 @@ import {
 
 export async function GET() {
   try {
-    const preferences = await getOrCreateAlertPreferences(await getCurrentUserId());
+    const identity = await requirePersonalizedUser();
+    const preferences = await getOrCreateAlertPreferences(identity.userId);
     return NextResponse.json(preferences);
   } catch (error) {
+    if (error instanceof Error && error.message === "PERSONALIZED_AUTH_REQUIRED") {
+      return NextResponse.json({ error: "Authentication required for personalized actions." }, { status: 401 });
+    }
     console.error("Failed to load alert preferences:", error);
     return NextResponse.json(
       { error: "Failed to load alert preferences" },
@@ -44,7 +48,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updated = await updateAlertPreferences(await getCurrentUserId(), {
+    const identity = await requirePersonalizedUser();
+    const updated = await updateAlertPreferences(identity.userId, {
       minScore,
       enableWatchedTickerAlerts,
       enableWatchedPoliticianAlerts,
@@ -52,6 +57,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof Error && error.message === "PERSONALIZED_AUTH_REQUIRED") {
+      return NextResponse.json({ error: "Authentication required for personalized actions." }, { status: 401 });
+    }
     console.error("Failed to update alert preferences:", error);
     return NextResponse.json(
       { error: "Failed to update alert preferences" },

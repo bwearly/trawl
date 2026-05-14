@@ -52,14 +52,53 @@ For local and development testing before real Auth.js integration, this project 
 3. Switch to a different user and add different watchlist items.
 4. Verify watchlists, alerts, and preferences stay separated per user.
 
-### Removal plan
+## Auth.js current policy and MVP behavior
 
-When Auth.js is integrated:
+Current auth wiring is intentionally transitional and **not** a production-ready auth model yet.
 
-- Replace seam internals with real Auth.js session user ID.
-- Remove dev-auth routes.
-- Remove dev switcher UI.
-- Disable production fallback.
+### Public browsing behavior
+
+Public research/browsing remains available without sign-in:
+
+- Home
+- Signals feed
+- Signal detail
+- Politician leaderboard/detail
+- Ticker detail
+- Filtering/sorting/searching
+
+Public pages intentionally **do not** decorate watch state from fallback `demo-user` identity. Signed-out users should see neutral watch UI state.
+
+### Personalized behavior
+
+Personalized features require a personalized identity:
+
+- Accepted personalized identity sources:
+  - Auth.js session user
+  - Dev-cookie user (`trawl_dev_user_id`) in non-production
+- Fallback `demo-user` is a seam fallback and is **not** treated as personalized for gated UX/API behavior.
+
+When no personalized identity exists:
+
+- `/watchlist` shows an inline sign-in prompt.
+- `/alerts` shows an inline sign-in prompt.
+- Personalized write/update APIs return `401` JSON:
+  - watch/unwatch APIs
+  - alert preference read/update APIs
+  - alert mark-read mutation APIs
+
+### Provider and environment notes
+
+- Current provider is temporary `next-auth` Credentials (`Development Identity (temporary)`), not production auth.
+- `AUTH_SECRET` is required in production; startup fails clearly when missing.
+- `/api/dev-auth/*` routes are dev-only and return `404` in production.
+
+### Before protected production launch
+
+1. Replace temporary credentials flow with a production identity provider.
+2. Disable demo fallback for protected/personalized paths.
+3. Remove dev-auth switcher/routes.
+4. Keep `getCurrentUserId` and `getPersonalizedUserIdentity` as the central seam helpers while migrating route-by-route.
 
 ## Learn More
 

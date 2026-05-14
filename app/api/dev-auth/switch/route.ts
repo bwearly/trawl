@@ -3,8 +3,8 @@ import {
   DEV_ALLOWED_USER_IDS,
   DEV_AUTH_COOKIE_NAME,
   DEMO_FALLBACK_USER_ID,
-  isAllowedDevUserId,
-} from "@/lib/auth/get-current-user-id";
+} from "@/lib/auth/auth-identity";
+import { isAllowedDevUserId } from "@/lib/auth/get-current-user-id";
 
 function isDisabled() {
   return process.env.NODE_ENV === "production";

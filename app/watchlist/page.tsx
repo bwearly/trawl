@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import WatchlistContent from "@/components/watchlist/WatchlistContent";
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import {
   getWatchlistActivity,
   type WatchlistActivityItem,
@@ -40,10 +40,29 @@ function getActivityHref(item: WatchlistActivityItem) {
 }
 
 export default async function WatchlistPage() {
-  const userId = await getCurrentUserId();
+  const identity = await getPersonalizedUserIdentity();
+
+  if (!identity) {
+    return (
+      <main className="min-h-screen bg-gray-50 p-6">
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Personalized tracking</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to use your watchlist</h1>
+            <p className="mt-3 text-sm text-gray-600">Sign in to save politicians and tickers to your watchlist.</p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+              <Link href="/api/auth/signin" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
+              <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const [data, activity] = await Promise.all([
-    getWatchlist(userId),
-    getWatchlistActivity(userId),
+    getWatchlist(identity.userId),
+    getWatchlistActivity(identity.userId),
   ]);
   const totalWatched = data.politicians.length + data.tickers.length;
 
