@@ -61,7 +61,7 @@ export default async function WatchlistPage() {
             <p className="mt-2 text-sm text-gray-600">
               {totalWatched > 0
                 ? `${totalWatched} saved item${totalWatched === 1 ? "" : "s"} across tickers and politicians.`
-                : "Nothing saved yet — add items from signals, ticker pages, or politician pages."}
+                : "Track politicians and tickers in one place, then use alerts to stay on top of new activity."}
             </p>
           </div>
 

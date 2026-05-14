@@ -98,14 +98,17 @@ export default function AlertPreferencesForm() {
   }
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <section
+      id="alert-preferences"
+      className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+    >
       <div className="flex flex-col gap-2">
         <h2 className="text-xl font-semibold tracking-tight text-gray-950">
           Alert Preferences
         </h2>
         <p className="text-sm text-gray-500">
-          Control which watchlist alerts you receive and how strong a signal
-          must be before it appears.
+          Choose which watchlist alerts you get and set the minimum signal
+          score required before an alert appears.
         </p>
       </div>
 
@@ -128,6 +131,9 @@ export default function AlertPreferencesForm() {
               <option value="70">70+</option>
               <option value="80">80+</option>
             </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              Higher thresholds reduce alert volume to stronger-ranked signals.
+            </span>
           </label>
 
           <label className="flex items-start gap-3">
@@ -145,7 +151,7 @@ export default function AlertPreferencesForm() {
                 Watched ticker alerts
               </div>
               <div className="text-sm text-gray-500">
-                Notify me when a watched ticker gets a new signal.
+                Send alerts when a watched ticker appears in a new eligible signal.
               </div>
             </div>
           </label>
@@ -165,7 +171,7 @@ export default function AlertPreferencesForm() {
                 Watched politician alerts
               </div>
               <div className="text-sm text-gray-500">
-                Notify me when a watched politician files a new signal.
+                Send alerts when a watched politician appears in a new eligible signal.
               </div>
             </div>
           </label>
@@ -179,7 +185,15 @@ export default function AlertPreferencesForm() {
               {isSaving ? "Saving..." : "Save preferences"}
             </button>
 
-            {message && <span className="text-sm text-gray-500">{message}</span>}
+            {message && (
+              <span
+                className={`text-sm ${
+                  message.includes("Could not") ? "text-rose-600" : "text-emerald-700"
+                }`}
+              >
+                {message}
+              </span>
+            )}
           </div>
         </form>
       )}

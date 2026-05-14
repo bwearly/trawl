@@ -117,6 +117,8 @@ export default function SignalCard({
               className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getFreshnessStyles(
                 freshnessLabel
               )}`}
+              title="Filing freshness shows how quickly the trade was filed: fresh is recent, stale/historical is older."
+              aria-label={`Filing freshness: ${freshnessBadgeCopy}. Fresh means recent filing; delayed, stale, and historical are older.`}
             >
               {freshnessBadgeCopy}
             </span>
@@ -127,10 +129,16 @@ export default function SignalCard({
           className={`inline-flex rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 ring-inset ${getScoreStyles(
             score
           )}`}
+          title="Score is a research ranking signal based on filing context and supporting data. Not investment advice."
+          aria-label={`Score ${Math.round(Number(score))} out of 100. Research ranking signal, not investment advice.`}
         >
           Score {Math.round(Number(score))}/100
         </div>
       </div>
+
+      <p className="mt-2 text-xs text-gray-500">
+        Score ranks research priority (not investment advice).
+      </p>
 
       <div className="mt-5 grid gap-x-5 gap-y-2.5 text-sm text-gray-700 md:grid-cols-2">
         <p>

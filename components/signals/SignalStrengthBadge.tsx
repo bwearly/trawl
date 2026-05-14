@@ -8,6 +8,10 @@ export default function SignalStrengthBadge({ tier }: SignalStrengthBadgeProps) 
   if (!tier) return null;
 
   const isHighConviction = tier === "high_conviction";
+  const label = isHighConviction ? "High Conviction" : "Alert Eligible";
+  const helperText = isHighConviction
+    ? "High-conviction research signal with strong recency and score."
+    : "Alert eligible means this signal is recent and actionable enough for alerts.";
 
   return (
     <span
@@ -16,8 +20,10 @@ export default function SignalStrengthBadge({ tier }: SignalStrengthBadgeProps) 
           ? "bg-slate-900 text-white ring-slate-700"
           : "bg-slate-100 text-slate-700 ring-slate-200"
       }`}
+      title={helperText}
+      aria-label={`${label}: ${helperText}`}
     >
-      {isHighConviction ? "High Conviction" : "Alert Eligible"}
+      {label}
     </span>
   );
 }

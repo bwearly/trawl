@@ -316,6 +316,9 @@ export default function SignalFilters({
               <option value="70">70+</option>
               <option value="80">80+</option>
             </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              Score is a research ranking signal, not investment advice.
+            </span>
           </label>
 
           <label className="block">
@@ -366,6 +369,9 @@ export default function SignalFilters({
               <option value="historical">Historical</option>
               <option value="unknown">Unknown</option>
             </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              Fresh = recently filed. Historical = older context.
+            </span>
           </label>
 
           <label className="block">
