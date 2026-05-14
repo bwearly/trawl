@@ -1,9 +1,10 @@
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
-import { backfillAlertsForUser } from "@/lib/domain/alerts/alerts";
+import { DEMO_FALLBACK_USER_ID, normalizeUserId } from "../lib/auth/auth-identity";
+import { backfillAlertsForUser } from "../lib/domain/alerts/alerts";
 
 async function main() {
-  const userId = await getCurrentUserId();
-  console.log(`Backfilling alerts for user: ${userId}`);
+  const requestedUserId = process.env.ALERT_BACKFILL_USER_ID;
+  const userId = normalizeUserId(requestedUserId) ?? DEMO_FALLBACK_USER_ID;
+  console.log(`Backfilling alerts for userId=${userId}`);
 
   const result = await backfillAlertsForUser(userId);
 

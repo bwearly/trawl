@@ -65,7 +65,7 @@ export default async function AlertsPage() {
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view alerts</h1>
             <p className="mt-3 text-sm text-gray-600">Sign in to get alerts for the politicians and tickers you watch.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-              <Link href="/api/auth/signin" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
+              <Link href="/signin?callbackUrl=%2Falerts" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
               <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
             </div>
           </div>
