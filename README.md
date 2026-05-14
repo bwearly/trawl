@@ -20,6 +20,47 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Temporary dev-auth identity switcher (dev only)
+
+For local and development testing before real Auth.js integration, this project includes a temporary identity switcher.
+
+> This is **dev-only** and must **not** be treated as production authentication.
+
+### Routes
+
+- `GET /api/dev-auth/current`
+- `POST /api/dev-auth/switch`
+
+### Allowed users
+
+- `demo-user`
+- `demo-user-2`
+- `demo-user-3`
+
+### Cookie
+
+- `trawl_dev_user_id`
+
+### UI
+
+- Dev user switcher is available in the app nav/layout.
+
+### Test user-scoped isolation
+
+1. Switch between allowed users with the dev switcher UI.
+2. Add watchlist items for one user.
+3. Switch to a different user and add different watchlist items.
+4. Verify watchlists, alerts, and preferences stay separated per user.
+
+### Removal plan
+
+When Auth.js is integrated:
+
+- Replace seam internals with real Auth.js session user ID.
+- Remove dev-auth routes.
+- Remove dev switcher UI.
+- Disable production fallback.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
