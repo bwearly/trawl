@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 
 const allowedDevUserIds = ["demo-user", "demo-user-2", "demo-user-3"] as const;
 
-export default function SignInPage() {
+function SignInContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/watchlist";
   const isProduction = process.env.NODE_ENV === "production";
@@ -91,5 +91,27 @@ export default function SignInPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gray-50 p-6">
+          <div className="mx-auto max-w-md">
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+              <p className="text-sm font-medium text-gray-500">Authentication</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
+                Sign in to Trawl
+              </h1>
+              <p className="mt-3 text-sm text-gray-600">Loading sign-in options...</p>
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <SignInContent />
+    </Suspense>
   );
 }
