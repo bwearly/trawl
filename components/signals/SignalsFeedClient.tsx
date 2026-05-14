@@ -105,8 +105,22 @@ export default function SignalsFeedClient({
 
       <div className="space-y-3.5">
         {feedItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
-            No results.
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
+            <h2 className="text-lg font-semibold text-gray-900">
+              No signals match these filters
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Try widening your filters or return to the default signals feed to
+              explore more disclosures.
+            </p>
+            <div className="mt-5">
+              <Link
+                href="/signals"
+                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+              >
+                View default signals
+              </Link>
+            </div>
           </div>
         ) : (
           feedItems.map((item) => {

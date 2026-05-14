@@ -1,8 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import SignalCard from "@/components/signals/SignalCard";
 import { getBiggestOutperformers } from "@/lib/domain/signals/get-biggest-outperformers";
 import { getRecentlyFiled } from "@/lib/domain/signals/get-recently-filed";
 import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
+
+export const metadata: Metadata = {
+  title: "Trawl — Congressional Trade Signals",
+  description:
+    "Track congressional trade disclosures, review ranked research signals, and investigate market follow-through in one place.",
+};
 
 export default async function Home() {
   const [topPicks, recentlyFiled, biggestOutperformers] = await Promise.all([
