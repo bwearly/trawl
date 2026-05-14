@@ -13,6 +13,7 @@ import {
   watchlistItems,
   watchlists,
 } from "../lib/db/schema";
+import { classifyMissingPriceTicker } from "../lib/domain/pipeline/missing-price-classification";
 import { normalizeTickerForStorage, normalizeYahooSymbol } from "../lib/domain/pipeline/normalization";
 
 type HealthSummary = {
@@ -286,17 +287,31 @@ async function main() {
         const unresolved = unresolvedByTicker.get(ticker);
         const rawTicker = String(typed.ticker ?? "").trim().toUpperCase();
 
+        const yahooLookupTicker = normalizeYahooSymbol(ticker);
+        const importFailureReason = unresolved?.reason ?? null;
+        const importFailureDetail = unresolved?.detail ?? null;
+        const classificationResult = classifyMissingPriceTicker({
+          rawTicker,
+          storageTicker: ticker,
+          yahooLookupTicker,
+          sampleAssetNames: typed.sample_asset_names ?? [],
+          importFailureReason,
+          importFailureDetail,
+        });
+
         return {
           rawTicker,
           storageTicker: ticker,
-          yahooLookupTicker: normalizeYahooSymbol(ticker),
+          yahooLookupTicker,
           disclosureCount: Number(typed.disclosure_count ?? 0),
           firstDisclosureDate: typed.first_disclosure_date,
           lastDisclosureDate: typed.last_disclosure_date,
           samplePoliticians: typed.sample_politicians ?? [],
           sampleAssetNames: typed.sample_asset_names ?? [],
-          importFailureReason: unresolved?.reason ?? null,
-          importFailureDetail: unresolved?.detail ?? null,
+          importFailureReason,
+          importFailureDetail,
+          classification: classificationResult.classification,
+          classificationReason: classificationResult.classificationReason,
         };
       }),
       spyPriceRowCount: Number(priceTotals?.spyRows ?? 0),
@@ -373,7 +388,7 @@ async function main() {
         row.disclosureCount
       )} range=${String(row.firstDisclosureDate)}..${String(row.lastDisclosureDate)} reason=${String(
         row.importFailureReason ?? "unknown"
-      )}`
+      )} classification=${String(row.classification ?? "unknown")}`
     );
   }
 
