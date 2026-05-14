@@ -5,7 +5,7 @@ import YahooFinance from "yahoo-finance2";
 import { db } from "../lib/db";
 import { disclosures, priceHistory } from "../lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import {
   normalizeTickerForStorage,
   normalizeYahooSymbol,
@@ -277,6 +277,7 @@ async function main() {
   console.log(`  - tickers failed: ${failedTickers.length}`);
 
   if (failedTickers.length > 0) {
+    mkdirSync("tmp", { recursive: true });
     writeFileSync(
       "tmp/price-import-unresolved-symbols.json",
       `${JSON.stringify(failedTickers, null, 2)}\n`,
