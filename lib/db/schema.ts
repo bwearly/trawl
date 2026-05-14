@@ -10,6 +10,18 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email"),
+  name: text("name"),
+  image: text("image"),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastSignInAt: timestamp("last_sign_in_at"),
+});
+
 export const politicians = pgTable("politicians", {
   id: serial("id").primaryKey(),
   fullName: text("full_name").notNull(),
