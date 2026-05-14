@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import DevIdentitySwitcher from "@/components/dev/DevIdentitySwitcher";
 import AuthNavControls from "@/components/auth/AuthNavControls";
 
-const navItems = [
+const baseNavItems = [
   { href: "/", label: "Home" },
   { href: "/signals", label: "Signals" },
   { href: "/politicians", label: "Politicians" },
@@ -15,6 +16,10 @@ const navItems = [
 
 export default function GlobalNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const navItems = session?.user?.id
+    ? [...baseNavItems, { href: "/account", label: "Account" as const }]
+    : baseNavItems;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);

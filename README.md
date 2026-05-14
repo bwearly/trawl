@@ -102,6 +102,25 @@ When no personalized identity exists:
 3. Remove dev-auth switcher/routes.
 4. Keep `getCurrentUserId` and `getPersonalizedUserIdentity` as the central seam helpers while migrating route-by-route.
 
+
+## User profile persistence (phase 1, additive)
+
+Trawl now includes an additive `users` table used for basic profile persistence from authenticated Google sessions.
+
+What this phase does:
+
+- Upserts a `users` row keyed by the current Auth.js session user id (`session.user.id`) for Google-authenticated sessions.
+- Stores profile fields when available: `email`, `name`, `image`.
+- Updates `lastSignInAt` and `updatedAt` on each qualifying session callback.
+
+What this phase intentionally does **not** do yet:
+
+- No migration of `watchlists`, `alerts`, `notification_jobs`, `notification_events`, or `alert_preferences` ownership fields.
+- No removal of legacy `user_id` columns.
+- No change to `getCurrentUserId` behavior or fallback policy.
+- No enablement of live email sending.
+- No removal of the dev-auth switcher.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

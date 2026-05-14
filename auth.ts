@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { DEMO_FALLBACK_USER_ID, DEV_ALLOWED_USER_IDS } from "@/lib/auth/auth-identity";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 
 const isProduction = process.env.NODE_ENV === "production";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
@@ -65,6 +67,9 @@ const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   callbacks: {
     jwt({ token, user, account, profile }) {
+      if (account?.provider) {
+        token.authProvider = account.provider;
+      }
       if (user?.id) {
         token.sub = user.id;
       } else if (account?.provider === "google") {
@@ -78,7 +83,7 @@ const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token;
     },
-    session({ session, token }) {
+    async session({ session, token }) {
       if (token.sub) {
         session.user = {
           ...session.user,
@@ -86,6 +91,39 @@ const { handlers, auth, signIn, signOut } = NextAuth({
           name: session.user?.name ?? token.sub,
         };
       }
+
+      const resolvedUserId = token.sub;
+      const isGoogleSession = token.authProvider === "google";
+      const isGoogleEmailFallback = token.authUserIdSource === "google-email-fallback";
+
+      if (resolvedUserId && isGoogleSession && !isGoogleEmailFallback) {
+        const email = typeof token.email === "string" ? token.email : session.user?.email ?? null;
+        const name = typeof token.name === "string" ? token.name : session.user?.name ?? null;
+        const image =
+          typeof token.picture === "string" ? token.picture : session.user?.image ?? null;
+
+        await db
+          .insert(users)
+          .values({
+            id: resolvedUserId,
+            email,
+            name,
+            image,
+            updatedAt: new Date(),
+            lastSignInAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: users.id,
+            set: {
+              email,
+              name,
+              image,
+              updatedAt: new Date(),
+              lastSignInAt: new Date(),
+            },
+          });
+      }
+
       return session;
     },
   },
