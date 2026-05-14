@@ -7,6 +7,7 @@ import {
   alerts,
   disclosurePerformanceWindows,
   disclosures,
+  politicians,
   priceHistory,
   researchSignals,
   watchlistItems,
@@ -112,9 +113,10 @@ async function main() {
             count(*)::int as disclosure_count,
             min(coalesce(d.trade_date, d.filing_date))::date as first_disclosure_date,
             max(coalesce(d.trade_date, d.filing_date))::date as last_disclosure_date,
-            array_remove((array_agg(distinct d.politician_name order by d.politician_name))[1:3], null) as sample_politicians,
+            array_remove((array_agg(distinct p.full_name order by p.full_name))[1:3], null) as sample_politicians,
             array_remove((array_agg(distinct d.asset_name order by d.asset_name))[1:3], null) as sample_asset_names
           from ${disclosures} d
+          inner join ${politicians} p on p.id = d.politician_id
           where upper(d.ticker) in (${sql.join(missingTickersForDiagnostics.map((ticker) => sql`${ticker}`), sql`, `)})
           group by upper(d.ticker)
         `)
