@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { db } from "../lib/db";
 import { disclosures, politicians, priceHistory } from "../lib/db/schema";
 import { classifyMissingPriceTicker, type MissingPriceClassification } from "../lib/domain/pipeline/missing-price-classification";
@@ -40,7 +40,15 @@ const GROUP_ORDER: MissingPriceClassification[] = [
 
 async function main() {
   const unresolvedPriceImportPath = "tmp/price-import-unresolved-symbols.json";
-  const unresolvedPriceImport: PriceImportFailure[] = JSON.parse(readFileSync(unresolvedPriceImportPath, "utf8"));
+  const unresolvedPriceImport: PriceImportFailure[] = existsSync(unresolvedPriceImportPath)
+    ? JSON.parse(readFileSync(unresolvedPriceImportPath, "utf8"))
+    : [];
+
+  if (!existsSync(unresolvedPriceImportPath)) {
+    console.warn(
+      "Warning: tmp/price-import-unresolved-symbols.json not found. Run npm run prices:import for import failure details."
+    );
+  }
 
   const unresolvedByTicker = new Map(
     unresolvedPriceImport.map((row) => [normalizeTickerForStorage(row.ticker), row])
