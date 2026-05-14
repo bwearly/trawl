@@ -8,6 +8,7 @@ import {
   calcReturnPercent,
   findClosestPriceOnOrAfter,
 } from "../lib/domain/pipeline/performance";
+import { classifyMissingPriceTicker, type MissingPriceClassification } from "../lib/domain/pipeline/missing-price-classification";
 
 type Failure = { category: string; test: string; detail: string };
 const failures: Failure[] = [];
@@ -176,8 +177,97 @@ function runPerformanceWindowValidations() {
   assertEqual(c, "alpha calculates correctly", calcAlphaPercent(12.5, 4.1), 8.4);
 }
 
+function runMissingPriceClassificationValidations() {
+  const c = "missing-price-classification";
+  const assertAllowed = (
+    test: string,
+    actual: MissingPriceClassification,
+    allowed: MissingPriceClassification[]
+  ) => assertTrue(c, test, allowed.includes(actual), `expected one of ${allowed.join(", ")} actual=${actual}`);
+
+  const appl = classifyMissingPriceTicker({
+    rawTicker: "APPL",
+    storageTicker: "AAPL",
+    yahooLookupTicker: "AAPL",
+    sampleAssetNames: ["Appell Pete Corp"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found, symbol may be delisted",
+  });
+  assertAllowed("APPL/Appell Pete classification", appl.classification, ["likely_false_positive_parser_noise", "manual_review"]);
+
+  const fei = classifyMissingPriceTicker({
+    rawTicker: "FEI",
+    storageTicker: "FEI",
+    yahooLookupTicker: "FEI",
+    sampleAssetNames: ["Interest"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertEqual(c, "FEI + Interest classification", fei.classification, "likely_false_positive_parser_noise");
+
+  const fnfvv = classifyMissingPriceTicker({
+    rawTicker: "FNFV.V",
+    storageTicker: "FNFV.V",
+    yahooLookupTicker: "FNFV.V",
+    sampleAssetNames: ["Issued"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertEqual(c, "FNFV.V + Issued classification", fnfvv.classification, "likely_false_positive_parser_noise");
+
+  const cade = classifyMissingPriceTicker({
+    rawTicker: "CADE",
+    storageTicker: "CADE",
+    yahooLookupTicker: "CADE",
+    sampleAssetNames: ["CADE$A"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertEqual(c, "CADE + CADE$A classification", cade.classification, "unsupported_share_class_or_symbol_format");
+
+  const hcn = classifyMissingPriceTicker({
+    rawTicker: "HCN/UFP",
+    storageTicker: "HCN/UFP",
+    yahooLookupTicker: "HCN/UFP",
+    sampleAssetNames: ["HCN/UFP"],
+    importFailureReason: "request_error",
+    importFailureDetail: "Failed Yahoo Schema validation for HCN/UFP",
+  });
+  assertEqual(c, "HCN/UFP schema failure classification", hcn.classification, "yahoo_provider_or_schema_issue");
+
+  const k = classifyMissingPriceTicker({
+    rawTicker: "K",
+    storageTicker: "K",
+    yahooLookupTicker: "K",
+    sampleAssetNames: ["Kellanova"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertAllowed("K + Kellanova classification", k.classification, ["expected_delisted_or_acquired", "manual_review"]);
+
+  const dfs = classifyMissingPriceTicker({
+    rawTicker: "DFS",
+    storageTicker: "DFS",
+    yahooLookupTicker: "DFS",
+    sampleAssetNames: ["Discover Financial Services"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertAllowed("DFS classification", dfs.classification, ["expected_delisted_or_acquired", "manual_review"]);
+
+  const genericStock = classifyMissingPriceTicker({
+    rawTicker: "ZZZZ",
+    storageTicker: "ZZZZ",
+    yahooLookupTicker: "ZZZZ",
+    sampleAssetNames: ["Stock"],
+    importFailureReason: "invalid_symbol",
+    importFailureDetail: "No data found",
+  });
+  assertEqual(c, "generic Stock + invalid_symbol classification", genericStock.classification, "manual_review");
+}
+
 function printSummary() {
-  const categories = ["ticker-normalization", "house-asset-resolution", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "performance-windows"];
+  const categories = ["ticker-normalization", "house-asset-resolution", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "performance-windows", "missing-price-classification"];
   console.log("\nPipeline deterministic validation summary\n");
   for (const category of categories) {
     const categoryFailures = failures.filter((f) => f.category === category);
@@ -202,6 +292,7 @@ function main() {
   runAlertEligibilityValidations();
   runScoringValidations();
   runPerformanceWindowValidations();
+  runMissingPriceClassificationValidations();
   printSummary();
 
   if (failures.length > 0) {
