@@ -62,6 +62,10 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
               Research Signals
             </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Scores rank research priority from congressional filings. They are
+              not investment advice.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

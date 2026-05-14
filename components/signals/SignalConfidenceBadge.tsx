@@ -43,7 +43,8 @@ export default function SignalConfidenceBadge({
       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getTierStyles(
         confidence.tier
       )}`}
-      title={confidence.isDerived ? "Confidence is estimated from available support data." : undefined}
+      title="Confidence reflects how much supporting data is available for this signal."
+      aria-label={`${confidence.label}. Confidence reflects how much supporting data is available for this signal.`}
     >
       {confidence.label}
     </span>

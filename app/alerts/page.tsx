@@ -55,6 +55,8 @@ function getAlertTypeLabel(type: string) {
 
 export default async function AlertsPage() {
   const rows = await getAlerts(getCurrentUserId());
+  const unreadCount = rows.filter((row) => !row.isRead).length;
+  const readCount = rows.length - unreadCount;
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -68,7 +70,8 @@ export default async function AlertsPage() {
               Alerts
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              New signals from watched tickers and watched politicians.
+              Alerts are generated from your watched tickers and politicians,
+              based on your alert preferences.
             </p>
           </div>
 
@@ -105,15 +108,38 @@ export default async function AlertsPage() {
             </div>
 
             <div className="text-sm text-gray-500">
-              {rows.length} alert{rows.length === 1 ? "" : "s"}
+              {rows.length} total · {unreadCount} unread · {readCount} read
             </div>
           </div>
 
           <div className="mt-5 space-y-3">
             {rows.length === 0 && (
-              <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
-                No alerts yet. Start watching a few tickers or politicians and
-                alerts will show up here.
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <h3 className="text-base font-semibold text-gray-900">No alerts yet</h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  Add items to your watchlist and tune your preferences to start
+                  receiving relevant alerts.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                  <Link
+                    href="/signals"
+                    className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+                  >
+                    Browse signals
+                  </Link>
+                  <Link
+                    href="/watchlist"
+                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+                  >
+                    Go to watchlist
+                  </Link>
+                  <a
+                    href="#alert-preferences"
+                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+                  >
+                    Adjust alert preferences
+                  </a>
+                </div>
               </div>
             )}
 

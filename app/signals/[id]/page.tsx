@@ -356,6 +356,9 @@ export default async function SignalDetailPage({
               <p className="mt-1 text-3xl font-semibold text-gray-950">
                 {signal.score}
               </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Research ranking signal, not investment advice.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <WatchButton
@@ -401,7 +404,8 @@ export default async function SignalDetailPage({
                   Performance After Disclosure
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Based on market close prices after the trade date.
+                  Based on market close prices after the trade date. Alpha means
+                  performance versus SPY over the same window.
                 </p>
               </div>
 
@@ -436,7 +440,12 @@ export default async function SignalDetailPage({
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span
+                        className="font-medium text-gray-700"
+                        title="Alpha means stock performance compared with SPY over the same period."
+                      >
+                        Alpha
+                      </span>
                       <span className="font-semibold">
                         {alpha7d != null
                           ? formatPercent(alpha7d)
@@ -466,7 +475,12 @@ export default async function SignalDetailPage({
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span
+                        className="font-medium text-gray-700"
+                        title="Alpha means stock performance compared with SPY over the same period."
+                      >
+                        Alpha
+                      </span>
                       <span className="font-semibold">
                         {alpha30d != null
                           ? formatPercent(alpha30d)
@@ -496,7 +510,12 @@ export default async function SignalDetailPage({
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                      <span className="font-medium text-gray-700">Alpha</span>
+                      <span
+                        className="font-medium text-gray-700"
+                        title="Alpha means stock performance compared with SPY over the same period."
+                      >
+                        Alpha
+                      </span>
                       <span className="font-semibold">
                         {alpha90d != null
                           ? formatPercent(alpha90d)
@@ -537,9 +556,8 @@ export default async function SignalDetailPage({
                 Score Breakdown
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                The signal score combines trade direction, filing freshness,
-                historical politician context, trade size, and
-                benchmark-relative performance when available.
+                The score combines filing context and supporting evidence to
+                rank research priority.
               </p>
 
               <div className="mt-5 space-y-4">
@@ -551,8 +569,8 @@ export default async function SignalDetailPage({
                 </div>
 
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                  Higher scores indicate stronger research priority based on
-                  current evidence. Scores are informational and not investment
+                  Higher scores suggest stronger research priority based on
+                  available evidence. Informational only, not investment
                   advice.
                 </div>
               </div>

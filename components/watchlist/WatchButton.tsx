@@ -23,11 +23,13 @@ export default function WatchButton({
 }: WatchButtonProps) {
   const [isWatching, setIsWatching] = useState(initialIsWatching);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function toggleWatch() {
     if (isLoading) return;
 
     setIsLoading(true);
+    setErrorMessage(null);
 
     try {
       const endpoint =
@@ -57,6 +59,7 @@ export default function WatchButton({
       onChange?.(nextValue);
     } catch (error) {
       console.error(error);
+      setErrorMessage("Couldn’t update watchlist. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -73,12 +76,8 @@ export default function WatchButton({
     isLoading
       ? "Updating..."
       : isWatching
-      ? variant === "ghost"
-        ? "Watching"
-        : "Saved"
-      : variant === "ghost"
-      ? "Watch"
-      : "Save";
+      ? "Watching"
+      : "Watch";
 
   const toneClasses =
     variant === "ghost"
@@ -90,21 +89,30 @@ export default function WatchButton({
       : "bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50";
 
   return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleWatch();
-      }}
-      disabled={isLoading}
-      aria-label={
-        isWatching ? `Remove ${itemType} from watchlist` : `Add ${itemType} to watchlist`
-      }
-      className={`${baseClasses} ${toneClasses} disabled:cursor-not-allowed disabled:opacity-60`}
-    >
-      <span aria-hidden>{icon}</span>
-      <span className="ml-1.5">{label}</span>
-    </button>
+    <div className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleWatch();
+        }}
+        disabled={isLoading}
+        title={isWatching ? "Remove from watchlist" : "Add to watchlist"}
+        aria-label={
+          isWatching
+            ? `Remove ${itemType} from watchlist`
+            : `Add ${itemType} to watchlist`
+        }
+        className={`${baseClasses} ${toneClasses} disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        <span aria-hidden>{icon}</span>
+        <span className="ml-1.5">{label}</span>
+      </button>
+      {isWatching && !isLoading && (
+        <span className="text-xs text-gray-500">Remove from watchlist</span>
+      )}
+      {errorMessage && <span className="text-xs text-rose-600">{errorMessage}</span>}
+    </div>
   );
 }

@@ -51,11 +51,11 @@ export default function WatchlistContent({
       {!hasItems && (
         <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-950">
-            Start building your watchlist
+            Your watchlist is empty
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-gray-600">
-            Save tickers and politicians while researching signals so you can
-            quickly revisit names that matter to you.
+            Save politicians and tickers to quickly revisit names you care about
+            and get alert updates when new matching signals appear.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2.5">
@@ -69,7 +69,7 @@ export default function WatchlistContent({
               href="/politicians"
               className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
-              Explore politicians
+              Browse politicians
             </Link>
           </div>
         </section>
