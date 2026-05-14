@@ -23,7 +23,8 @@
     "house:diagnose": "tsx scripts/diagnose-house-import.ts",
     "daily:pipeline": "tsx scripts/daily-pipeline.ts",
     "pipeline:validate": "tsx scripts/validate-pipeline-logic.ts",
-    "pipeline:health": "tsx scripts/pipeline-health.ts"
+    "pipeline:health": "tsx scripts/pipeline-health.ts",
+    "disclosures:repair-tickers": "tsx scripts/repair-disclosure-tickers.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
