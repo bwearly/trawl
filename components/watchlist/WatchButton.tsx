@@ -117,7 +117,7 @@ export default function WatchButton({
       {isWatching && !isLoading && (
         <span className="text-xs text-gray-500">Remove from watchlist</span>
       )}
-      {errorMessage && <span className="text-xs text-rose-600">{errorMessage} <Link href="/api/auth/signin" className="underline">Sign in</Link>.</span>}
+      {errorMessage && <span className="text-xs text-rose-600">{errorMessage} <Link href="/signin?callbackUrl=%2Fwatchlist" className="underline">Sign in</Link>.</span>}
     </div>
   );
 }

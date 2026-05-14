@@ -11,6 +11,9 @@ if (isProduction && !process.env.AUTH_SECRET) {
 const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
+  pages: {
+    signIn: "/signin",
+  },
   providers: isProduction
     ? []
     : [
