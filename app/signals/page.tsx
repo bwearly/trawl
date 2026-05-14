@@ -34,7 +34,7 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 export default async function SignalsPage({ searchParams }: SignalsPageProps) {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const params = await searchParams;
 
   const initialFilters = parseSignalFilters({

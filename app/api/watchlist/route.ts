@@ -4,7 +4,7 @@ import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
 
 export async function GET() {
   try {
-    const data = await getWatchlist(getCurrentUserId());
+    const data = await getWatchlist(await getCurrentUserId());
     return NextResponse.json(data);
   } catch (error) {
     console.error("Failed to load watchlist:", error);

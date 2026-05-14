@@ -40,7 +40,7 @@ function getActivityHref(item: WatchlistActivityItem) {
 }
 
 export default async function WatchlistPage() {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const [data, activity] = await Promise.all([
     getWatchlist(userId),
     getWatchlistActivity(userId),

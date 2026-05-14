@@ -4,7 +4,7 @@ import { markAllAlertsAsRead } from "@/lib/domain/alerts/alerts";
 
 export async function POST(request: NextRequest) {
   try {
-    await markAllAlertsAsRead(getCurrentUserId());
+    await markAllAlertsAsRead(await getCurrentUserId());
 
     return NextResponse.redirect(new URL("/alerts", request.url), {
       status: 303,

@@ -7,7 +7,7 @@ import {
 
 export async function GET() {
   try {
-    const preferences = await getOrCreateAlertPreferences(getCurrentUserId());
+    const preferences = await getOrCreateAlertPreferences(await getCurrentUserId());
     return NextResponse.json(preferences);
   } catch (error) {
     console.error("Failed to load alert preferences:", error);
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updated = await updateAlertPreferences(getCurrentUserId(), {
+    const updated = await updateAlertPreferences(await getCurrentUserId(), {
       minScore,
       enableWatchedTickerAlerts,
       enableWatchedPoliticianAlerts,

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       );
     }
 
-    await markAlertAsRead(getCurrentUserId(), alertId);
+    await markAlertAsRead(await getCurrentUserId(), alertId);
 
     return NextResponse.redirect(new URL("/alerts", request.url), {
       status: 303,

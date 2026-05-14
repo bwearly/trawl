@@ -75,7 +75,7 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function TickerDetailPage({ params }: PageProps) {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const { symbol } = await params;
   const data = await getTickerDetail(symbol);
 

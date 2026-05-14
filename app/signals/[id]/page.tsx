@@ -66,7 +66,7 @@ export default async function SignalDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const { id } = await params;
   const signalId = Number(id);
 

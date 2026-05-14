@@ -80,7 +80,7 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function PoliticianDetailPage({ params }: PageProps) {
-  const userId = getCurrentUserId();
+  const userId = await getCurrentUserId();
   const { id } = await params;
   const politicianId = Number(id);
 
