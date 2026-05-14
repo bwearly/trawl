@@ -74,6 +74,21 @@ function runHouseAssetResolutionValidations() {
   const appellPete = resolveHouseTicker({ rawTicker: null, rawAssetName: "Appell Pete Corp" });
   assertTrue(c, "Appell Pete does not map to AAPL", appellPete.ticker !== "AAPL", `unexpected ticker=${String(appellPete.ticker)}`);
 
+  const interest = resolveHouseTicker({ rawTicker: null, rawAssetName: "Interest" });
+  assertEqual(c, "Interest does not resolve FEI", interest.ticker, null);
+
+  const issued = resolveHouseTicker({ rawTicker: null, rawAssetName: "Issued" });
+  assertEqual(c, "Issued does not resolve FNFV.V", issued.ticker, null);
+
+  const shares = resolveHouseTicker({ rawTicker: null, rawAssetName: "Shares" });
+  assertEqual(c, "Shares does not resolve MAG", shares.ticker, null);
+
+  const exactNew = resolveHouseTicker({ rawTicker: null, rawAssetName: "NEW" });
+  assertEqual(c, "exact NEW asset name does not resolve NEW", exactNew.ticker, null);
+
+  const explicitAppl = resolveHouseTicker({ rawTicker: "APPL", rawAssetName: "Appell Pete Corp" });
+  assertEqual(c, "explicit APPL ticker is preserved", explicitAppl.ticker, "APPL");
+
   assertEqual(c, "BF.B still maps to Yahoo BF-B", normalizeYahooSymbol("BF.B"), "BF-B");
 }
 

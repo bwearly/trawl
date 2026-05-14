@@ -226,6 +226,12 @@ const UNSUPPORTED_ASSET_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
 let rejectedFallbackTickerLogCount = 0;
 const MAX_REJECTED_FALLBACK_TICKER_LOGS = 40;
 
+const PTR_NON_TICKER_ASSET_NAME_DENYLIST = new Set(["INTEREST", "ISSUED", "SHARES", "NEW"]);
+
+function isPtrNonTickerAssetNameNoise(assetName: string): boolean {
+  return PTR_NON_TICKER_ASSET_NAME_DENYLIST.has(assetName.trim().toUpperCase());
+}
+
 function sanitizeParsedText(raw: string | null | undefined): string | null {
   if (raw == null) return null;
   const withoutControlChars = raw.replace(/[\u0000-\u001f\u007f]/g, " ");
@@ -599,6 +605,10 @@ function extractTickerFromPtrLine(
   assetName: string,
   assetCategory: NormalizedDisclosure["assetCategory"]
 ): string | null {
+  if (isPtrNonTickerAssetNameNoise(assetName)) {
+    return null;
+  }
+
   const combinedContext = `${assetName} ${line}`;
   const unsupportedContext = hasUnsupportedAssetTerms(assetName, line);
   const parentheticalCandidates = [...`${assetName} ${line}`.matchAll(/\(([A-Z][A-Z.\-]{0,7})\)/g)]
