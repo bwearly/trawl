@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DevIdentitySwitcher from "@/components/dev/DevIdentitySwitcher";
+import AuthNavControls from "@/components/auth/AuthNavControls";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -49,7 +50,10 @@ export default function GlobalNav() {
           })}
         </nav>
 
-        <DevIdentitySwitcher />
+        <div className="ml-auto flex items-center gap-2">
+          <AuthNavControls />
+          <DevIdentitySwitcher />
+        </div>
       </div>
     </header>
   );

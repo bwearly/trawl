@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type WatchButtonProps = {
@@ -49,6 +50,11 @@ export default function WatchButton({
         },
         body: JSON.stringify(body),
       });
+
+      if (response.status === 401) {
+        setErrorMessage("Sign in to save to your watchlist.");
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`Failed to update watchlist: ${response.status}`);
@@ -111,7 +117,7 @@ export default function WatchButton({
       {isWatching && !isLoading && (
         <span className="text-xs text-gray-500">Remove from watchlist</span>
       )}
-      {errorMessage && <span className="text-xs text-rose-600">{errorMessage}</span>}
+      {errorMessage && <span className="text-xs text-rose-600">{errorMessage} <Link href="/api/auth/signin" className="underline">Sign in</Link>.</span>}
     </div>
   );
 }

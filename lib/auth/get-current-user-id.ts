@@ -1,17 +1,11 @@
-import { cookies } from "next/headers";
-
-/**
- * Centralized fallback identity used by the temporary auth seam.
- */
-export const DEMO_FALLBACK_USER_ID = "demo-user";
-export const DEV_AUTH_COOKIE_NAME = "trawl_dev_user_id";
-export const DEV_ALLOWED_USER_IDS = [
+import { auth } from "@/auth";
+import {
   DEMO_FALLBACK_USER_ID,
-  "demo-user-2",
-  "demo-user-3",
-] as const;
-
-export type DevAllowedUserId = (typeof DEV_ALLOWED_USER_IDS)[number];
+  DEV_ALLOWED_USER_IDS,
+  DEV_AUTH_COOKIE_NAME,
+  type DevAllowedUserId,
+} from "@/lib/auth/auth-identity";
+import { cookies } from "next/headers";
 export type AuthSource = "fallback" | "dev-cookie" | "session";
 
 type UserIdResolution = {
@@ -22,6 +16,12 @@ type UserIdResolution = {
 function isDevelopmentAuthEnabled() {
   return process.env.NODE_ENV !== "production";
 }
+
+/**
+ * Temporary launch seam flag.
+ * MUST be set to false before enabling protected production routes.
+ */
+const ALLOW_DEMO_FALLBACK = true;
 
 export function normalizeUserId(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -55,8 +55,8 @@ function resolveDevCookieUserId(cookieValue: unknown): DevAllowedUserId | null {
  * fallback disabled for protected production routes.
  */
 export async function resolveCurrentUserIdentity(): Promise<UserIdResolution> {
-  // Placeholder for future real session user id extraction.
-  const sessionUserId = normalizeUserId(null);
+  const session = await auth();
+  const sessionUserId = normalizeUserId(session?.user?.id);
   if (sessionUserId) {
     return { userId: sessionUserId, source: "session" };
   }
@@ -72,9 +72,42 @@ export async function resolveCurrentUserIdentity(): Promise<UserIdResolution> {
     }
   }
 
-  return { userId: DEMO_FALLBACK_USER_ID, source: "fallback" };
+  if (ALLOW_DEMO_FALLBACK) {
+    return { userId: DEMO_FALLBACK_USER_ID, source: "fallback" };
+  }
+
+  throw new Error("No authenticated user resolved and demo fallback is disabled.");
 }
 
 export async function getCurrentUserId() {
   return (await resolveCurrentUserIdentity()).userId;
+}
+
+
+export type PersonalizedUserIdentity = {
+  userId: string;
+  source: Extract<AuthSource, "session" | "dev-cookie">;
+};
+
+export async function getCurrentUserIdentity() {
+  return resolveCurrentUserIdentity();
+}
+
+export async function getPersonalizedUserIdentity(): Promise<PersonalizedUserIdentity | null> {
+  const identity = await resolveCurrentUserIdentity();
+  if (identity.source === "session") {
+    return identity;
+  }
+  if (identity.source === "dev-cookie" && isDevelopmentAuthEnabled()) {
+    return identity;
+  }
+  return null;
+}
+
+export async function requirePersonalizedUser(): Promise<PersonalizedUserIdentity> {
+  const identity = await getPersonalizedUserIdentity();
+  if (!identity) {
+    throw new Error("PERSONALIZED_AUTH_REQUIRED");
+  }
+  return identity;
 }

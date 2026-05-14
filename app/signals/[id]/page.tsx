@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, asc, eq, gte } from "drizzle-orm";
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { db } from "@/lib/db";
 import {
   disclosurePerformanceWindows,
@@ -66,7 +66,7 @@ export default async function SignalDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const userId = await getCurrentUserId();
+  const identity = await getPersonalizedUserIdentity();
   const { id } = await params;
   const signalId = Number(id);
 
@@ -279,13 +279,14 @@ export default async function SignalDetailPage({
     tradeSizeScore: signal.tradeSizeScore,
     historicalPoliticianScore: signal.historicalPoliticianScore,
   });
-  const [initialIsWatchingTicker, initialIsWatchingPolitician] =
-    await Promise.all([
-      normalizedTicker
-        ? isTickerWatched(userId, normalizedTicker)
-        : Promise.resolve(false),
-      isPoliticianWatched(userId, signal.politicianId),
-    ]);
+  const [initialIsWatchingTicker, initialIsWatchingPolitician] = identity
+    ? await Promise.all([
+        normalizedTicker
+          ? isTickerWatched(identity.userId, normalizedTicker)
+          : Promise.resolve(false),
+        isPoliticianWatched(identity.userId, signal.politicianId),
+      ])
+    : [false, false];
 
   return (
     <div className="min-h-screen bg-gray-50">

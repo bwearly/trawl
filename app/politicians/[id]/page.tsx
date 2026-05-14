@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCurrentUserId } from "@/lib/auth/get-current-user-id";
+import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getPoliticianDetail } from "@/lib/domain/politicians/get-politicians-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
 import { isPoliticianWatched } from "@/lib/domain/watchlists/watchlists";
@@ -80,7 +80,7 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
 }
 
 export default async function PoliticianDetailPage({ params }: PageProps) {
-  const userId = await getCurrentUserId();
+  const identity = await getPersonalizedUserIdentity();
   const { id } = await params;
   const politicianId = Number(id);
 
@@ -93,10 +93,9 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
   if (!data) {
     notFound();
   }
-  const initialIsWatching = await isPoliticianWatched(
-    userId,
-    data.politician.id
-  );
+  const initialIsWatching = identity
+    ? await isPoliticianWatched(identity.userId, data.politician.id)
+    : false;
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
   const avgAlpha30d = formatPercent(data.stats.avgAlpha30d);
