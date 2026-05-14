@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn, signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 export default function AuthNavControls() {
   const { data: session, status } = useSession();
@@ -22,7 +22,7 @@ export default function AuthNavControls() {
   }
 
   return (
-    <button type="button" onClick={() => signIn()} className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-100">
+    <button type="button" onClick={() => window.location.assign("/signin")} className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-100">
       Sign in
     </button>
   );

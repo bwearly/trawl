@@ -6,6 +6,7 @@ import { FormEvent, Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 
 const allowedDevUserIds = ["demo-user", "demo-user-2", "demo-user-3"] as const;
+const isGoogleSignInEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
 
 function SignInContent() {
   const searchParams = useSearchParams();
@@ -37,6 +38,11 @@ function SignInContent() {
     window.location.assign(result.url ?? callbackUrl);
   }
 
+  async function handleGoogleSignIn() {
+    setIsSubmitting(true);
+    await signIn("google", { callbackUrl });
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-md">
@@ -46,38 +52,37 @@ function SignInContent() {
           <p className="mt-3 text-sm text-gray-600">Sign in to save watchlists and receive alerts.</p>
 
           {isProduction ? (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Production authentication is not configured with a safe end-user provider yet. Demo credentials are disabled in production.
-            </div>
+            isGoogleSignInEnabled ? (
+              <div className="mt-6 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isSubmitting}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? "Redirecting..." : "Continue with Google"}
+                </button>
+                <p className="text-xs text-gray-500">Production sign-in is powered by Google OAuth.</p>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Sign-in is temporarily unavailable. Google OAuth is not configured.
+              </div>
+            )
           ) : (
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <label className="block text-sm font-medium text-gray-700" htmlFor="userId">
                 Demo user ID
               </label>
-              <input
-                id="userId"
-                name="userId"
-                value={userId}
-                onChange={(event) => setUserId(event.target.value)}
-                list="allowed-dev-user-ids"
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm outline-none ring-0 transition focus:border-gray-400"
-                placeholder="demo-user"
-                autoComplete="username"
-              />
+              <input id="userId" name="userId" value={userId} onChange={(event) => setUserId(event.target.value)} list="allowed-dev-user-ids" className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm outline-none ring-0 transition focus:border-gray-400" placeholder="demo-user" autoComplete="username" />
               <datalist id="allowed-dev-user-ids">
                 {allowedDevUserIds.map((id) => (
                   <option key={id} value={id} />
                 ))}
               </datalist>
-              <p className="text-xs text-gray-500">
-                Allowed: {allowedDevUserIds.join(", ")}
-              </p>
+              <p className="text-xs text-gray-500">Allowed: {allowedDevUserIds.join(", ")}</p>
               {error && <p className="text-sm text-rose-600">{error}</p>}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex w-full items-center justify-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <button type="submit" disabled={isSubmitting} className="inline-flex w-full items-center justify-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60">
                 {isSubmitting ? "Signing in..." : "Continue"}
               </button>
             </form>
