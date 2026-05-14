@@ -12,7 +12,22 @@ type DisclosureCandidate = {
   filingDate: Date | null;
 };
 
+type FalsePositiveRule = {
+  label: string;
+  ticker: string;
+  assetName: string;
+};
+
 const APPLY_REPAIRS = process.env.APPLY_REPAIRS === "true";
+
+const FALSE_POSITIVE_RULES: FalsePositiveRule[] = [
+  { label: "Appell Pete Corp", ticker: "APPL", assetName: "Appell Pete Corp" },
+  { label: "Appell Pete Corp", ticker: "AAPL", assetName: "Appell Pete Corp" },
+  { label: "Interest", ticker: "FEI", assetName: "Interest" },
+  { label: "Issued", ticker: "FNFV.V", assetName: "Issued" },
+  { label: "Shares", ticker: "MAG", assetName: "Shares" },
+  { label: "NEW", ticker: "NEW", assetName: "NEW" },
+];
 
 function formatDate(value: Date | null): string {
   if (!value) return "null";
@@ -78,7 +93,7 @@ async function applyAttRepairs(): Promise<number> {
   return result.length;
 }
 
-async function getAppellPeteCandidatesByTicker(ticker: "APPL" | "AAPL"): Promise<DisclosureCandidate[]> {
+async function getFalsePositiveCandidates(rule: FalsePositiveRule): Promise<DisclosureCandidate[]> {
   return db
     .select({
       id: disclosures.id,
@@ -89,10 +104,21 @@ async function getAppellPeteCandidatesByTicker(ticker: "APPL" | "AAPL"): Promise
       filingDate: disclosures.filingDate,
     })
     .from(disclosures)
-    .where(
-      and(eq(disclosures.ticker, ticker), ilike(disclosures.assetName, "%Appell Pete%"))
-    )
+    .where(and(eq(disclosures.ticker, rule.ticker), eq(disclosures.assetName, rule.assetName)))
     .orderBy(disclosures.id);
+}
+
+async function clearFalsePositiveTickers(rule: FalsePositiveRule): Promise<number> {
+  const result = await db
+    .update(disclosures)
+    .set({
+      ticker: null,
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(disclosures.ticker, rule.ticker), eq(disclosures.assetName, rule.assetName)))
+    .returning({ id: disclosures.id });
+
+  return result.length;
 }
 
 async function getFiservDiagnostics(): Promise<DisclosureCandidate[]> {
@@ -120,6 +146,9 @@ async function main(): Promise<void> {
   console.log(
     `Normalization diagnostics: storage(FISV)->${normalizeTickerForStorage("FISV")}, yahoo(FI)->${normalizeYahooSymbol("FI")}`
   );
+  console.log(
+    "Schema safety check: disclosures.ticker is nullable, and downstream scripts skip/process null tickers safely where required."
+  );
 
   const attCandidates = await getAttCandidates();
   printSampleRows("AT&T AT->T", attCandidates);
@@ -132,18 +161,27 @@ async function main(): Promise<void> {
     console.log("AT&T dry-run only: no updates applied.");
   }
 
-  const appellPeteApplCandidates = await getAppellPeteCandidatesByTicker("APPL");
-  const appellPeteAaplCandidates = await getAppellPeteCandidatesByTicker("AAPL");
-  printSampleRows("Appell Pete APPL candidates (raw ticker)", appellPeteApplCandidates);
-  printSampleRows("Appell Pete AAPL candidates (normalized/storage ticker)", appellPeteAaplCandidates);
-  const appellPeteTotal = appellPeteApplCandidates.length + appellPeteAaplCandidates.length;
-  console.log(`Appell Pete review status: manual-review candidates=${appellPeteTotal}`);
+  let totalFalsePositiveCandidates = 0;
+  let totalFalsePositiveUpdates = 0;
+
+  for (const rule of FALSE_POSITIVE_RULES) {
+    const candidates = await getFalsePositiveCandidates(rule);
+    totalFalsePositiveCandidates += candidates.length;
+    printSampleRows(`False-positive parser-noise ${rule.ticker} / ${rule.assetName}`, candidates);
+
+    if (APPLY_REPAIRS) {
+      const updated = await clearFalsePositiveTickers(rule);
+      totalFalsePositiveUpdates += updated;
+      console.log(`Applied parser-noise cleanup for ${rule.ticker}/${rule.assetName}: updated=${updated}`);
+    }
+  }
+
+  console.log(`False-positive parser-noise total candidates=${totalFalsePositiveCandidates}`);
   if (APPLY_REPAIRS) {
-    console.log(
-      "Appell Pete apply-mode action: SKIPPED (manual review required; no safe replacement ticker is inferred in this script)."
-    );
+    console.log(`False-positive parser-noise total updated=${totalFalsePositiveUpdates}`);
+    console.log("Apply mode: parser-noise false positives were cleared by setting ticker=null for exact-match rules only.");
   } else {
-    console.log("Appell Pete dry-run action: MANUAL-REVIEW (candidate rows reported, no DB updates).");
+    console.log("Dry-run mode: no parser-noise updates applied. Set APPLY_REPAIRS=true to apply exact-match null ticker cleanup.");
   }
 
   const fiservCandidates = await getFiservDiagnostics();
