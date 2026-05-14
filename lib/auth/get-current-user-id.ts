@@ -96,10 +96,10 @@ export async function getCurrentUserIdentity() {
 export async function getPersonalizedUserIdentity(): Promise<PersonalizedUserIdentity | null> {
   const identity = await resolveCurrentUserIdentity();
   if (identity.source === "session") {
-    return identity;
+    return { userId: identity.userId, source: "session" };
   }
   if (identity.source === "dev-cookie" && isDevelopmentAuthEnabled()) {
-    return identity;
+    return { userId: identity.userId, source: "dev-cookie" };
   }
   return null;
 }
