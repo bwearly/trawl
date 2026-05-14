@@ -89,8 +89,10 @@ When no personalized identity exists:
 
 ### Provider and environment notes
 
-- Current provider is temporary `next-auth` Credentials (`Development Identity (temporary)`), not production auth.
+- Production provider is Google OAuth via Auth.js when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured.
+- Dev-only Credentials (`Development Identity (temporary)`) remains available only when `NODE_ENV !== "production"`.
 - `AUTH_SECRET` is required in production; startup fails clearly when missing.
+- Production startup also fails clearly when Google OAuth env vars are missing.
 - `/api/dev-auth/*` routes are dev-only and return `404` in production.
 
 ### Before protected production launch
@@ -136,3 +138,28 @@ This repository now includes a **notification queue foundation** for alert email
 - Unsubscribe/suppression model.
 - Provider adapter implementation (e.g. Resend/SendGrid/Postmark/SES).
 - Delivery monitoring and failure handling policy.
+
+
+## Production Auth.js configuration
+
+Set these environment variables for production deployments:
+
+- `AUTH_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_URL` (or `NEXTAUTH_URL`) if your hosting/runtime does not automatically provide canonical URL detection
+- `AUTH_TRUST_HOST=true` when required by your proxy/platform setup
+- `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` to show the Google sign-in button on `/signin`
+
+Google OAuth redirect URL for Vercel production:
+
+- `https://<your-vercel-domain>/api/auth/callback/google`
+
+Example:
+
+- `https://trawl.vercel.app/api/auth/callback/google`
+
+Notes:
+
+- Dev credentials are local/dev-only and are disabled in production.
+- Session identity uses the Auth.js user id; for Google this is expected to be the stable Google account subject id. If a provider response only includes email, email may be used temporarily as the identity key.
