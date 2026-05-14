@@ -14,15 +14,57 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Useful Scripts
 
 - `npm run house:import -- --years=2026,2025,2024` — imports House disclosures for specific years.
+- `npm run pipeline:validate` — runs deterministic pipeline validation assertions across:
+  - normalization
+  - asset resolution
+  - trade type normalization
+  - alert eligibility
+  - scoring thresholds
+  - performance windows
+  - missing-price classification
+  - Current expected state: pass with **80 assertions**.
 - `npm run prices:import` — imports ticker + SPY price history.
   - Price symbol aliases handled during import: `APPL → AAPL`, `BRKB → BRK.B` (Yahoo `BRK-B`), and `BF.B/BF-B` normalization.
-  - Unresolved/failed symbols are written to `tmp/price-import-unresolved-symbols.json` for separate review.
+  - Imports Yahoo price history.
+  - Unresolved/failed symbols are written to `tmp/price-import-unresolved-symbols.json` for separate review and richer failure diagnostics.
+- `npm run pipeline:health` — reports pipeline health coverage + warnings across:
+  - disclosure coverage
+  - price coverage
+  - performance coverage
+  - signal coverage
+  - alert coverage
+  - watchlist/user coverage
 - `npm run performance:backfill` — computes disclosure return windows.
 - `npm run politicians:backfill` — refreshes politician-level historical stats.
 - `npm run signals:recalculate` — recomputes signal component scores and rationales.
 - `npm run alerts:backfill` — regenerates historical alerts from current signal state.
 - `npm run signals:evaluate` — prints score bucket/performance diagnostics.
+- `npm run prices:review-missing` — groups unresolved/missing price tickers by classification and writes `tmp/missing-price-review.json`.
+  - Can run without `tmp/price-import-unresolved-symbols.json`, but failure reasons are richer after `npm run prices:import`.
+- `npm run disclosures:repair-tickers` — disclosure ticker repair in **dry-run** mode (no writes).
+- `APPLY_REPAIRS=true npm run disclosures:repair-tickers` — disclosure ticker repair in **apply** mode.
+  - Includes repair/protection for `AT&T Inc` ticker correction: `AT -> T`.
+  - Includes false-positive parser-noise cleanup by setting `ticker=null` only for exact safe matches.
+  - Future imports are protected by asset-name guards for: `Appell Pete Corp`, `Interest`, `Issued`, `Shares`, and `NEW`.
 - `npm run pipeline:daily` — runs the full daily pipeline (recent House years + all core backfills).
+
+## Local Reliability Review Workflow
+
+Recommended command sequence after pipeline-affecting changes:
+
+```bash
+npm run pipeline:validate
+npm run prices:import
+npm run pipeline:health
+npm run prices:review-missing
+npm run lint
+```
+
+Current expected state:
+
+- `pipeline:validate` passes with 80 assertions.
+- false-positive parser-noise review bucket should be `0` after cleanup.
+- user-scoped `demo-user` warning is expected until real auth is added.
 
 ## Daily Automation
 
