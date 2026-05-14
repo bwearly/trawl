@@ -127,31 +127,75 @@ async function main() {
     return;
   }
 
-  await db.transaction(async (tx) => {
-    if (candidateAlerts.length) {
-      await tx.delete(alerts).where(inArray(alerts.id, candidateAlerts.map((a) => a.id)));
+  console.log(
+    "\n⚠️ APPLY mode uses sequential deletes because Neon HTTP does not support transactions."
+  );
+
+  async function runDelete(label: string, executeDelete: () => Promise<number>) {
+    try {
+      const deletedCount = await executeDelete();
+      console.log(`- deleted ${label}: ${deletedCount}`);
+    } catch (error) {
+      console.error(`❌ Failed while deleting ${label}.`);
+      console.error(
+        "Fix the issue, then rerun `npm run db:remove-seed` to continue cleanup from this point."
+      );
+      throw error;
     }
-    if (seededSignalIds.length) {
-      await tx.delete(researchSignals).where(inArray(researchSignals.id, seededSignalIds));
-    }
-    if (seededPerformanceWindows.length) {
-      await tx
-        .delete(disclosurePerformanceWindows)
-        .where(inArray(disclosurePerformanceWindows.id, seededPerformanceWindows.map((p) => p.id)));
-    }
-    if (seededDisclosureIds.length) {
-      await tx.delete(disclosures).where(inArray(disclosures.id, seededDisclosureIds));
-    }
-    if (candidatePoliticianStats.length) {
-      await tx
-        .delete(politicianStats)
-        .where(inArray(politicianStats.id, candidatePoliticianStats.map((p) => p.id)));
-    }
-    if (orphanedSeededPoliticians.length) {
-      await tx
-        .delete(politicians)
-        .where(inArray(politicians.id, orphanedSeededPoliticianIds));
-    }
+  }
+
+  await runDelete("alerts", async () => {
+    if (!candidateAlerts.length) return 0;
+    const deleted = await db
+      .delete(alerts)
+      .where(inArray(alerts.id, candidateAlerts.map((a) => a.id)))
+      .returning({ id: alerts.id });
+    return deleted.length;
+  });
+
+  await runDelete("researchSignals", async () => {
+    if (!seededSignalIds.length) return 0;
+    const deleted = await db
+      .delete(researchSignals)
+      .where(inArray(researchSignals.id, seededSignalIds))
+      .returning({ id: researchSignals.id });
+    return deleted.length;
+  });
+
+  await runDelete("disclosurePerformanceWindows", async () => {
+    if (!seededPerformanceWindows.length) return 0;
+    const deleted = await db
+      .delete(disclosurePerformanceWindows)
+      .where(inArray(disclosurePerformanceWindows.id, seededPerformanceWindows.map((p) => p.id)))
+      .returning({ id: disclosurePerformanceWindows.id });
+    return deleted.length;
+  });
+
+  await runDelete("disclosures", async () => {
+    if (!seededDisclosureIds.length) return 0;
+    const deleted = await db
+      .delete(disclosures)
+      .where(inArray(disclosures.id, seededDisclosureIds))
+      .returning({ id: disclosures.id });
+    return deleted.length;
+  });
+
+  await runDelete("politicianStats", async () => {
+    if (!candidatePoliticianStats.length) return 0;
+    const deleted = await db
+      .delete(politicianStats)
+      .where(inArray(politicianStats.id, candidatePoliticianStats.map((p) => p.id)))
+      .returning({ id: politicianStats.id });
+    return deleted.length;
+  });
+
+  await runDelete("politicians", async () => {
+    if (!orphanedSeededPoliticians.length) return 0;
+    const deleted = await db
+      .delete(politicians)
+      .where(inArray(politicians.id, orphanedSeededPoliticianIds))
+      .returning({ id: politicians.id });
+    return deleted.length;
   });
 
   console.log("\n🗑️ APPLY complete. Seeded/demo-linked records were deleted safely.");
