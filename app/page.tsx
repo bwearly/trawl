@@ -8,7 +8,7 @@ import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
 export const metadata: Metadata = {
   title: "Trawl — Congressional Trade Signals",
   description:
-    "Track congressional trade disclosures, review ranked research signals, and investigate market follow-through in one place.",
+    "Track congressional trade disclosures, find ranked opportunities, validate performance, and stay on top of watchlists and alerts.",
 };
 
 export default async function Home() {
@@ -28,12 +28,13 @@ export default async function Home() {
             </p>
 
             <h1 className="mt-4 text-5xl font-bold tracking-tight text-gray-950">
-              Public-disclosure stock research signals
+              Follow congressional trades with clearer, faster signal review
             </h1>
 
             <p className="mt-6 text-lg leading-8 text-gray-600">
-              Monitor congressional trade disclosures, score them as research
-              signals, and review the context before doing any deeper work.
+              Trawl turns public congressional trade filings into ranked signals
+              so you can quickly spot opportunities, evaluate politician
+              performance, and monitor names you care about.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -45,14 +46,71 @@ export default async function Home() {
               </Link>
 
               <Link
-                href="/signals?minScore=70&sort=score"
+                href="/politicians"
                 className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                View high-score signals
+                Politicians
+              </Link>
+
+              <Link
+                href="/watchlist"
+                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Watchlist
+              </Link>
+
+              <Link
+                href="/alerts"
+                className="rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Alerts
               </Link>
             </div>
           </div>
         </div>
+
+        <section className="grid gap-4 rounded-3xl border border-gray-200 bg-white p-8 shadow-sm md:grid-cols-[1.4fr_1fr]">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
+              Start here
+            </p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-gray-950">
+              How to use Trawl in 3 steps
+            </h2>
+            <p className="mt-3 text-base text-gray-600">
+              Use this flow to go from new filing to monitored idea in a few
+              minutes.
+            </p>
+          </div>
+
+          <ol className="space-y-3 text-sm text-gray-700">
+            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <span className="font-semibold text-gray-900">1.</span> Browse{" "}
+              <Link href="/signals" className="font-semibold text-gray-900 underline">
+                signals
+              </Link>{" "}
+              to find today&apos;s highest-ranked disclosures.
+            </li>
+            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <span className="font-semibold text-gray-900">2.</span> Add
+              politicians or tickers to your{" "}
+              <Link
+                href="/watchlist"
+                className="font-semibold text-gray-900 underline"
+              >
+                watchlist
+              </Link>{" "}
+              to keep your research focused.
+            </li>
+            <li className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <span className="font-semibold text-gray-900">3.</span> Review{" "}
+              <Link href="/alerts" className="font-semibold text-gray-900 underline">
+                alerts
+              </Link>{" "}
+              for fresh filings and signal changes.
+            </li>
+          </ol>
+        </section>
 
         <section className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -64,8 +122,8 @@ export default async function Home() {
                 Top Picks Today
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                Highest-scoring active disclosures worth reviewing based on
-                score, market follow-through, and current supporting data.
+                The strongest active signals right now, ranked to help you
+                review the highest-conviction ideas first.
               </p>
             </div>
 
@@ -130,8 +188,8 @@ export default async function Home() {
                 Recently Filed
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                Newest public filings to review, regardless of score ranking.
-                This feed prioritizes filing recency over signal strength.
+                The newest congressional disclosures, ordered by filing time so
+                you can quickly catch what just hit the tape.
               </p>
             </div>
 
@@ -186,8 +244,8 @@ export default async function Home() {
                 Biggest Outperformers vs SPY
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-7 text-gray-600">
-                Signals with the strongest benchmark-relative follow-through
-                based on current backfilled performance data.
+                Signals that beat SPY by the widest margin so far, useful for
+                validating which setups have historically followed through.
               </p>
             </div>
 
@@ -202,7 +260,7 @@ export default async function Home() {
           <div className="mt-6 space-y-4">
             {biggestOutperformers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
-                No outperformers with benchmark-relative performance data yet.
+                No outperformers with SPY comparison data yet.
               </div>
             ) : (
               biggestOutperformers.map((signal, index) => (
