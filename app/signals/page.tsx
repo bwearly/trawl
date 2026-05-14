@@ -6,6 +6,7 @@ import { getUnreadAlertsCount } from "@/lib/domain/alerts/alerts";
 import {
   getSignals,
   parseSignalFilters,
+  parseSignalSort,
 } from "@/lib/domain/signals/signals";
 import { getWatchedTickers } from "@/lib/domain/watchlists/watchlists";
 
@@ -37,6 +38,8 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
   const userId = await getCurrentUserId();
   const params = await searchParams;
 
+  const sort = parseSignalSort(firstParam(params.sort));
+
   const initialFilters = parseSignalFilters({
     minScore: firstParam(params.minScore),
     tradeType: firstParam(params.tradeType),
@@ -44,7 +47,7 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     ticker: firstParam(params.ticker),
     politician: firstParam(params.politician),
     freshness: firstParam(params.freshness),
-    sort: firstParam(params.sort),
+    sort,
   });
 
   const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([

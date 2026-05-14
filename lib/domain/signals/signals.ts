@@ -90,6 +90,12 @@ const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
   "freshness",
 ]);
 
+export function parseSignalSort(rawSort: string | undefined): SignalFilters["sort"] {
+  return SORT_OPTIONS.has(rawSort as SignalFilters["sort"])
+    ? (rawSort as SignalFilters["sort"])
+    : "score";
+}
+
 export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
   minScore: "0",
   tradeType: "all",
@@ -113,9 +119,7 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
     ? (raw.party as SignalFilters["party"])
     : DEFAULT_SIGNAL_FILTERS.party;
 
-  const sort = SORT_OPTIONS.has(raw.sort as SignalFilters["sort"])
-    ? (raw.sort as SignalFilters["sort"])
-    : DEFAULT_SIGNAL_FILTERS.sort;
+  const sort = parseSignalSort(raw.sort);
   const freshness = FRESHNESS_OPTIONS.has(raw.freshness as SignalFilters["freshness"])
     ? (raw.freshness as SignalFilters["freshness"])
     : DEFAULT_SIGNAL_FILTERS.freshness;
@@ -166,6 +170,36 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
     whereFilters.push(isNull(disclosures.filingLagDays));
   }
 
+  const scoreDesc = desc(researchSignals.score);
+  const signalDateDesc = desc(researchSignals.signalDate);
+  const filingDateDesc = desc(disclosures.filingDate);
+  const filingLagNullsLast = sql`${disclosures.filingLagDays} IS NULL`;
+  const freshnessRank = sql<number>`case
+    when ${disclosures.filingLagDays} <= 15 then 1
+    when ${disclosures.filingLagDays} > 15 and ${disclosures.filingLagDays} <= 45 then 2
+    when ${disclosures.filingLagDays} > 45 and ${disclosures.filingLagDays} <= 90 then 3
+    when ${disclosures.filingLagDays} > 90 and ${disclosures.filingLagDays} <= 365 then 4
+    when ${disclosures.filingLagDays} > 365 then 5
+    else 6
+  end`;
+
+  const orderBy =
+    filters.sort === "newest"
+      ? [filingDateDesc, signalDateDesc, scoreDesc]
+      : filters.sort === "filingLagAsc"
+      ? [asc(filingLagNullsLast), asc(disclosures.filingLagDays), scoreDesc, signalDateDesc]
+      : filters.sort === "filingLagDesc"
+      ? [asc(filingLagNullsLast), desc(disclosures.filingLagDays), scoreDesc, signalDateDesc]
+      : filters.sort === "freshness"
+      ? [asc(freshnessRank), scoreDesc, signalDateDesc]
+      : filters.sort === "ticker"
+      ? [asc(researchSignals.ticker), scoreDesc, signalDateDesc]
+      : filters.sort === "politician"
+      ? [asc(politicians.fullName), scoreDesc, signalDateDesc]
+      : filters.sort === "tradeType"
+      ? [asc(disclosures.tradeType), scoreDesc, signalDateDesc]
+      : [scoreDesc, filingDateDesc, signalDateDesc];
+
   return db
     .select({
       signalId: researchSignals.id,
@@ -197,22 +231,7 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
     )
     .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(whereFilters.length ? and(...whereFilters) : undefined)
-    .orderBy(
-      filters.sort === "newest"
-        ? desc(researchSignals.signalDate)
-        : filters.sort === "filingLagAsc" || filters.sort === "freshness"
-        ? asc(disclosures.filingLagDays)
-        : filters.sort === "filingLagDesc"
-        ? desc(disclosures.filingLagDays)
-        : filters.sort === "ticker"
-        ? asc(researchSignals.ticker)
-        : filters.sort === "politician"
-        ? asc(politicians.fullName)
-        : filters.sort === "tradeType"
-        ? asc(disclosures.tradeType)
-        : desc(researchSignals.score),
-      desc(researchSignals.signalDate)
-    )
+    .orderBy(...orderBy)
     .then((rows) =>
       rows.map((row) => ({
         ...row,
