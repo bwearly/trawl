@@ -105,12 +105,17 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/signals"
-            className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-          >
-            ← Back to signals
-          </Link>
+          <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+            <Link
+              href="/signals"
+              className="text-gray-600 transition hover:text-gray-900"
+            >
+              ← Back to signals
+            </Link>
+            <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
+              View leaderboard
+            </Link>
+          </div>
 
           <div className="sm:ml-auto">
             <WatchButton
@@ -126,6 +131,10 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             <div className="max-w-3xl">
               <p className="text-sm font-medium text-gray-500">
                 Politician analytics
+              </p>
+              <p className="mt-2 text-sm text-gray-600">
+                Historical outcomes for this politician&apos;s disclosed trades.
+                Use these metrics as context, not investment advice.
               </p>
 
               <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-gray-950 sm:text-4xl">
@@ -159,7 +168,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
 
               <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-inset ring-gray-200">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  Average 30d alpha
+                  Average 30d alpha vs SPY
                 </p>
                 <p
                   className={`mt-1.5 text-2xl font-semibold tracking-tight sm:text-3xl ${toneToClass(
@@ -177,14 +186,14 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
           <DetailStatCard
             label="Total disclosures"
             value={String(data.stats.totalDisclosures)}
-            supportingText={`Purchase: ${data.stats.purchaseCount} · Sale: ${data.stats.saleCount}`}
+            supportingText={`Sample size · Purchase: ${data.stats.purchaseCount} · Sale: ${data.stats.saleCount}`}
           />
 
           <DetailStatCard
             label="Average 30d alpha"
             value={avgAlpha30d}
             tone={getMetricTone(avgAlpha30d)}
-            supportingText={`7d: ${formatPercent(data.stats.avgAlpha7d)} · 90d: ${formatPercent(
+            supportingText={`Alpha is return vs SPY · 7d: ${formatPercent(data.stats.avgAlpha7d)} · 90d: ${formatPercent(
               data.stats.avgAlpha90d
             )}`}
           />
@@ -193,7 +202,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             label="30d win rate"
             value={formatPercent(data.stats.winRate30d)}
             tone={getWinRateTone(data.stats.winRate30d)}
-            supportingText={`7d: ${formatPercent(data.stats.winRate7d)} · 90d: ${formatPercent(
+            supportingText={`% of disclosures with positive alpha · 7d: ${formatPercent(data.stats.winRate7d)} · 90d: ${formatPercent(
               data.stats.winRate90d
             )}`}
           />
@@ -205,7 +214,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 ? `${data.stats.avgFilingLagDays}d`
                 : "Not enough data yet"
             }
-            supportingText={`Last trade: ${formatDate(data.stats.lastTradeDate)}`}
+            supportingText={`Trade date to filing date · Last trade: ${formatDate(data.stats.lastTradeDate)}`}
           />
         </section>
 
@@ -217,8 +226,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                   Recent disclosures
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Latest trades, signal scores, and realized outperformance vs
-                  SPY.
+                  Latest trades with signal score and 30-day alpha vs SPY.
                 </p>
               </div>
             </div>
@@ -230,11 +238,11 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                     <th className="px-4 py-3 font-medium">Ticker</th>
                     <th className="px-4 py-3 font-medium">Asset</th>
                     <th className="px-4 py-3 font-medium">Trade type</th>
-                    <th className="px-4 py-3 font-medium">Trade date</th>
-                    <th className="px-4 py-3 font-medium">Score</th>
-                    <th className="px-4 py-3 font-medium">30d alpha</th>
-                  </tr>
-                </thead>
+                  <th className="px-4 py-3 font-medium">Trade date</th>
+                  <th className="px-4 py-3 font-medium">Score</th>
+                  <th className="px-4 py-3 font-medium">30d alpha vs SPY</th>
+                </tr>
+              </thead>
                 <tbody>
                   {data.recentDisclosures.map((row) => (
                     <tr
@@ -300,7 +308,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         colSpan={6}
                         className="px-4 py-10 text-center text-sm text-gray-500"
                       >
-                        No disclosures found for this politician yet.
+                        <p>No disclosures found for this politician yet.</p>
+                        <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
+                          <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                            Go to Signals
+                          </Link>
+                          <Link href="/" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                            Go to Home
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   )}

@@ -63,6 +63,8 @@ export default function SignalFilters({
   });
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const hasMounted = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +80,7 @@ export default function SignalFilters({
     async function fetchSignals() {
       setIsLoading(true);
       onLoadingChange(true);
+      setSignalsError(null);
 
       try {
         const params = new URLSearchParams({
@@ -102,7 +105,9 @@ export default function SignalFilters({
         onResultsChange(rows);
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          console.error(error);
+          setSignalsError(
+            "We couldn’t refresh signals right now. Try adjusting a filter or reloading."
+          );
         }
       } finally {
         setIsLoading(false);
@@ -144,6 +149,7 @@ export default function SignalFilters({
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setIsSearchLoading(true);
+      setSearchError(null);
 
       try {
         const response = await fetch(
@@ -162,7 +168,9 @@ export default function SignalFilters({
         setShowSearchResults(true);
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          console.error(error);
+          setSearchError(
+            "Search is temporarily unavailable. Try again in a moment."
+          );
         }
       } finally {
         setIsSearchLoading(false);
@@ -295,6 +303,9 @@ export default function SignalFilters({
                 </div>
               )}
             </div>
+          )}
+          {searchError && (
+            <p className="mt-2 text-sm text-rose-600">{searchError}</p>
           )}
         </div>
 
@@ -437,6 +448,9 @@ export default function SignalFilters({
             </select>
           </label>
         </div>
+        {signalsError && (
+          <p className="text-sm text-rose-600">{signalsError}</p>
+        )}
       </div>
     </div>
   );

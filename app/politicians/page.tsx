@@ -53,7 +53,12 @@ export default async function PoliticiansLeaderboardPage() {
               Politician Leaderboard
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Ranked by average 30-day alpha, then win rate, then disclosure volume.
+              Compare how disclosed trades have historically performed after filing.
+              Rankings prioritize 30-day alpha, then win rate, then total sample size.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Alpha = return relative to SPY. Win rate = share of disclosures with
+              positive alpha.
             </p>
           </div>
 
@@ -74,7 +79,7 @@ export default async function PoliticiansLeaderboardPage() {
                 Historical outperformance
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Compare politicians by post-disclosure alpha, win rate, and activity.
+                Use this table to spot consistent outperformers before opening detail views.
               </p>
             </div>
 
@@ -93,9 +98,9 @@ export default async function PoliticiansLeaderboardPage() {
                   <th className="px-4 py-3 font-medium">Party</th>
                   <th className="px-4 py-3 font-medium">State</th>
                   <th className="px-4 py-3 font-medium">Disclosures</th>
-                  <th className="px-4 py-3 font-medium">Avg 30d alpha</th>
+                  <th className="px-4 py-3 font-medium">Avg 30d alpha vs SPY</th>
                   <th className="px-4 py-3 font-medium">30d win rate</th>
-                  <th className="px-4 py-3 font-medium">Avg filing lag</th>
+                  <th className="px-4 py-3 font-medium">Avg filing lag (days)</th>
                   <th className="px-4 py-3 font-medium">Last trade</th>
                 </tr>
               </thead>
@@ -176,7 +181,21 @@ export default async function PoliticiansLeaderboardPage() {
                       colSpan={10}
                       className="px-4 py-10 text-center text-sm text-gray-500"
                     >
-                      No politician stats are available yet.
+                      <p>No politician stats are available yet.</p>
+                      <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
+                        <Link
+                          href="/signals"
+                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
+                        >
+                          Go to Signals
+                        </Link>
+                        <Link
+                          href="/"
+                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
+                        >
+                          Go to Home
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )}
