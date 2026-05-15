@@ -40,6 +40,19 @@ type MetadataMatch = {
   canonicalName: string;
 };
 
+const NAME_ALIASES: Record<string, string> = {
+  "DONALD STERNOFF BEYER": "DONALD S BEYER",
+  "NEAL PATRICK DUNN": "NEAL P DUNN",
+  "RICHARD DEAN MCCORMICK": "RICHARD MCCORMICK",
+  "JAMES FRENCH HILL": "J FRENCH HILL",
+  "JAMES D JORDAN": "JIM JORDAN",
+  "JAMES E BANKS": "JIM BANKS",
+  "EARL LEROY CARTER": "EARL L CARTER",
+  "CAROL DEVINE MILLER": "CAROL D MILLER",
+  "PETER ALLEN STAUBER": "PETE STAUBER",
+  "ELIZABETH FLETCHER": "LIZZIE FLETCHER",
+};
+
 const CURRENT_LEGISLATORS_URL =
   "https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json";
 const HISTORICAL_LEGISLATORS_URL =
@@ -67,13 +80,21 @@ function normalizeName(raw: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[.'’,-]/g, " ")
     .replace(/&/g, " AND ")
-    .replace(/\b([A-Z])\b/gi, " ")
-    .replace(/\b(MD|PHD|DO|DDS|DVM|ESQ|FACS|CPA)\b/gi, " ")
-    .replace(/\b(MR|MRS|MS|REP|REPRESENTATIVE|HON|HONORABLE|DR)\b/gi, " ")
+    .replace(/\b(MR|MRS|MS|REP|REPRESENTATIVE|HON|HONORABLE)\b/gi, " ")
+    .replace(/\b(DR|DOCTOR|MD|M D|PHD|PH D|DO|DDS|DVM|ESQ|FACS|FACS|CPA)\b/gi, " ")
     .replace(/\b(JR|SR|II|III|IV|V)\b/gi, " ")
+    .replace(/\b([A-Z])\b/gi, " $1 ")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
+}
+
+function getMatchesForPoliticianName(metadataIndex: Map<string, MetadataMatch[]>, fullName: string): MetadataMatch[] {
+  const normalized = normalizeName(fullName);
+  const aliasTarget = NAME_ALIASES[normalized];
+  const keys = aliasTarget ? [normalized, aliasTarget] : [normalized];
+  const all = keys.flatMap((key) => metadataIndex.get(key) ?? []);
+  return dedupeMatches(all);
 }
 
 function buildNameVariants(name: LegislatorName): string[] {
@@ -181,13 +202,49 @@ async function backfillPoliticianMetadata() {
   console.log(`Politicians loaded: ${housePoliticians.length}`);
 
   for (const politician of housePoliticians) {
-    const key = normalizeName(politician.fullName);
-    const matches = dedupeMatches(metadataIndex.get(key) ?? []);
+    const matches = getMatchesForPoliticianName(metadataIndex, politician.fullName);
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
     if (matches.length > 1) {
+      const politicianState = normalizeState(politician.state);
+      const stateScopedMatches = politicianState
+        ? matches.filter((candidate) => normalizeState(candidate.state) === politicianState)
+        : [];
+      if (stateScopedMatches.length === 1) {
+        matched += 1;
+        const match = stateScopedMatches[0];
+        const shouldSkipParty = !force && politician.party !== null;
+        const shouldSkipState = !force && politician.state !== null;
+        if (shouldSkipParty && shouldSkipState) {
+          skippedExisting += 1;
+          continue;
+        }
+        const nextParty = force || politician.party === null ? (match.party ?? politician.party) : politician.party;
+        const nextState = force || politician.state === null ? (match.state ?? politician.state) : politician.state;
+
+        if (nextParty === politician.party && nextState === politician.state) {
+          noChange += 1;
+          continue;
+        }
+
+        await db
+          .update(politicians)
+          .set({
+            party: nextParty,
+            state: nextState,
+          })
+          .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, "house")));
+
+        if (nextParty !== politician.party) updatedPartyCount += 1;
+        if (nextState !== politician.state) updatedStateCount += 1;
+        updated += 1;
+        console.log(
+          `✅ Updated ${politician.fullName}: party ${politician.party ?? "NULL"} -> ${nextParty ?? "NULL"}, state ${politician.state ?? "NULL"} -> ${nextState ?? "NULL"}`
+        );
+        continue;
+      }
       ambiguous += 1;
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "ambiguous_match", candidates: matches });
       console.log(`⚠️ Ambiguous metadata match for "${politician.fullName}" (${matches.length} candidates).`);
