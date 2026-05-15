@@ -108,6 +108,9 @@ export default function AlertPreferencesForm() {
           Choose which watchlist alerts you get and set the minimum signal
           score required before an alert appears.
         </p>
+        <p className="text-xs text-amber-700">
+          Alerts are research notifications, not investment advice.
+        </p>
       </div>
 
       {isLoading ? (

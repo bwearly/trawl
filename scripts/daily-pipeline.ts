@@ -46,9 +46,7 @@ async function main() {
   runStep("Pipeline health report", "npm", ["run", "pipeline:health"]);
 
   console.log("\n✅ Daily pipeline completed.");
-  console.log(
-    "Note: alerts:backfill currently depends on that script's configured user scope. Verify whether it is single-user or all-user before relying on daily alert generation for production.",
-  );
+  console.log("alerts:backfill ran in all-user mode unless ALERT_BACKFILL_USER_ID was explicitly set.");
 }
 
 main().catch((error) => {

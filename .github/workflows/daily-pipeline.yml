@@ -13,7 +13,6 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       TRAWL_DATABASE_DATABASE_URL: ${{ secrets.TRAWL_DATABASE_DATABASE_URL }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
-      ALERT_BACKFILL_USER_ID: ${{ secrets.ALERT_BACKFILL_USER_ID }}
       ALERT_EMAIL_QUEUE_ENABLED: "false"
     steps:
       - name: Checkout repository
