@@ -26,6 +26,7 @@
     "pipeline:health": "tsx scripts/pipeline-health.ts",
     "disclosures:repair-tickers": "tsx scripts/repair-disclosure-tickers.ts",
     "prices:review-missing": "tsx scripts/review-missing-price-tickers.ts",
+    "politicians:backfill-metadata": "tsx scripts/backfill-politician-metadata.ts",
     "db:remove-seed": "tsx scripts/remove-seeded-records.ts",
     "notifications:process": "tsx scripts/process-notification-jobs.ts",
     "performance:backfill:daily": "tsx scripts/backfill-performance.ts --recent-days=180 --missing-only"

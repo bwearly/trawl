@@ -227,3 +227,24 @@ The workflow also sets:
 ### Alert backfill scope warning
 
 Alert backfill behavior can still be scoped depending on how `alerts:backfill` is configured at runtime (for example, if `ALERT_BACKFILL_USER_ID` is provided).
+
+## House metadata backfill notes
+
+House PTR filings do **not** include party. Party must be populated from a separate member metadata source, not inferred from filings.
+
+Current House import behavior:
+
+- `state` can be parsed from PTR filing `State/District` values (e.g., `GA14` -> `GA`).
+- `party` remains metadata-driven and is not inferred from PTR transaction rows.
+
+To backfill House politician metadata safely:
+
+```bash
+npm run politicians:backfill-metadata
+```
+
+Notes:
+
+- By default, this backfill only fills `party`/`state` when they are currently `NULL`.
+- Use `--force` only when you intentionally want to allow overwriting existing values.
+- Unmatched or ambiguous rows are written to `tmp/unmatched-politician-metadata.json`.

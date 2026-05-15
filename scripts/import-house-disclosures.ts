@@ -131,6 +131,11 @@ type PtrCandidateRecord = {
   assetCategory: NormalizedDisclosure["assetCategory"];
 };
 
+type ParsedStateDistrict = {
+  raw: string;
+  state: string | null;
+};
+
 const ALLOWED_SINGLE_LETTER_TICKERS = new Set(["F", "T", "U", "V", "C", "D", "K", "O", "S"]);
 const DISALLOWED_STATE_TICKER_TOKENS = new Set([
   "AL",
@@ -779,6 +784,23 @@ function normalizePtrLine(line: string): string {
   return sanitizeParsedTextOrEmpty(line.replace(/\u00a0/g, " "));
 }
 
+function parseStateFromDistrictValue(rawValue: string | null | undefined): ParsedStateDistrict | null {
+  const raw = sanitizeParsedText(rawValue);
+  if (!raw) return null;
+  const compact = raw.toUpperCase().replace(/\s+/g, "");
+  const match = compact.match(/^([A-Z]{2})\D*\d{0,3}$/);
+  if (!match) {
+    return { raw, state: null };
+  }
+  return { raw, state: match[1] ?? null };
+}
+
+function parseStateDistrictFromPdfText(text: string): ParsedStateDistrict | null {
+  const match = text.match(/State\s*\/\s*District\s*:\s*([A-Za-z0-9\-\s]+)/i);
+  if (!match) return null;
+  return parseStateFromDistrictValue(match[1] ?? null);
+}
+
 function splitPtrLineOnTypeTokens(line: string): string[] {
   const out: string[] = [];
   const compact = normalizePtrLine(line);
@@ -878,7 +900,25 @@ function parsePtrTransactionsFromPdfText(params: {
   );
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
-  const state = getValue(sourceRow, ["state"]);
+  const stateFromRow = parseStateFromDistrictValue(
+    getValue(sourceRow, ["state", "district state", "st", "state/district"])
+  );
+  const stateFromPdf = parseStateDistrictFromPdfText(text);
+  const state = stateFromRow?.state ?? stateFromPdf?.state ?? null;
+  if (stateFromPdf) {
+    if (stateFromPdf.state) {
+      console.log(
+        `🧪 PTR parsed State/District="${stateFromPdf.raw}" -> state="${stateFromPdf.state}"`
+      );
+    } else {
+      console.log(`⚠️ PTR malformed State/District value: "${stateFromPdf.raw}"`);
+    }
+  } else {
+    console.log("⚠️ PTR missing State/District field in extracted PDF text.");
+  }
+  if (stateFromRow && !stateFromRow.state) {
+    console.log(`⚠️ PTR malformed row state value: "${stateFromRow.raw}"`);
+  }
   const now = new Date();
   let debugRowsLogged = 0;
 
@@ -1281,7 +1321,7 @@ async function fetchYearRows(year: number): Promise<YearFetchResult> {
 
 async function getOrCreatePoliticianId(normalized: NormalizedDisclosure): Promise<number> {
   const existing = await db
-    .select({ id: politicians.id })
+    .select({ id: politicians.id, state: politicians.state })
     .from(politicians)
     .where(
       and(
@@ -1291,13 +1331,22 @@ async function getOrCreatePoliticianId(normalized: NormalizedDisclosure): Promis
     )
     .limit(1);
 
-  if (existing[0]) return existing[0].id;
+  if (existing[0]) {
+    if (!existing[0].state && normalized.state) {
+      await db.update(politicians).set({ state: normalized.state }).where(eq(politicians.id, existing[0].id));
+      console.log(
+        `ℹ️ Backfilled politician state: "${normalized.politicianName}" -> "${normalized.state}"`
+      );
+    }
+    return existing[0].id;
+  }
 
   const inserted = await db
     .insert(politicians)
     .values({
       fullName: normalized.politicianName,
       chamber: normalized.chamber,
+      // Party is intentionally left as provided by upstream member metadata; House PTR filings do not include party.
       party: normalized.party,
       state: normalized.state,
     })
