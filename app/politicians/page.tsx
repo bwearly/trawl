@@ -14,6 +14,11 @@ function formatPercent(value: number | null) {
   return `${value}%`;
 }
 
+function formatDays(value: number | null) {
+  if (value === null) return "—";
+  return `${Math.round(value)}d`;
+}
+
 function formatDate(value: Date | string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString();
@@ -164,9 +169,7 @@ export default async function PoliticiansLeaderboardPage() {
                     </td>
 
                     <td className="px-4 py-4 text-gray-700">
-                      {row.avgFilingLagDays !== null
-                        ? `${row.avgFilingLagDays}d`
-                        : "—"}
+                      {formatDays(row.avgFilingLagDays)}
                     </td>
 
                     <td className="px-4 py-4 text-gray-700">
