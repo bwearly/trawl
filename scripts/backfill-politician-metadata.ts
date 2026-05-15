@@ -41,9 +41,9 @@ type MetadataMatch = {
 };
 
 const CURRENT_LEGISLATORS_URL =
-  "https://theunitedstates.io/congress-legislators/legislators-current.json";
+  "https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json";
 const HISTORICAL_LEGISLATORS_URL =
-  "https://theunitedstates.io/congress-legislators/legislators-historical.json";
+  "https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-historical.json";
 
 function normalizeParty(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -66,6 +66,7 @@ function normalizeName(raw: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[.'’,-]/g, " ")
+    .replace(/&/g, " AND ")
     .replace(/\b([A-Z])\b/gi, " ")
     .replace(/\b(MD|PHD|DO|DDS|DVM|ESQ|FACS|CPA)\b/gi, " ")
     .replace(/\b(MR|MRS|MS|REP|REPRESENTATIVE|HON|HONORABLE|DR)\b/gi, " ")
@@ -85,12 +86,27 @@ function buildNameVariants(name: LegislatorName): string[] {
 }
 
 async function fetchLegislators(url: string): Promise<LegislatorRecord[]> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch metadata from ${url}: HTTP ${response.status}`);
+  const maxAttempts = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`Fetch attempt ${attempt}/${maxAttempts} failed for ${url} with HTTP ${response.status}.`);
+        lastError = new Error(`Failed to fetch metadata from ${url}: HTTP ${response.status}`);
+      } else {
+        const parsed = (await response.json()) as LegislatorRecord[] | undefined;
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Fetch attempt ${attempt}/${maxAttempts} failed for ${url}: ${message}`);
+      lastError = error instanceof Error ? error : new Error(message);
+    }
   }
-  const parsed = (await response.json()) as LegislatorRecord[];
-  return Array.isArray(parsed) ? parsed : [];
+
+  throw lastError ?? new Error(`Failed to fetch metadata from ${url}: unknown error`);
 }
 
 function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMatch[]> {
@@ -98,9 +114,9 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
 
   for (const record of records) {
     const terms = record.terms ?? [];
-    const houseTerms = terms.filter((term) => term.type === "rep");
-    if (houseTerms.length === 0 || !record.name) continue;
-    const latestTerm = houseTerms[houseTerms.length - 1];
+    const congressionalTerms = terms.filter((term) => term.type === "rep" || term.type === "sen");
+    if (congressionalTerms.length === 0 || !record.name) continue;
+    const latestTerm = congressionalTerms[congressionalTerms.length - 1];
     const party = normalizeParty(latestTerm?.party);
     const state = normalizeState(latestTerm?.state);
     const canonicalName = (record.name.official_full ?? buildNameVariants(record.name)[0] ?? "").trim();
@@ -159,6 +175,8 @@ async function backfillPoliticianMetadata() {
   let ambiguous = 0;
   let skippedExisting = 0;
   let noChange = 0;
+  let updatedPartyCount = 0;
+  let updatedStateCount = 0;
 
   console.log(`Politicians loaded: ${housePoliticians.length}`);
 
@@ -177,12 +195,14 @@ async function backfillPoliticianMetadata() {
     }
     matched += 1;
     const match = matches[0];
-    if (!force && politician.party !== null && politician.state !== null) {
+    const shouldSkipParty = !force && politician.party !== null;
+    const shouldSkipState = !force && politician.state !== null;
+    if (shouldSkipParty && shouldSkipState) {
       skippedExisting += 1;
       continue;
     }
-    const nextParty = force ? (match.party ?? politician.party) : (politician.party ?? match.party);
-    const nextState = force ? (match.state ?? politician.state) : (politician.state ?? match.state);
+    const nextParty = force || politician.party === null ? (match.party ?? politician.party) : politician.party;
+    const nextState = force || politician.state === null ? (match.state ?? politician.state) : politician.state;
 
     if (nextParty === politician.party && nextState === politician.state) {
       noChange += 1;
@@ -197,6 +217,8 @@ async function backfillPoliticianMetadata() {
       })
       .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, "house")));
 
+    if (nextParty !== politician.party) updatedPartyCount += 1;
+    if (nextState !== politician.state) updatedStateCount += 1;
     updated += 1;
     console.log(
       `✅ Updated ${politician.fullName}: party ${politician.party ?? "NULL"} -> ${nextParty ?? "NULL"}, state ${politician.state ?? "NULL"} -> ${nextState ?? "NULL"}`
@@ -211,6 +233,8 @@ async function backfillPoliticianMetadata() {
   console.log(`- Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`- Matched (single): ${matched}`);
   console.log(`- Updated: ${updated}`);
+  console.log(`- Updated party count: ${updatedPartyCount}`);
+  console.log(`- Updated state count: ${updatedStateCount}`);
   console.log(`- Skipped existing: ${skippedExisting}`);
   console.log(`- Unchanged: ${noChange}`);
   console.log(`- Ambiguous: ${ambiguous}`);

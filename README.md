@@ -247,4 +247,7 @@ Notes:
 
 - By default, this backfill only fills `party`/`state` when they are currently `NULL`.
 - Use `--force` only when you intentionally want to allow overwriting existing values.
+- Metadata comes from the `unitedstates/congress-legislators` project (CC0), using generated JSON published on `gh-pages`:
+  - `https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json`
+  - `https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-historical.json`
 - Unmatched or ambiguous rows are written to `tmp/unmatched-politician-metadata.json`.
