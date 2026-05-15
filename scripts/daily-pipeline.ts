@@ -33,7 +33,7 @@ async function main() {
 
   runStep("House import (recent years)", "npm", ["run", "house:import", "--", yearsArg]);
   runStep("Price import", "npm", ["run", "prices:import"]);
-  runStep("Performance backfill", "npm", ["run", "performance:backfill"]);
+  runStep("Performance backfill", "npm", ["run", "performance:backfill:daily"]);
   runStep("Politician stats backfill", "npm", ["run", "politicians:backfill"]);
   runStep("Signal recalculation", "npm", ["run", "signals:recalculate"]);
   runStep("Alert backfill", "npm", ["run", "alerts:backfill"]);

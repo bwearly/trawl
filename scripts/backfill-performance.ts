@@ -14,33 +14,120 @@ import {
   startOfUtcDay,
 } from "../lib/domain/pipeline/performance";
 
+type BackfillOptions = {
+  recentDays: number | null;
+  missingOnly: boolean;
+};
+
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 400;
+let retryCount = 0;
+
+const closestPriceCache = new Map<string, Awaited<ReturnType<typeof getClosestPriceOnOrAfter>>>();
+const latestPriceCache = new Map<string, Awaited<ReturnType<typeof getLatestPrice>>>();
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientDbError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(fetch failed|connection|timeout|NeonDbError|DrizzleQueryError)/i.test(message);
+}
+
+async function withRetry<T>(label: string, task: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      return await task();
+    } catch (error) {
+      attempt += 1;
+      if (!isTransientDbError(error) || attempt > MAX_RETRIES) {
+        throw error;
+      }
+
+      retryCount += 1;
+      const delayMs = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[retry] ${label} attempt ${attempt}/${MAX_RETRIES} failed (${message.slice(0, 180)}). Retrying in ${delayMs}ms...`
+      );
+      await sleep(delayMs);
+    }
+  }
+}
+
+function parseOptions(): BackfillOptions {
+  let recentDays: number | null = null;
+  let missingOnly = false;
+
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith("--recent-days=")) {
+      const value = Number.parseInt(arg.split("=")[1] ?? "", 10);
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`Invalid --recent-days value: ${arg}`);
+      }
+      recentDays = value;
+    } else if (arg === "--missing-only") {
+      missingOnly = true;
+    }
+  }
+
+  return { recentDays, missingOnly };
+}
+
+function isWithinRecentWindow(disclosure: typeof disclosures.$inferSelect, recentDays: number, now: Date) {
+  const threshold = startOfUtcDay(addCalendarDays(now, -recentDays));
+  const filing = disclosure.filingDate ? startOfUtcDay(disclosure.filingDate) : null;
+  const trade = disclosure.tradeDate ? startOfUtcDay(disclosure.tradeDate) : null;
+  return (filing != null && filing >= threshold) || (trade != null && trade >= threshold);
+}
+
 async function getClosestPriceOnOrAfter(ticker: string, targetDate: Date) {
   const normalizedTarget = startOfUtcDay(targetDate);
+  const cacheKey = `${ticker}|${normalizedTarget.toISOString()}`;
 
-  const rows = await db
-    .select()
-    .from(priceHistory)
-    .where(
-      and(
-        eq(priceHistory.ticker, ticker),
-        gte(priceHistory.date, normalizedTarget)
+  if (closestPriceCache.has(cacheKey)) {
+    return closestPriceCache.get(cacheKey) ?? null;
+  }
+
+  const rows = await withRetry(`getClosestPriceOnOrAfter(${ticker}, ${normalizedTarget.toISOString()})`, async () =>
+    db
+      .select()
+      .from(priceHistory)
+      .where(
+        and(
+          eq(priceHistory.ticker, ticker),
+          gte(priceHistory.date, normalizedTarget)
+        )
       )
-    )
-    .orderBy(asc(priceHistory.date))
-    .limit(1);
+      .orderBy(asc(priceHistory.date))
+      .limit(1)
+  );
 
-  return rows[0] ?? null;
+  const row = rows[0] ?? null;
+  closestPriceCache.set(cacheKey, row);
+  return row;
 }
 
 async function getLatestPrice(ticker: string) {
-  const rows = await db
-    .select()
-    .from(priceHistory)
-    .where(eq(priceHistory.ticker, ticker))
-    .orderBy(desc(priceHistory.date))
-    .limit(1);
+  if (latestPriceCache.has(ticker)) {
+    return latestPriceCache.get(ticker) ?? null;
+  }
 
-  return rows[0] ?? null;
+  const rows = await withRetry(`getLatestPrice(${ticker})`, async () =>
+    db
+      .select()
+      .from(priceHistory)
+      .where(eq(priceHistory.ticker, ticker))
+      .orderBy(desc(priceHistory.date))
+      .limit(1)
+  );
+
+  const row = rows[0] ?? null;
+  latestPriceCache.set(ticker, row);
+  return row;
 }
 
 async function resolveFuturePrice(
@@ -73,17 +160,54 @@ async function resolveFuturePrice(
 }
 
 async function main() {
+  const options = parseOptions();
+  const now = new Date();
+
   console.log("Backfilling REAL performance with SPY benchmark...");
+  console.log("Options:", options);
 
-  const allDisclosures = await db.select().from(disclosures);
+  const allDisclosures = await withRetry("load disclosures", async () =>
+    db.select().from(disclosures)
+  );
 
-  console.log(`Found ${allDisclosures.length} disclosures.`);
+  const summary = {
+    disclosuresConsidered: 0,
+    skippedMissingTickerOrDate: 0,
+    skippedOutsideRecentWindow: 0,
+    skippedExistingRows: 0,
+    skippedMissingTradePrice: 0,
+    created: 0,
+    updated: 0,
+  };
+
+  let existingIds = new Set<number>();
+  if (options.missingOnly) {
+    const ids = await withRetry("load existing performance ids", async () =>
+      db
+        .select({ disclosureId: disclosurePerformanceWindows.disclosureId })
+        .from(disclosurePerformanceWindows)
+    );
+    existingIds = new Set(ids.map((row) => row.disclosureId));
+  }
 
   for (const disclosure of allDisclosures) {
+    summary.disclosuresConsidered += 1;
+
     if (!disclosure.ticker || !disclosure.filingDate) {
-      console.log(
-        `Skipping disclosure ${disclosure.id} because ticker or filingDate is missing.`
-      );
+      summary.skippedMissingTickerOrDate += 1;
+      continue;
+    }
+
+    if (
+      options.recentDays != null &&
+      !isWithinRecentWindow(disclosure, options.recentDays, now)
+    ) {
+      summary.skippedOutsideRecentWindow += 1;
+      continue;
+    }
+
+    if (options.missingOnly && existingIds.has(disclosure.id)) {
+      summary.skippedExistingRows += 1;
       continue;
     }
 
@@ -94,7 +218,6 @@ async function main() {
 
     const normalizedTicker = disclosure.ticker.trim().toUpperCase();
 
-    // Stock price anchors
     const tradePriceRow = await getClosestPriceOnOrAfter(
       normalizedTicker,
       tradeAnchorDate
@@ -106,9 +229,7 @@ async function main() {
     );
 
     if (!tradePriceRow) {
-      console.log(
-        `Skipping disclosure ${disclosure.id} (${normalizedTicker}) because no trade-date price was found.`
-      );
+      summary.skippedMissingTradePrice += 1;
       continue;
     }
 
@@ -130,7 +251,6 @@ async function main() {
       false
     );
 
-    // SPY price anchors
     const spyTradePriceRow = await getClosestPriceOnOrAfter("SPY", tradeAnchorDate);
 
     const spyFuture7d = await resolveFuturePrice(
@@ -188,12 +308,6 @@ async function main() {
         ? calcReturnPercent(spyTradeDatePrice, Number(spyFuture90d.row.close))
         : null;
 
-    const existing = await db
-      .select()
-      .from(disclosurePerformanceWindows)
-      .where(eq(disclosurePerformanceWindows.disclosureId, disclosure.id))
-      .limit(1);
-
     const payload = {
       ticker: normalizedTicker,
       tradeDatePrice: tradeDatePrice.toFixed(2),
@@ -208,43 +322,40 @@ async function main() {
       updatedAt: new Date(),
     };
 
+    const existing = await withRetry(`check existing performance row for ${disclosure.id}`, async () =>
+      db
+        .select({ disclosureId: disclosurePerformanceWindows.disclosureId })
+        .from(disclosurePerformanceWindows)
+        .where(eq(disclosurePerformanceWindows.disclosureId, disclosure.id))
+        .limit(1)
+    );
+
     if (existing.length > 0) {
-      await db
-        .update(disclosurePerformanceWindows)
-        .set(payload)
-        .where(eq(disclosurePerformanceWindows.disclosureId, disclosure.id));
-
-      console.log(
-        `Updated performance for disclosure ${disclosure.id} (${normalizedTicker})`
+      await withRetry(`update performance row for ${disclosure.id}`, async () =>
+        db
+          .update(disclosurePerformanceWindows)
+          .set(payload)
+          .where(eq(disclosurePerformanceWindows.disclosureId, disclosure.id))
       );
+      summary.updated += 1;
     } else {
-      await db.insert(disclosurePerformanceWindows).values({
-        disclosureId: disclosure.id,
-        ...payload,
-      });
-
-      console.log(
-        `Created performance for disclosure ${disclosure.id} (${normalizedTicker})`
+      await withRetry(`insert performance row for ${disclosure.id}`, async () =>
+        db.insert(disclosurePerformanceWindows).values({
+          disclosureId: disclosure.id,
+          ...payload,
+        })
       );
+      summary.created += 1;
     }
-
-    console.log({
-      disclosureId: disclosure.id,
-      ticker: normalizedTicker,
-      tradeAnchorDate,
-      tradeDatePrice,
-      filingDatePrice,
-      return7d,
-      return30d,
-      return90d,
-      spyTradeDatePrice,
-      spyReturn7d,
-      spyReturn30d,
-      spyReturn90d,
-    });
   }
 
   console.log("Finished REAL performance backfill with SPY benchmark.");
+  console.log("Backfill summary:", {
+    ...summary,
+    retries: retryCount,
+    closestPriceCacheSize: closestPriceCache.size,
+    latestPriceCacheSize: latestPriceCache.size,
+  });
 }
 
 main().catch((err) => {
