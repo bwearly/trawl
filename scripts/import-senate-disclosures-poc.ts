@@ -28,7 +28,6 @@ type ParseFailure = {
 
 const SOURCE_LABEL = "Senate Financial Disclosure" as const;
 const HOME_URL = "https://efdsearch.senate.gov/search/home/";
-const BASE_URL = "https://efdsearch.senate.gov";
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const REQUEST_DELAY_MS = 1250;
@@ -36,6 +35,8 @@ const REQUEST_DELAY_MS = 1250;
 function parseArgs() {
   const args = process.argv.slice(2);
   let limit = DEFAULT_LIMIT;
+  let year: number | null = null;
+  let inputFile: string | null = null;
 
   for (const arg of args) {
     if (arg.startsWith("--limit=")) {
@@ -45,9 +46,21 @@ function parseArgs() {
       }
       limit = Math.min(value, MAX_LIMIT);
     }
+    if (arg.startsWith("--year=")) {
+      const value = Number.parseInt(arg.split("=")[1] ?? "", 10);
+      if (!Number.isFinite(value) || value < 1990 || value > 2100) {
+        throw new Error(`Invalid --year value: ${arg}`);
+      }
+      year = value;
+    }
+    if (arg.startsWith("--input-file=")) {
+      const value = arg.split("=")[1]?.trim();
+      if (!value) throw new Error(`Invalid --input-file value: ${arg}`);
+      inputFile = value;
+    }
   }
 
-  return { limit };
+  return { limit, year, inputFile };
 }
 
 function sleep(ms: number) {
@@ -115,7 +128,7 @@ function discoverReportUrls(html: string, limit: number) {
   while ((match = regex.exec(html)) !== null && links.size < limit) {
     const path = match[1] ?? "";
     if (!path) continue;
-    const absolute = path.startsWith("http") ? path : `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+    const absolute = path.startsWith("http") ? path : new URL(path, HOME_URL).toString();
     links.add(absolute);
   }
 
@@ -190,42 +203,58 @@ async function fetchText(url: string) {
   return response.text();
 }
 
+async function runManualInputMode(inputFile: string, normalized: SenateNormalizedDisclosure[], failures: ParseFailure[]) {
+  const { readFile } = await import("node:fs/promises");
+  const absolutePath = resolve(inputFile);
+  const body = await readFile(absolutePath, "utf8");
+  const stripped = stripTags(body);
+  const parsed = normalizeFromText(`file://${absolutePath}`, stripped);
+  if (parsed.row) normalized.push(parsed.row);
+  else if (parsed.failure) failures.push(parsed.failure);
+  console.log(`Manual input mode used. file=${absolutePath}`);
+}
+
 async function main() {
-  const { limit } = parseArgs();
+  const { limit, year, inputFile } = parseArgs();
   const normalized: SenateNormalizedDisclosure[] = [];
   const failures: ParseFailure[] = [];
 
-  console.log(`Starting Senate PTR POC (read-only). limit=${limit}`);
+  console.log(`Starting Senate PTR POC (read-only). limit=${limit}${year ? ` year=${year}` : ""}`);
   console.log("No DB writes. No schema changes. No pipeline integration.");
+  if (inputFile) {
+    await runManualInputMode(inputFile, normalized, failures);
+  } else {
+    console.log("Network mode used. NOTE: This POC only performs tiny public fetches and does not bypass access controls.");
 
-  let homeHtml = "";
-  try {
-    homeHtml = await fetchText(HOME_URL);
-  } catch (error) {
-    failures.push({ sourceUrl: HOME_URL, reason: "home_fetch_failed", detail: error instanceof Error ? error.message : String(error) });
-  }
-
-  const reportUrls = homeHtml ? discoverReportUrls(homeHtml, limit) : [];
-
-  if (reportUrls.length === 0) {
-    failures.push({
-      sourceUrl: HOME_URL,
-      reason: "no_report_links_discovered",
-      detail: "Likely due to eFD access gating/terms flow or changed page structure.",
-    });
-  }
-
-  for (const url of reportUrls) {
+    let homeHtml = "";
     try {
-      await sleep(REQUEST_DELAY_MS);
-      const html = await fetchText(url);
-      const text = stripTags(html);
-      const parsed = normalizeFromText(url, text);
-
-      if (parsed.row) normalized.push(parsed.row);
-      else if (parsed.failure) failures.push(parsed.failure);
+      homeHtml = await fetchText(HOME_URL);
     } catch (error) {
-      failures.push({ sourceUrl: url, reason: "report_fetch_or_parse_failed", detail: error instanceof Error ? error.message : String(error) });
+      failures.push({ sourceUrl: HOME_URL, reason: "home_fetch_failed", detail: error instanceof Error ? error.message : String(error) });
+    }
+
+    const reportUrls = homeHtml ? discoverReportUrls(homeHtml, limit) : [];
+
+    if (reportUrls.length === 0) {
+      failures.push({
+        sourceUrl: HOME_URL,
+        reason: "no_report_links_discovered",
+        detail: "Likely due to eFD access gating/terms flow or changed page structure.",
+      });
+    }
+
+    for (const url of reportUrls) {
+      try {
+        await sleep(REQUEST_DELAY_MS);
+        const html = await fetchText(url);
+        const text = stripTags(html);
+        const parsed = normalizeFromText(url, text);
+
+        if (parsed.row) normalized.push(parsed.row);
+        else if (parsed.failure) failures.push(parsed.failure);
+      } catch (error) {
+        failures.push({ sourceUrl: url, reason: "report_fetch_or_parse_failed", detail: error instanceof Error ? error.message : String(error) });
+      }
     }
   }
 
@@ -237,6 +266,10 @@ async function main() {
   console.log(JSON.stringify(normalized, null, 2));
 
   console.log(`\nDone. normalized=${normalized.length} failures=${failures.length}`);
+  console.log(`Records attempted=${inputFile ? 1 : limit}`);
+  if (!inputFile && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {
+    console.log("Access limitation note: Senate eFD appears to require additional interactive/session flow not captured by direct fetch in this environment.");
+  }
   console.log("Wrote tmp/senate-poc-normalized.json and tmp/senate-poc-failures.json");
 }
 
