@@ -53,6 +53,8 @@ type YearFetchResult = {
   xmlPreview: string | null;
 };
 
+type ImportMode = "manual" | "daily";
+
 type NormalizedDisclosure = {
   politicianName: string;
   party: string | null;
@@ -1253,11 +1255,46 @@ function scoreFileContent(content: string): number {
 
 async function fetchYearRows(year: number): Promise<YearFetchResult> {
   const url = `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/${year}FD.zip`;
+  const maxAttempts = 3;
+  const downloadHeaders = {
+    "User-Agent":
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    Accept: "application/zip,application/octet-stream,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: "https://disclosures-clerk.house.gov/",
+    Connection: "keep-alive",
+  };
   console.log(`📥 Downloading ${url}`);
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
+  let response: Response | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      response = await fetch(url, { headers: downloadHeaders });
+      if (response.ok) {
+        break;
+      }
+
+      console.warn(
+        `⚠️ House zip download failed year=${year} url=${url} status=${response.status} attempt=${attempt}/${maxAttempts}`
+      );
+    } catch (error) {
+      console.warn(
+        `⚠️ House zip download error year=${year} url=${url} attempt=${attempt}/${maxAttempts}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    if (attempt < maxAttempts) {
+      const backoffMs = 500 * 2 ** (attempt - 1);
+      console.log(`⏳ Retrying year=${year} in ${backoffMs}ms (attempt ${attempt + 1}/${maxAttempts})`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  if (!response || !response.ok) {
+    const status = response ? `${response.status} ${response.statusText}` : "no response";
+    throw new Error(`Failed to download ${url} after ${maxAttempts} attempts: ${status}`);
   }
 
   const tempDir = await mkdtemp(join(tmpdir(), "trawl-house-"));
@@ -1903,12 +1940,17 @@ async function main() {
   const years = parseYearsArg();
   const shouldResetBeforeImport = process.env.RESET_HOUSE_IMPORT === "true";
   const shouldCleanupDuplicates = process.argv.slice(2).includes("--cleanup-duplicates");
+  const continueOnYearFailure =
+    process.argv.slice(2).includes("--continue-on-year-failure") ||
+    process.argv.slice(2).includes("--daily-mode");
+  const mode: ImportMode = continueOnYearFailure ? "daily" : "manual";
 
   if (years.length === 0) {
     throw new Error("No valid years provided. Use --years=2026 or similar.");
   }
 
   console.log(`🏛️ House import started for year(s): ${years.join(", ")}`);
+  console.log(`🧭 Import mode: ${mode}`);
   console.log(`🧪 RESET_HOUSE_IMPORT=${shouldResetBeforeImport ? "enabled" : "disabled"}`);
 
   if (shouldResetBeforeImport) {
@@ -1931,9 +1973,27 @@ async function main() {
   let rejectedRows = 0;
   let ptrTextStructureDebugLogged = 0;
   const ptrCandidateCountByPdf: Array<{ year: number; docId: string; count: number }> = [];
+  const yearsAttempted: number[] = [];
+  const yearsSucceeded: number[] = [];
+  const yearsFailed: number[] = [];
 
   for (const year of years) {
-    const fetchResult = await fetchYearRows(year);
+    yearsAttempted.push(year);
+    let fetchResult: YearFetchResult;
+    try {
+      fetchResult = await fetchYearRows(year);
+    } catch (error) {
+      yearsFailed.push(year);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Failed to fetch House archive for year=${year}: ${message}`);
+      if (!continueOnYearFailure) {
+        throw error;
+      }
+      console.warn(`⚠️ Continuing import after year failure because mode=${mode} year=${year}`);
+      continue;
+    }
+    yearsSucceeded.push(year);
+
     const sourceRows = fetchResult.rows;
     console.log(`📄 ${year}: parsed ${sourceRows.length} source rows.`);
     console.log(`🧭 ${year}: ZIP entries discovered (${fetchResult.zipEntries.length}):`);
@@ -2156,6 +2216,12 @@ async function main() {
     }
   }
 
+  if (yearsSucceeded.length === 0) {
+    throw new Error(
+      `All requested years failed to fetch in mode=${mode}. attempted=${yearsAttempted.join(", ")} failed=${yearsFailed.join(", ")}`
+    );
+  }
+
   for (const row of normalizedRows) {
     tickerResolutionCounts.set(
       row.tickerResolutionSource,
@@ -2255,6 +2321,17 @@ async function main() {
   console.log(`   - row parsing: parsed_transaction_rows=${parsedTransactionRows}`);
   console.log(`   - validation rejection: ${totalRejectedByValidationAndDuplicate - (stats.rejectionReasons.get("duplicate") ?? 0)}`);
   console.log(`   - duplicate skipping: ${stats.rejectionReasons.get("duplicate") ?? 0}`);
+  console.log("🧾 House year import summary:");
+  console.log(`   - years attempted: ${yearsAttempted.join(", ")}`);
+  console.log(`   - years succeeded: ${yearsSucceeded.length > 0 ? yearsSucceeded.join(", ") : "(none)"}`);
+  console.log(`   - years failed: ${yearsFailed.length > 0 ? yearsFailed.join(", ") : "(none)"}`);
+  console.log(`   - rows processed: ${normalizedRows.length}`);
+  console.log(`   - rows imported (inserted + updated): ${stats.inserted + stats.updated}`);
+  if (yearsFailed.length > 0 && continueOnYearFailure) {
+    console.warn(
+      `⚠️ House import completed with partial year failures in mode=${mode}. failed_years=${yearsFailed.join(", ")}`
+    );
+  }
 
   console.log(
     `✅ Import done. Inserted ${stats.inserted}, updated ${stats.updated}, skipped unchanged ${stats.skippedUnchanged}.`
