@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Politician Performance | Trawl",
+  title: "Politician Disclosure Analytics | Trawl",
   description:
     "Compare politicians by historical post-disclosure alpha, win rate, and activity to prioritize further research.",
 };
@@ -65,6 +65,9 @@ export default async function PoliticiansLeaderboardPage() {
               Alpha = return relative to SPY. Win rate = share of disclosures with
               positive alpha.
             </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Trawl surfaces public disclosure activity for research. It does not recommend buying or selling securities.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -84,7 +87,7 @@ export default async function PoliticiansLeaderboardPage() {
                 Historical outperformance
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Use this table to spot consistent outperformers before opening detail views.
+                Use this table to review consistent historical patterns before opening detail views.
               </p>
             </div>
 
@@ -148,7 +151,7 @@ export default async function PoliticiansLeaderboardPage() {
                         {row.totalDisclosures}
                       </div>
                       <div className="mt-1 text-xs text-gray-500">
-                        Buy: {row.purchaseCount} · Sell: {row.saleCount}
+                        Purchases: {row.purchaseCount} · Sales: {row.saleCount}
                       </div>
                     </td>
 

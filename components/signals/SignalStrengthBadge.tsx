@@ -8,10 +8,10 @@ export default function SignalStrengthBadge({ tier }: SignalStrengthBadgeProps) 
   if (!tier) return null;
 
   const isHighConviction = tier === "high_conviction";
-  const label = isHighConviction ? "High Conviction" : "Alert Eligible";
+  const label = isHighConviction ? "High Conviction" : "Notification Eligible";
   const helperText = isHighConviction
-    ? "High-conviction research signal with strong recency and score."
-    : "Alert eligible means this signal is recent and actionable enough for alerts.";
+    ? "Higher-ranked research signal with strong recency and score context."
+    : "Notification eligible means this signal is recent enough for watchlist research notifications.";
 
   return (
     <span

@@ -13,7 +13,7 @@ import { getWatchedTickers } from "@/lib/domain/watchlists/watchlists";
 export const metadata: Metadata = {
   title: "Research Signals | Trawl",
   description:
-    "Browse ranked congressional trade research signals, filter by freshness and score, and review actionable filing context.",
+    "Browse ranked congressional trade research signals, filter by freshness and score, and review filing context for public-disclosure research.",
 };
 
 type SearchParams = {
@@ -68,6 +68,9 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             <p className="mt-2 text-sm text-gray-600">
               Scores rank research priority from congressional filings. They are
               not investment advice.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Disclosure data may be delayed, incomplete, amended, or unavailable. Users should verify filings from the original source.
             </p>
           </div>
 

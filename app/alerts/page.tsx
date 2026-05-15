@@ -90,8 +90,7 @@ export default async function AlertsPage() {
               Alerts
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Research notifications are generated from your watched tickers and politicians,
-              based on your alert preferences.
+              Research notifications are based on your watchlist and preferences. They are not trading recommendations.
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.
