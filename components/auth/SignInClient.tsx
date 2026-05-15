@@ -50,7 +50,7 @@ function SignInContent({ productionReadiness }: { productionReadiness: Productio
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Authentication</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to Trawl</h1>
-          <p className="mt-3 text-sm text-gray-600">Sign in to save watchlists and receive alerts.</p>
+          <p className="mt-3 text-sm text-gray-600">Sign in to save watchlists and receive research notifications.</p>
 
           {isProduction ? (
             isGoogleSignInEnabled ? (

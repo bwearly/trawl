@@ -55,7 +55,7 @@ export default function WatchlistContent({
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-gray-600">
             Save politicians and tickers to quickly revisit names you care about
-            and get alert updates when new matching signals appear.
+            and get research notification updates when new matching signals appear.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2.5">
