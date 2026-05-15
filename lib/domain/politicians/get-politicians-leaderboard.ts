@@ -5,12 +5,21 @@ import {
   politicianStats,
   politicians
 } from "@/lib/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 
 function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+const ACTIVE_LOOKBACK_DAYS = 365;
+const MIN_LEADERBOARD_DISCLOSURES = 3;
+
+function getActiveLeaderboardCutoffDate() {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - ACTIVE_LOOKBACK_DAYS);
+  return cutoff;
 }
 
 export type PoliticianLeaderboardRow = {
@@ -31,6 +40,8 @@ export type PoliticianLeaderboardRow = {
 export async function getPoliticianLeaderboard(): Promise<
   PoliticianLeaderboardRow[]
 > {
+  const activeCutoffDate = getActiveLeaderboardCutoffDate();
+
   const rows = await db
     .select({
       id: politicians.id,
@@ -48,6 +59,12 @@ export async function getPoliticianLeaderboard(): Promise<
     })
     .from(politicians)
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
+    .where(
+      and(
+        gte(politicianStats.lastTradeDate, activeCutoffDate),
+        gte(politicianStats.totalDisclosures, MIN_LEADERBOARD_DISCLOSURES)
+      )
+    )
     .orderBy(
       desc(sql`COALESCE(${politicianStats.avgAlpha30d}, -999999)`),
       desc(sql`COALESCE(${politicianStats.winRate30d}, -999999)`),
@@ -90,6 +107,7 @@ export async function getPoliticianLeaderboard(): Promise<
         disclosurePerformanceWindows,
         eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
       )
+      .where(gte(disclosures.tradeDate, activeCutoffDate))
       .groupBy(
         politicians.id,
         politicians.fullName,
@@ -97,7 +115,27 @@ export async function getPoliticianLeaderboard(): Promise<
         politicians.party,
         politicians.state
       )
-      .orderBy(desc(sql`count(${disclosures.id})`), politicians.fullName);
+      .having(sql`count(${disclosures.id}) >= ${MIN_LEADERBOARD_DISCLOSURES}`)
+      .orderBy(
+        desc(sql`COALESCE(round(avg(case
+          when ${disclosurePerformanceWindows.return30d} is not null
+            and ${disclosurePerformanceWindows.spyReturn30d} is not null
+          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
+          else null
+        end), 2), -999999)`),
+        desc(sql`COALESCE(round(100.0 * avg(case
+          when ${disclosurePerformanceWindows.return30d} is not null
+            and ${disclosurePerformanceWindows.spyReturn30d} is not null
+          then case
+            when (${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}) > 0 then 1.0
+            else 0.0
+          end
+          else null
+        end), 2), -999999)`),
+        desc(sql`count(${disclosures.id})`),
+        desc(sql`max(${disclosures.tradeDate})`),
+        politicians.fullName
+      );
 
     return fallbackRows.map((row) => ({
       id: row.id,
