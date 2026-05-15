@@ -7,6 +7,9 @@ import {
 } from "@/lib/db/schema";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 
+export const ACTIVE_LEADERBOARD_LOOKBACK_DAYS = 365;
+export const ACTIVE_LEADERBOARD_MIN_DISCLOSURES = 3;
+
 function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const n = Number(value);
@@ -40,7 +43,14 @@ export type PoliticianLeaderboardRow = {
 export async function getPoliticianLeaderboard(): Promise<
   PoliticianLeaderboardRow[]
 > {
-  const activeCutoffDate = getActiveLeaderboardCutoffDate();
+  const activeFilter = sql`(
+    select count(*)
+    from ${disclosures} as d_recent
+    where d_recent.politician_id = ${politicians.id}
+      and coalesce(d_recent.filing_date, d_recent.trade_date) >= now() - interval '${sql.raw(
+        `${ACTIVE_LEADERBOARD_LOOKBACK_DAYS} days`
+      )}'
+  ) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`;
 
   const rows = await db
     .select({
@@ -59,12 +69,7 @@ export async function getPoliticianLeaderboard(): Promise<
     })
     .from(politicians)
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
-    .where(
-      and(
-        gte(politicianStats.lastTradeDate, activeCutoffDate),
-        gte(politicianStats.totalDisclosures, MIN_LEADERBOARD_DISCLOSURES)
-      )
-    )
+    .where(activeFilter)
     .orderBy(
       desc(sql`COALESCE(${politicianStats.avgAlpha30d}, -999999)`),
       desc(sql`COALESCE(${politicianStats.winRate30d}, -999999)`),
@@ -107,7 +112,7 @@ export async function getPoliticianLeaderboard(): Promise<
         disclosurePerformanceWindows,
         eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
       )
-      .where(gte(disclosures.tradeDate, activeCutoffDate))
+      .where(activeFilter)
       .groupBy(
         politicians.id,
         politicians.fullName,

@@ -1,4 +1,8 @@
-import { getPoliticianLeaderboard } from "@/lib/domain/politicians/get-politicians-leaderboard";
+import {
+  ACTIVE_LEADERBOARD_LOOKBACK_DAYS,
+  ACTIVE_LEADERBOARD_MIN_DISCLOSURES,
+  getPoliticianLeaderboard,
+} from "@/lib/domain/politicians/get-politicians-leaderboard";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -52,14 +56,19 @@ export default async function PoliticiansLeaderboardPage() {
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-medium text-gray-500">
-              Ranked politician analytics
+              Active disclosure analytics
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
-              Politician Leaderboard
+              Active politician research leaderboard
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Compare how disclosed trades have historically performed after filing.
-              Rankings prioritize 30-day alpha, then win rate, then total sample size.
+              Compare recent disclosure activity with historical post-filing outcomes for research prioritization.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Showing politicians with at least {ACTIVE_LEADERBOARD_MIN_DISCLOSURES} disclosures in the last 12 months.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Active window uses a {ACTIVE_LEADERBOARD_LOOKBACK_DAYS}-day lookback on filing/trade dates.
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Alpha = return relative to SPY. Win rate = share of disclosures with
@@ -83,13 +92,13 @@ export default async function PoliticiansLeaderboardPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                Historical outperformance
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Use this table to review consistent historical patterns before opening detail views.
-              </p>
-            </div>
+                <h2 className="text-xl font-semibold tracking-tight text-gray-950">
+                  Active disclosure leaderboard
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Rankings prioritize 30-day alpha, then win rate, then total sample size across currently active disclosure profiles.
+                </p>
+              </div>
 
             <div className="text-sm text-gray-500">
               {rows.length} politician{rows.length === 1 ? "" : "s"}

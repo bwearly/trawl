@@ -79,6 +79,11 @@ function getTradeTypeClasses(tradeType: string | null | undefined) {
   return "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200";
 }
 
+function toTimestamp(value: Date | null | undefined) {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  return new Date(value).getTime();
+}
+
 export default async function PoliticianDetailPage({ params }: PageProps) {
   const identity = await getPersonalizedUserIdentity();
   const { id } = await params;
@@ -99,6 +104,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
   const avgAlpha30d = formatPercent(data.stats.avgAlpha30d);
+  const sortedDisclosures = [...data.recentDisclosures].sort((a, b) => {
+    const filingDiff = toTimestamp(b.filingDate) - toTimestamp(a.filingDate);
+    if (filingDiff !== 0) return filingDiff;
+    const tradeDiff = toTimestamp(b.tradeDate) - toTimestamp(a.tradeDate);
+    if (tradeDiff !== 0) return tradeDiff;
+    return b.id - a.id;
+  });
+  const recentSignals = sortedDisclosures.slice(0, 6);
+  const historicalSignals = sortedDisclosures.slice(6);
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -134,6 +148,9 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               <p className="mt-2 text-sm text-gray-600">
                 Historical outcomes for this politician&apos;s disclosed trades.
                 Use these metrics as context, not investment advice.
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Trawl surfaces public disclosure activity for research. It does not recommend buying or selling securities.
               </p>
 
               <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-gray-950 sm:text-4xl">
@@ -222,10 +239,10 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                  Recent disclosures
+                  Recent research signals
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Latest trades with signal score and 30-day alpha vs SPY.
+                  Recent signals are shown first so older historical outliers do not dominate the profile.
                 </p>
               </div>
             </div>
@@ -243,7 +260,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 </tr>
               </thead>
                 <tbody>
-                  {data.recentDisclosures.map((row) => (
+                  {recentSignals.map((row) => (
                     <tr
                       key={row.id}
                       className="border-b border-gray-100 last:border-b-0"
@@ -301,7 +318,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                     </tr>
                   ))}
 
-                  {data.recentDisclosures.length === 0 && (
+                  {recentSignals.length === 0 && (
                     <tr>
                       <td
                         colSpan={6}
@@ -364,6 +381,76 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               benchmark-relative outperformance using your current signal and
               performance data.
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-gray-950">
+                Historical disclosure context
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Older disclosures remain available below for transparency and deeper research context.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-gray-500">
+                <tr className="border-b border-gray-200">
+                  <th className="px-4 py-3 font-medium">Ticker</th>
+                  <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Trade type</th>
+                  <th className="px-4 py-3 font-medium">Trade date</th>
+                  <th className="px-4 py-3 font-medium">Score</th>
+                  <th className="px-4 py-3 font-medium">30d alpha vs SPY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historicalSignals.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-4 py-4">
+                      {row.ticker ? (
+                        <Link
+                          href={`/tickers/${row.ticker}`}
+                          className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-200"
+                        >
+                          {row.ticker}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">Not available</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-gray-700">
+                      <span className="block max-w-[18rem] truncate" title={row.assetName}>
+                        {row.assetName}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(row.tradeType)}`}>
+                        {row.tradeType ?? "unknown"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-gray-700">{formatDate(row.tradeDate)}</td>
+                    <td className="px-4 py-4">
+                      {row.score !== null ? <span className="font-semibold text-gray-900">{row.score}</span> : <span className="text-gray-400">Not scored yet</span>}
+                    </td>
+                    <td className={`px-4 py-4 font-semibold ${toneToClass(getPerformanceTone(row.alpha30d))}`}>
+                      {formatPercent(row.alpha30d)}
+                    </td>
+                  </tr>
+                ))}
+                {historicalSignals.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">
+                      No older disclosures in this view yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
