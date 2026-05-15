@@ -31,7 +31,13 @@ async function main() {
 
   console.log(`Starting daily pipeline for filing years: ${years.join(", ")}`);
 
-  runStep("House import (recent years)", "npm", ["run", "house:import", "--", yearsArg]);
+  runStep("House import (recent years)", "npm", [
+    "run",
+    "house:import",
+    "--",
+    yearsArg,
+    "--daily-mode",
+  ]);
   runStep("Price import", "npm", ["run", "prices:import"]);
   runStep("Performance backfill", "npm", ["run", "performance:backfill:daily"]);
   runStep("Politician stats backfill", "npm", ["run", "politicians:backfill"]);
