@@ -7,7 +7,7 @@ import { getRecentlyFiled } from "@/lib/domain/signals/get-recently-filed";
 import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
 
 export const metadata: Metadata = {
-  title: "Trawl — Congressional Trade Signals",
+  title: "Trawl — Public Disclosure Research",
   description:
     "Track congressional trade disclosures, review ranked activity, validate performance, and stay on top of watchlists and research notifications.",
 };
@@ -219,6 +219,7 @@ export default async function Home() {
 
       <section className="relative bg-gradient-to-br from-blue-50 via-white to-emerald-50 px-6 py-16 text-gray-950 sm:py-20">
         <p className="mx-auto mb-6 max-w-6xl text-xs font-medium text-gray-600">Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.</p>
+        <p className="mx-auto mb-6 max-w-6xl text-xs text-gray-500">Disclosure data may be delayed, incomplete, amended, or unavailable. Users should verify filings from the original source.</p>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.14),transparent_26%)]" />
         <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
@@ -227,12 +228,12 @@ export default async function Home() {
             </p>
 
             <h1 className="mt-6 text-5xl font-bold tracking-tight text-gray-950 sm:text-6xl">
-              A trading-style dashboard for congressional stock activity.
+              A transparency dashboard for congressional disclosure activity.
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600">
-              Watch disclosures hit the tape, compare trades against SPY, and
-              turn filings into a daily research workflow you can actually scan.
+              Review public filings, compare historical context against SPY, and
+              turn disclosure activity into a daily research workflow.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -240,14 +241,14 @@ export default async function Home() {
                 href="/signals"
                 className="rounded-xl bg-gray-950 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-black"
               >
-                Open signal desk
+                Open research feed
               </Link>
 
               <Link
                 href="/politicians"
                 className="rounded-xl border border-gray-300 bg-white/70 px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-white"
               >
-                View leaderboard
+                View analytics
               </Link>
 
               <Link
@@ -272,7 +273,7 @@ export default async function Home() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
               Step 1
             </p>
-            <h3 className="mt-2 text-lg font-bold text-gray-950">Scan the tape</h3>
+            <h3 className="mt-2 text-lg font-bold text-gray-950">Scan disclosure activity</h3>
             <p className="mt-2 text-sm leading-6 text-gray-600">
               Start with ranked research signals and sort by score, filing date,
               freshness, or ticker.
@@ -316,7 +317,7 @@ export default async function Home() {
                 Research feed
               </p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-                Three ways to read the market
+                Three ways to review disclosure activity
               </h2>
             </div>
             <Link
@@ -342,7 +343,7 @@ export default async function Home() {
                 <div key={signal.signalId}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200">
-                      Top Pick
+                      Top ranked
                     </span>
                     <span className="text-xs font-medium text-gray-500">
                       #{index + 1}
@@ -373,20 +374,20 @@ export default async function Home() {
 
           <SectionShell
             eyebrow="Validation"
-            title="Outperformers vs SPY"
-            description="Historical follow-through where trade-linked moves beat the market benchmark."
+            title="Historical context vs SPY"
+            description="Historical context showing how trade-linked moves compared with a market benchmark."
             href="/signals"
             linkLabel="Compare signals"
             accent="emerald"
           >
             {biggestOutperformers.length === 0 ? (
-              <SignalEmptyState label="No outperformers with SPY comparison data yet." />
+              <SignalEmptyState label="No historical SPY comparison data available yet." />
             ) : (
               biggestOutperformers.map((signal, index) => (
                 <div key={signal.signalId}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                      Outperformer
+                      Historical context
                     </span>
                     <span className="text-xs font-medium text-gray-500">
                       #{index + 1} · {signal.chosenAlphaWindow} alpha{" "}
