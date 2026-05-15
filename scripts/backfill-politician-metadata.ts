@@ -51,6 +51,16 @@ const NAME_ALIASES: Record<string, string> = {
   "CAROL DEVINE MILLER": "CAROL D MILLER",
   "PETER ALLEN STAUBER": "PETE STAUBER",
   "ELIZABETH FLETCHER": "LIZZIE FLETCHER",
+  "RICHARD W ALLEN": "RICK W ALLEN",
+  "ROB BRESNAHAN": "ROBERT P BRESNAHAN",
+  "SCOTT SCOTT FRANKLIN": "C SCOTT FRANKLIN",
+  "MICHAEL PATRICK GUEST": "MICHAEL GUEST",
+  "JOHN MCGUIRE": "JOHN J MCGUIRE",
+  "GREG STEUBE": "W GREGORY STEUBE",
+  "MARK GREEN": "MARK E GREEN",
+  "MICHAEL A COLLINS": "MIKE COLLINS",
+  "RUDY C YAKYM": "RUDY YAKYM",
+  "LLOYD K SMUCKER": "LLOYD SMUCKER",
 };
 
 const CURRENT_LEGISLATORS_URL =
@@ -89,12 +99,15 @@ function normalizeName(raw: string): string {
     .toUpperCase();
 }
 
-function getMatchesForPoliticianName(metadataIndex: Map<string, MetadataMatch[]>, fullName: string): MetadataMatch[] {
+function getMatchesForPoliticianName(
+  metadataIndex: Map<string, MetadataMatch[]>,
+  fullName: string
+): { matches: MetadataMatch[]; matchedByAlias: boolean } {
   const normalized = normalizeName(fullName);
   const aliasTarget = NAME_ALIASES[normalized];
   const keys = aliasTarget ? [normalized, aliasTarget] : [normalized];
   const all = keys.flatMap((key) => metadataIndex.get(key) ?? []);
-  return dedupeMatches(all);
+  return { matches: dedupeMatches(all), matchedByAlias: Boolean(aliasTarget) };
 }
 
 function buildNameVariants(name: LegislatorName): string[] {
@@ -193,26 +206,29 @@ async function backfillPoliticianMetadata() {
   const unmatched: Array<{ id: number; fullName: string; reason: string; candidates?: MetadataMatch[] }> = [];
   let updated = 0;
   let matched = 0;
-  let ambiguous = 0;
   let skippedExisting = 0;
   let noChange = 0;
   let updatedPartyCount = 0;
   let updatedStateCount = 0;
+  let matchedByAliasCount = 0;
+  let matchedByStateDisambiguationCount = 0;
 
   console.log(`Politicians loaded: ${housePoliticians.length}`);
 
   for (const politician of housePoliticians) {
-    const matches = getMatchesForPoliticianName(metadataIndex, politician.fullName);
+    const { matches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
+    if (matchedByAlias) matchedByAliasCount += 1;
     if (matches.length > 1) {
       const politicianState = normalizeState(politician.state);
       const stateScopedMatches = politicianState
         ? matches.filter((candidate) => normalizeState(candidate.state) === politicianState)
         : [];
       if (stateScopedMatches.length === 1) {
+        matchedByStateDisambiguationCount += 1;
         matched += 1;
         const match = stateScopedMatches[0];
         const shouldSkipParty = !force && politician.party !== null;
@@ -245,7 +261,6 @@ async function backfillPoliticianMetadata() {
         );
         continue;
       }
-      ambiguous += 1;
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "ambiguous_match", candidates: matches });
       console.log(`⚠️ Ambiguous metadata match for "${politician.fullName}" (${matches.length} candidates).`);
       continue;
@@ -284,6 +299,8 @@ async function backfillPoliticianMetadata() {
 
   await mkdir("tmp", { recursive: true });
   await writeFile("tmp/unmatched-politician-metadata.json", JSON.stringify(unmatched, null, 2), "utf8");
+  const unmatchedNoMatchCount = unmatched.filter((entry) => entry.reason === "no_match").length;
+  const unmatchedAmbiguousCount = unmatched.filter((entry) => entry.reason === "ambiguous_match").length;
 
   console.log("Backfill complete.");
   console.log(`- House politicians scanned: ${housePoliticians.length}`);
@@ -292,9 +309,12 @@ async function backfillPoliticianMetadata() {
   console.log(`- Updated: ${updated}`);
   console.log(`- Updated party count: ${updatedPartyCount}`);
   console.log(`- Updated state count: ${updatedStateCount}`);
+  console.log(`- Matched by alias: ${matchedByAliasCount}`);
+  console.log(`- Matched by state disambiguation: ${matchedByStateDisambiguationCount}`);
   console.log(`- Skipped existing: ${skippedExisting}`);
   console.log(`- Unchanged: ${noChange}`);
-  console.log(`- Ambiguous: ${ambiguous}`);
+  console.log(`- Remaining unmatched: ${unmatchedNoMatchCount}`);
+  console.log(`- Remaining ambiguous: ${unmatchedAmbiguousCount}`);
   console.log(`- Unmatched total: ${unmatched.length}`);
   console.log(`- Unmatched output: tmp/unmatched-politician-metadata.json`);
 }
