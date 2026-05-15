@@ -46,9 +46,9 @@ export async function getTopPicks(limit = 6) {
       )
     )
     .orderBy(
-      desc(researchSignals.score),
       desc(disclosures.filingDate),
-      desc(researchSignals.signalDate)
+      desc(researchSignals.signalDate),
+      desc(researchSignals.score)
     )
     .limit(limit);
 }

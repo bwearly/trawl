@@ -457,8 +457,9 @@ export default function SignalFilters({
               disabled={isLoading}
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
             >
+              <option value="current">Recent research (default)</option>
               <option value="score">Highest score</option>
-              <option value="newest">Newest signal</option>
+              <option value="newest">Newest filing</option>
               <option value="filingLagAsc">Filing lag: shortest</option>
               <option value="filingLagDesc">Filing lag: longest</option>
               <option value="freshness">Freshness (fresh → stale)</option>

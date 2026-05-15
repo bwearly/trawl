@@ -330,8 +330,8 @@ export default async function Home() {
 
           <SectionShell
             eyebrow="Top signals"
-            title="Top Research Signals"
-            description="The highest-ranked current research signals, ready for quick review."
+            title="Current Research Signals"
+            description="Recent disclosures are prioritized first, then score, so current research leads this view."
             href="/signals"
             linkLabel="Open desk"
             accent="blue"
@@ -343,7 +343,7 @@ export default async function Home() {
                 <div key={signal.signalId}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200">
-                      Top ranked
+                      Current research
                     </span>
                     <span className="text-xs font-medium text-gray-500">
                       #{index + 1}
