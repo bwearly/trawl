@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import {
+  disclosures,
   politicianStats,
   politicians
 } from "@/lib/db/schema";
@@ -52,6 +53,49 @@ export async function getPoliticianLeaderboard(): Promise<
       desc(politicianStats.totalDisclosures),
       politicians.fullName
     );
+
+  if (rows.length === 0) {
+    const fallbackRows = await db
+      .select({
+        id: politicians.id,
+        fullName: politicians.fullName,
+        chamber: politicians.chamber,
+        party: politicians.party,
+        state: politicians.state,
+        totalDisclosures: sql<number>`count(${disclosures.id})`,
+        purchaseCount: sql<number>`sum(case when ${disclosures.tradeType} = 'purchase' then 1 else 0 end)`,
+        saleCount: sql<number>`sum(case when ${disclosures.tradeType} = 'sale' then 1 else 0 end)`,
+        avgAlpha30d: sql<null>`null`,
+        winRate30d: sql<null>`null`,
+        avgFilingLagDays: sql<number | null>`avg(${disclosures.filingLagDays})`,
+        lastTradeDate: sql<Date | null>`max(${disclosures.tradeDate})`,
+      })
+      .from(politicians)
+      .innerJoin(disclosures, eq(disclosures.politicianId, politicians.id))
+      .groupBy(
+        politicians.id,
+        politicians.fullName,
+        politicians.chamber,
+        politicians.party,
+        politicians.state
+      )
+      .orderBy(desc(sql`count(${disclosures.id})`), politicians.fullName);
+
+    return fallbackRows.map((row) => ({
+      id: row.id,
+      fullName: row.fullName,
+      chamber: row.chamber,
+      party: row.party,
+      state: row.state,
+      totalDisclosures: row.totalDisclosures,
+      purchaseCount: row.purchaseCount,
+      saleCount: row.saleCount,
+      avgAlpha30d: null,
+      winRate30d: null,
+      avgFilingLagDays: toNumber(row.avgFilingLagDays),
+      lastTradeDate: row.lastTradeDate,
+    }));
+  }
 
   return rows.map((row) => ({
     id: row.id,

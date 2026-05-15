@@ -159,16 +159,22 @@ This repository now includes a **notification queue foundation** for alert email
 - Delivery monitoring and failure handling policy.
 
 
-## Production Auth.js configuration
+## Production Auth.js configuration checklist
 
-Set these environment variables for production deployments:
+Required environment variable names for production launch:
 
 - `AUTH_SECRET`
+- `AUTH_URL`
+- `NEXTAUTH_URL`
+- `AUTH_TRUST_HOST`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `AUTH_URL` (or `NEXTAUTH_URL`) if your hosting/runtime does not automatically provide canonical URL detection
-- `AUTH_TRUST_HOST=true` when required by your proxy/platform setup
-- `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` to show the Google sign-in button on `/signin`
+- `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`
+
+Notes:
+
+- Do not store secret values in source control.
+- `/signin` now shows a non-secret readiness checklist when production auth config is incomplete.
 
 Google OAuth redirect URL for Vercel production:
 

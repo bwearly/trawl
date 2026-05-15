@@ -52,6 +52,8 @@ export default function SignalFilters({
   const [party, setParty] = useState(initialFilters.party);
   const [ticker, setTicker] = useState(initialFilters.ticker);
   const [politician, setPolitician] = useState(initialFilters.politician);
+  const [draftTicker, setDraftTicker] = useState(initialFilters.ticker);
+  const [draftPolitician, setDraftPolitician] = useState(initialFilters.politician);
   const [freshness, setFreshness] = useState(initialFilters.freshness);
   const [sort, setSort] = useState(initialFilters.sort);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,6 +70,11 @@ export default function SignalFilters({
 
   const hasMounted = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
+
+  function applyTextFilters() {
+    setTicker(draftTicker.trim());
+    setPolitician(draftPolitician.trim());
+  }
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -337,8 +344,13 @@ export default function SignalFilters({
               Ticker contains
             </span>
             <input
-              value={ticker}
-              onChange={(event) => setTicker(event.target.value)}
+              value={draftTicker}
+              onChange={(event) => setDraftTicker(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  applyTextFilters();
+                }
+              }}
               disabled={isLoading}
               placeholder="e.g. NVDA"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
@@ -350,8 +362,13 @@ export default function SignalFilters({
               Politician contains
             </span>
             <input
-              value={politician}
-              onChange={(event) => setPolitician(event.target.value)}
+              value={draftPolitician}
+              onChange={(event) => setDraftPolitician(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  applyTextFilters();
+                }
+              }}
               disabled={isLoading}
               placeholder="e.g. Pelosi"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
@@ -415,7 +432,7 @@ export default function SignalFilters({
               onChange={(event) =>
                 setParty(event.target.value as SignalFiltersType["party"])
               }
-              disabled={isLoading}
+              disabled
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="all">All</option>
@@ -423,6 +440,9 @@ export default function SignalFilters({
               <option value="Republican">Republican</option>
               <option value="Independent">Independent</option>
             </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              Party filter is temporarily disabled while disclosure-linked party data is backfilled.
+            </span>
           </label>
 
           <label className="block">
@@ -447,6 +467,16 @@ export default function SignalFilters({
               <option value="tradeType">Trade type (A → Z)</option>
             </select>
           </label>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={applyTextFilters}
+            disabled={isLoading}
+            className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Apply filters
+          </button>
         </div>
         {signalsError && (
           <p className="text-sm text-rose-600">{signalsError}</p>

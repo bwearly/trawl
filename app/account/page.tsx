@@ -76,6 +76,17 @@ export default async function AccountPage() {
             <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Signals</Link>
           </div>
         </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-950">Alert preferences</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Alerts currently appear in-app. Email delivery foundation is being prepared,
+            but email alerts are not live yet.
+          </p>
+          <div className="mt-4">
+            <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Manage alert preferences</Link>
+          </div>
+        </section>
       </div>
     </main>
   );

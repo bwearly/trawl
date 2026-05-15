@@ -218,12 +218,6 @@ export default function SignalCard({
 
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <WatchButton
-            itemType="politician"
-            politicianId={politicianId}
-            size="sm"
-            variant="ghost"
-          />
-          <WatchButton
             itemType="ticker"
             ticker={ticker}
             size="sm"
