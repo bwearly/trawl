@@ -80,8 +80,9 @@ export default async function WatchlistPage() {
             <p className="mt-2 text-sm text-gray-600">
               {totalWatched > 0
                 ? `${totalWatched} saved item${totalWatched === 1 ? "" : "s"} across tickers and politicians.`
-                : "Track politicians and tickers in one place, then use alerts to stay on top of new activity."}
+                : "Track politicians and tickers in one place, then use research notifications to stay on top of new activity."}
             </p>
+            <p className="mt-2 text-xs text-gray-500">Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.</p>
           </div>
 
           <Link
@@ -108,7 +109,7 @@ export default async function WatchlistPage() {
           <div className="mt-4 space-y-2">
             {activity.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                No recent watchlist changes yet. New disclosures and alert-eligible signals will show up here.
+                No recent watchlist changes yet. New disclosures and high-ranked signals will show up here.
               </div>
             ) : (
               activity.map((item) => (
@@ -145,7 +146,7 @@ export default async function WatchlistPage() {
               href="/alerts"
               className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
-              Review watchlist alerts
+              Review watchlist notifications
             </Link>
           </div>
         </section>

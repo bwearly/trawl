@@ -9,7 +9,7 @@ import { getTopPicks } from "@/lib/domain/signals/get-top-picks";
 export const metadata: Metadata = {
   title: "Trawl — Congressional Trade Signals",
   description:
-    "Track congressional trade disclosures, find ranked opportunities, validate performance, and stay on top of watchlists and alerts.",
+    "Track congressional trade disclosures, review ranked activity, validate performance, and stay on top of watchlists and research notifications.",
 };
 
 const marketRows = [
@@ -119,7 +119,7 @@ function TradingHeroGraphic() {
             </div>
             <div className="rounded-2xl bg-white/85 p-3">
               <p className="text-gray-950">Watch</p>
-              <p className="mt-1 text-lg font-bold">Alerts</p>
+              <p className="mt-1 text-lg font-bold">Watchlist Notifications</p>
             </div>
           </div>
         </div>
@@ -218,6 +218,7 @@ export default async function Home() {
       `}</style>
 
       <section className="relative bg-gradient-to-br from-blue-50 via-white to-emerald-50 px-6 py-16 text-gray-950 sm:py-20">
+        <p className="mx-auto mb-6 max-w-6xl text-xs font-medium text-gray-600">Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.</p>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.14),transparent_26%)]" />
         <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
@@ -301,7 +302,7 @@ export default async function Home() {
             </p>
             <h3 className="mt-2 text-lg font-bold text-gray-950">Track what matters</h3>
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              Save tickers and politicians so new activity turns into alerts.
+              Save tickers and politicians so new activity turns into research notifications.
             </p>
           </Link>
         </div>
@@ -328,14 +329,14 @@ export default async function Home() {
 
           <SectionShell
             eyebrow="Top signals"
-            title="Top Picks Today"
+            title="Top Research Signals"
             description="The highest-ranked current research signals, ready for quick review."
             href="/signals"
             linkLabel="Open desk"
             accent="blue"
           >
             {topPicks.length === 0 ? (
-              <SignalEmptyState label="No top picks available yet." />
+              <SignalEmptyState label="No research signals available yet." />
             ) : (
               topPicks.map((signal, index) => (
                 <div key={signal.signalId}>

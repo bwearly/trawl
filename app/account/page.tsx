@@ -5,7 +5,7 @@ import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 
 export const metadata: Metadata = {
   title: "Account | Trawl",
-  description: "Manage your Trawl account, watchlist, and alert settings.",
+  description: "Manage your Trawl account, watchlist, and notification settings.",
 };
 
 export default async function AccountPage() {
@@ -18,7 +18,7 @@ export default async function AccountPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm font-medium text-gray-500">Account</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view your account</h1>
-            <p className="mt-3 text-sm text-gray-600">Sign in to view your account, watchlist, and alert settings.</p>
+            <p className="mt-3 text-sm text-gray-600">Sign in to view your account, watchlist, and notification settings.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link href="/signin?callbackUrl=%2Faccount" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
               <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
@@ -37,7 +37,7 @@ export default async function AccountPage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-gray-500">Account</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">{displayName}</h1>
-          <p className="mt-2 text-sm text-gray-600">Your account powers personalized watchlists, alerts, and preference settings in Trawl.</p>
+          <p className="mt-2 text-sm text-gray-600">Your account powers personalized watchlists, research notifications, and preference settings in Trawl.</p>
 
           <div className="mt-5 flex items-start gap-4">
             {session.user.image ? (
@@ -71,7 +71,7 @@ export default async function AccountPage() {
           <h2 className="text-lg font-semibold text-gray-950">Quick links</h2>
           <div className="mt-4 flex flex-wrap gap-2.5">
             <Link href="/watchlist" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Watchlist</Link>
-            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alerts</Link>
+            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Watchlist Notifications</Link>
             <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alert preferences</Link>
             <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Signals</Link>
           </div>
@@ -81,10 +81,10 @@ export default async function AccountPage() {
           <h2 className="text-lg font-semibold text-gray-950">Alert preferences</h2>
           <p className="mt-2 text-sm text-gray-600">
             Alerts currently appear in-app. Email delivery foundation is being prepared,
-            but email alerts are not live yet.
+            but email research notifications are not live yet.
           </p>
           <div className="mt-4">
-            <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Manage alert preferences</Link>
+            <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Manage notification preferences</Link>
           </div>
         </section>
       </div>

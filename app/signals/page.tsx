@@ -83,7 +83,7 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
               href="/alerts"
               className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
             >
-              <span>Alerts</span>
+              <span>Watchlist Notifications</span>
               {unreadAlertsCount > 0 && (
                 <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-gray-900 px-1.5 py-0.5 text-xs font-semibold text-white">
                   {unreadAlertsCount}

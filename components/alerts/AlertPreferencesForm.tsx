@@ -105,8 +105,8 @@ export default function AlertPreferencesForm() {
           Alert Preferences
         </h2>
         <p className="text-sm text-gray-500">
-          Choose which watchlist alerts you get and set the minimum signal
-          score required before an alert appears.
+          Choose which watchlist research notifications you get and set the minimum signal
+          score required before a notification appears.
         </p>
         <p className="text-xs text-amber-700">
           Alerts are research notifications, not investment advice.
@@ -127,13 +127,13 @@ export default function AlertPreferencesForm() {
               disabled={isSaving}
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
             >
-              <option value="0">All alerts</option>
+              <option value="0">All notifications</option>
               <option value="50">50+</option>
               <option value="70">70+</option>
               <option value="80">80+</option>
             </select>
             <span className="mt-1 block text-xs text-gray-500">
-              Higher thresholds reduce alert volume to stronger-ranked signals.
+              Higher thresholds reduce notification volume to higher-ranked signals.
             </span>
           </label>
 
@@ -149,10 +149,10 @@ export default function AlertPreferencesForm() {
             />
             <div>
               <div className="text-sm font-medium text-gray-900">
-                Watched ticker alerts
+                Watched ticker notifications
               </div>
               <div className="text-sm text-gray-500">
-                Send alerts when a watched ticker appears in a new eligible signal.
+                Send a research notification when a watched ticker appears in a new eligible signal.
               </div>
             </div>
           </label>
@@ -169,10 +169,10 @@ export default function AlertPreferencesForm() {
             />
             <div>
               <div className="text-sm font-medium text-gray-900">
-                Watched politician alerts
+                Watched politician notifications
               </div>
               <div className="text-sm text-gray-500">
-                Send alerts when a watched politician appears in a new eligible signal.
+                Send a research notification when a watched politician appears in a new eligible signal.
               </div>
             </div>
           </label>

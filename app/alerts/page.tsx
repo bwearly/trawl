@@ -7,7 +7,7 @@ import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
 export const metadata: Metadata = {
   title: "Alerts | Trawl",
   description:
-    "Review watchlist alerts for new matched signals and control notification preferences for tickers and politicians.",
+    "Review watchlist research notifications for new matched signals and control notification preferences for tickers and politicians.",
 };
 
 function formatDate(value: Date | string | null) {
@@ -62,8 +62,8 @@ export default async function AlertsPage() {
         <div className="mx-auto max-w-3xl">
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm font-medium text-gray-500">Personalized notifications</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view alerts</h1>
-            <p className="mt-3 text-sm text-gray-600">Sign in to get alerts for the politicians and tickers you watch.</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view watchlist notifications</h1>
+            <p className="mt-3 text-sm text-gray-600">Sign in to get research notifications for the politicians and tickers you watch.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link href="/signin?callbackUrl=%2Falerts" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
               <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
@@ -90,8 +90,11 @@ export default async function AlertsPage() {
               Alerts
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Alerts are generated from your watched tickers and politicians,
+              Research notifications are generated from your watched tickers and politicians,
               based on your alert preferences.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.
             </p>
           </div>
 
@@ -120,7 +123,7 @@ export default async function AlertsPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                Recent alerts
+                Recent watchlist notifications
               </h2>
               <p className="mt-1 text-sm text-gray-500">
                 Latest matched signals for your watchlist.
@@ -135,10 +138,10 @@ export default async function AlertsPage() {
           <div className="mt-5 space-y-3">
             {rows.length === 0 && (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-                <h3 className="text-base font-semibold text-gray-900">No alerts yet</h3>
+                <h3 className="text-base font-semibold text-gray-900">No watchlist notifications yet</h3>
                 <p className="mt-2 text-sm text-gray-600">
                   Add items to your watchlist and tune your preferences to start
-                  receiving relevant alerts.
+                  receiving relevant research notifications.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
                   <Link
@@ -157,7 +160,7 @@ export default async function AlertsPage() {
                     href="#alert-preferences"
                     className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
                   >
-                    Adjust alert preferences
+                    Adjust notification preferences
                   </a>
                 </div>
               </div>
