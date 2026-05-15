@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import {
   disclosures,
+  disclosurePerformanceWindows,
   politicianStats,
   politicians
 } from "@/lib/db/schema";
@@ -65,13 +66,30 @@ export async function getPoliticianLeaderboard(): Promise<
         totalDisclosures: sql<number>`count(${disclosures.id})`,
         purchaseCount: sql<number>`sum(case when ${disclosures.tradeType} = 'purchase' then 1 else 0 end)`,
         saleCount: sql<number>`sum(case when ${disclosures.tradeType} = 'sale' then 1 else 0 end)`,
-        avgAlpha30d: sql<null>`null`,
-        winRate30d: sql<null>`null`,
+        avgAlpha30d: sql<number | null>`round(avg(case
+          when ${disclosurePerformanceWindows.return30d} is not null
+            and ${disclosurePerformanceWindows.spyReturn30d} is not null
+          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
+          else null
+        end), 2)`,
+        winRate30d: sql<number | null>`round(100.0 * avg(case
+          when ${disclosurePerformanceWindows.return30d} is not null
+            and ${disclosurePerformanceWindows.spyReturn30d} is not null
+          then case
+            when (${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}) > 0 then 1.0
+            else 0.0
+          end
+          else null
+        end), 2)`,
         avgFilingLagDays: sql<number | null>`avg(${disclosures.filingLagDays})`,
         lastTradeDate: sql<Date | null>`max(${disclosures.tradeDate})`,
       })
       .from(politicians)
       .innerJoin(disclosures, eq(disclosures.politicianId, politicians.id))
+      .leftJoin(
+        disclosurePerformanceWindows,
+        eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
+      )
       .groupBy(
         politicians.id,
         politicians.fullName,
@@ -90,8 +108,8 @@ export async function getPoliticianLeaderboard(): Promise<
       totalDisclosures: row.totalDisclosures,
       purchaseCount: row.purchaseCount,
       saleCount: row.saleCount,
-      avgAlpha30d: null,
-      winRate30d: null,
+      avgAlpha30d: toNumber(row.avgAlpha30d),
+      winRate30d: toNumber(row.winRate30d),
       avgFilingLagDays: toNumber(row.avgFilingLagDays),
       lastTradeDate: row.lastTradeDate,
     }));
