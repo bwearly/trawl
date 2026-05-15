@@ -19,12 +19,14 @@ type BackfillOptions = {
   missingOnly: boolean;
 };
 
+type PriceRow = typeof priceHistory.$inferSelect;
+
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 400;
 let retryCount = 0;
 
-const closestPriceCache = new Map<string, Awaited<ReturnType<typeof getClosestPriceOnOrAfter>>>();
-const latestPriceCache = new Map<string, Awaited<ReturnType<typeof getLatestPrice>>>();
+const closestPriceCache = new Map<string, PriceRow | null>();
+const latestPriceCache = new Map<string, PriceRow | null>();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,7 +86,10 @@ function isWithinRecentWindow(disclosure: typeof disclosures.$inferSelect, recen
   return (filing != null && filing >= threshold) || (trade != null && trade >= threshold);
 }
 
-async function getClosestPriceOnOrAfter(ticker: string, targetDate: Date) {
+async function getClosestPriceOnOrAfter(
+  ticker: string,
+  targetDate: Date
+): Promise<PriceRow | null> {
   const normalizedTarget = startOfUtcDay(targetDate);
   const cacheKey = `${ticker}|${normalizedTarget.toISOString()}`;
 
@@ -111,7 +116,7 @@ async function getClosestPriceOnOrAfter(ticker: string, targetDate: Date) {
   return row;
 }
 
-async function getLatestPrice(ticker: string) {
+async function getLatestPrice(ticker: string): Promise<PriceRow | null> {
   if (latestPriceCache.has(ticker)) {
     return latestPriceCache.get(ticker) ?? null;
   }
