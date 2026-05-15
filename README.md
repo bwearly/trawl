@@ -237,6 +237,16 @@ A Senate importer proof of concept is available for bounded, read-only normaliza
 npm run senate:import:poc -- --limit=5
 ```
 
+Optional flags:
+
+```bash
+# optional year hint for future network search flow work
+npm run senate:import:poc -- --limit=5 --year=2026
+
+# manual mode: parse a locally downloaded Senate report HTML/text file
+npm run senate:import:poc -- --input-file=tmp/senate-report.html
+```
+
 Notes:
 
 - Senate support is currently **POC-only**.
