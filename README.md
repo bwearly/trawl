@@ -228,6 +228,22 @@ The workflow also sets:
 
 Alert backfill behavior can still be scoped depending on how `alerts:backfill` is configured at runtime (for example, if `ALERT_BACKFILL_USER_ID` is provided).
 
+
+## Senate PTR importer POC (read-only)
+
+A Senate importer proof of concept is available for bounded, read-only normalization experiments:
+
+```bash
+npm run senate:import:poc -- --limit=5
+```
+
+Notes:
+
+- Senate support is currently **POC-only**.
+- The POC performs **no database writes** and does not change schema.
+- The POC is **not** wired into the daily pipeline/cron jobs.
+- Senate eFD source access constraints/terms must be reviewed before any production ingestion path.
+
 ## House metadata backfill notes
 
 House PTR filings do **not** include party. Party must be populated from a separate member metadata source, not inferred from filings.
