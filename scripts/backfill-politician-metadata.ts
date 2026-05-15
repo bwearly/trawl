@@ -41,9 +41,9 @@ type MetadataMatch = {
 };
 
 const CURRENT_LEGISLATORS_URL =
-  "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.json";
+  "https://theunitedstates.io/congress-legislators/legislators-current.json";
 const HISTORICAL_LEGISLATORS_URL =
-  "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-historical.json";
+  "https://theunitedstates.io/congress-legislators/legislators-historical.json";
 
 function normalizeParty(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -66,6 +66,8 @@ function normalizeName(raw: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[.'’,-]/g, " ")
+    .replace(/\b([A-Z])\b/gi, " ")
+    .replace(/\b(MD|PHD|DO|DDS|DVM|ESQ|FACS|CPA)\b/gi, " ")
     .replace(/\b(MR|MRS|MS|REP|REPRESENTATIVE|HON|HONORABLE|DR)\b/gi, " ")
     .replace(/\b(JR|SR|II|III|IV|V)\b/gi, " ")
     .replace(/\s+/g, " ")
@@ -136,6 +138,8 @@ async function backfillPoliticianMetadata() {
     fetchLegislators(HISTORICAL_LEGISLATORS_URL),
   ]);
   const metadataIndex = buildMetadataIndex([...current, ...historical]);
+  const metadataRecordsLoaded = current.length + historical.length;
+  console.log(`Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`Loaded metadata entries: ${metadataIndex.size} normalized name keys.`);
 
   const housePoliticians: PoliticianRow[] = await db
@@ -153,7 +157,10 @@ async function backfillPoliticianMetadata() {
   let updated = 0;
   let matched = 0;
   let ambiguous = 0;
+  let skippedExisting = 0;
   let noChange = 0;
+
+  console.log(`Politicians loaded: ${housePoliticians.length}`);
 
   for (const politician of housePoliticians) {
     const key = normalizeName(politician.fullName);
@@ -170,6 +177,10 @@ async function backfillPoliticianMetadata() {
     }
     matched += 1;
     const match = matches[0];
+    if (!force && politician.party !== null && politician.state !== null) {
+      skippedExisting += 1;
+      continue;
+    }
     const nextParty = force ? (match.party ?? politician.party) : (politician.party ?? match.party);
     const nextState = force ? (match.state ?? politician.state) : (politician.state ?? match.state);
 
@@ -197,8 +208,10 @@ async function backfillPoliticianMetadata() {
 
   console.log("Backfill complete.");
   console.log(`- House politicians scanned: ${housePoliticians.length}`);
+  console.log(`- Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`- Matched (single): ${matched}`);
   console.log(`- Updated: ${updated}`);
+  console.log(`- Skipped existing: ${skippedExisting}`);
   console.log(`- Unchanged: ${noChange}`);
   console.log(`- Ambiguous: ${ambiguous}`);
   console.log(`- Unmatched total: ${unmatched.length}`);
