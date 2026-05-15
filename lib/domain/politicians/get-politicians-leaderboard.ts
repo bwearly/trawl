@@ -5,7 +5,7 @@ import {
   politicianStats,
   politicians
 } from "@/lib/db/schema";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 export const ACTIVE_LEADERBOARD_LOOKBACK_DAYS = 365;
 export const ACTIVE_LEADERBOARD_MIN_DISCLOSURES = 3;
@@ -14,15 +14,6 @@ function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
-}
-
-const ACTIVE_LOOKBACK_DAYS = 365;
-const MIN_LEADERBOARD_DISCLOSURES = 3;
-
-function getActiveLeaderboardCutoffDate() {
-  const cutoff = new Date();
-  cutoff.setUTCDate(cutoff.getUTCDate() - ACTIVE_LOOKBACK_DAYS);
-  return cutoff;
 }
 
 export type PoliticianLeaderboardRow = {
@@ -71,8 +62,9 @@ export async function getPoliticianLeaderboard(): Promise<
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(activeFilter)
     .orderBy(
-      desc(sql`COALESCE(${politicianStats.avgAlpha30d}, -999999)`),
+      desc(politicianStats.lastTradeDate),
       desc(sql`COALESCE(${politicianStats.winRate30d}, -999999)`),
+      desc(sql`COALESCE(${politicianStats.avgAlpha30d}, -999999)`),
       desc(politicianStats.totalDisclosures),
       politicians.fullName
     );
@@ -120,14 +112,9 @@ export async function getPoliticianLeaderboard(): Promise<
         politicians.party,
         politicians.state
       )
-      .having(sql`count(${disclosures.id}) >= ${MIN_LEADERBOARD_DISCLOSURES}`)
+      .having(sql`count(${disclosures.id}) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`)
       .orderBy(
-        desc(sql`COALESCE(round(avg(case
-          when ${disclosurePerformanceWindows.return30d} is not null
-            and ${disclosurePerformanceWindows.spyReturn30d} is not null
-          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
-          else null
-        end), 2), -999999)`),
+        desc(sql`max(${disclosures.tradeDate})`),
         desc(sql`COALESCE(round(100.0 * avg(case
           when ${disclosurePerformanceWindows.return30d} is not null
             and ${disclosurePerformanceWindows.spyReturn30d} is not null
@@ -137,8 +124,13 @@ export async function getPoliticianLeaderboard(): Promise<
           end
           else null
         end), 2), -999999)`),
+        desc(sql`COALESCE(round(avg(case
+          when ${disclosurePerformanceWindows.return30d} is not null
+            and ${disclosurePerformanceWindows.spyReturn30d} is not null
+          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
+          else null
+        end), 2), -999999)`),
         desc(sql`count(${disclosures.id})`),
-        desc(sql`max(${disclosures.tradeDate})`),
         politicians.fullName
       );
 
