@@ -24,6 +24,7 @@ export type SignalFilters = {
     | "historical"
     | "unknown";
   sort:
+    | "current"
     | "score"
     | "newest"
     | "filingLagAsc"
@@ -80,6 +81,7 @@ const FRESHNESS_OPTIONS = new Set<SignalFilters["freshness"]>([
   "unknown",
 ]);
 const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
+  "current",
   "score",
   "newest",
   "filingLagAsc",
@@ -93,7 +95,7 @@ const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
 export function parseSignalSort(rawSort: string | undefined): SignalFilters["sort"] {
   return SORT_OPTIONS.has(rawSort as SignalFilters["sort"])
     ? (rawSort as SignalFilters["sort"])
-    : "score";
+     : "current";
 }
 
 export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
@@ -103,7 +105,7 @@ export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
   ticker: "",
   politician: "",
   freshness: "all",
-  sort: "score",
+  sort: "current",
 };
 
 export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, string>>): SignalFilters {
@@ -184,7 +186,9 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
   end`;
 
   const orderBy =
-    filters.sort === "newest"
+    filters.sort === "current"
+      ? [asc(freshnessRank), filingDateDesc, scoreDesc, signalDateDesc]
+      : filters.sort === "newest"
       ? [filingDateDesc, signalDateDesc, scoreDesc]
       : filters.sort === "filingLagAsc"
       ? [asc(filingLagNullsLast), asc(disclosures.filingLagDays), scoreDesc, signalDateDesc]

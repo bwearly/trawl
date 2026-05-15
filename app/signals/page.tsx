@@ -66,8 +66,15 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
               Research Signals
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Scores rank research priority from congressional filings. They are
-              not investment advice.
+              Recent research signals are shown first. Historical signals remain
+              available for context.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Trawl surfaces public disclosure activity for research. It does not
+              recommend buying or selling securities.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Recent signals are shown first so older historical outliers do not dominate the research feed.
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Disclosure data may be delayed, incomplete, amended, or unavailable. Users should verify filings from the original source.
