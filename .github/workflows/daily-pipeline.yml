@@ -1,0 +1,35 @@
+name: Daily Trawl Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 12:00 UTC is 5:00 AM MST / 6:00 AM MDT (early morning Mountain Time)
+    - cron: "0 12 * * *"
+
+jobs:
+  run-daily-pipeline:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TRAWL_DATABASE_DATABASE_URL: ${{ secrets.TRAWL_DATABASE_DATABASE_URL }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      ALERT_BACKFILL_USER_ID: ${{ secrets.ALERT_BACKFILL_USER_ID }}
+      ALERT_EMAIL_QUEUE_ENABLED: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate pipeline logic
+        run: npm run pipeline:validate
+
+      - name: Run daily pipeline
+        run: npm run pipeline:daily

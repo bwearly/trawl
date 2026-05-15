@@ -188,3 +188,42 @@ Notes:
 
 - Dev credentials are local/dev-only and are disabled in production.
 - Session identity uses the Auth.js user id; for Google this is expected to be the stable Google account subject id. If a provider response only includes email, email may be used temporarily as the identity key.
+
+## Daily pipeline GitHub Actions workflow
+
+A scheduled GitHub Actions workflow is available at `.github/workflows/daily-pipeline.yml` to run the daily Trawl data pipeline.
+
+### What it does
+
+On each run, the workflow:
+
+1. Checks out the repository.
+2. Sets up Node.js (Node 20).
+3. Installs dependencies with `npm ci`.
+4. Runs `npm run pipeline:validate`.
+5. Runs `npm run pipeline:daily`.
+
+The schedule is set to `0 12 * * *` (12:00 UTC daily), which maps to early morning Mountain Time (about 5:00 AM MST / 6:00 AM MDT).
+
+### Run manually
+
+1. Go to **GitHub → Actions → Daily Trawl Pipeline**.
+2. Click **Run workflow**.
+3. Select the branch and confirm **Run workflow**.
+
+### Required GitHub Secrets
+
+Configure these repository secrets before enabling scheduled runs:
+
+- `DATABASE_URL`
+- `TRAWL_DATABASE_DATABASE_URL` (set this too if your runtime expects this variable name)
+- `ALPHA_VANTAGE_API_KEY` (only if still required by your environment/integrations)
+- `ALERT_BACKFILL_USER_ID` (optional; only needed if you intentionally scope alert backfill to one user)
+
+The workflow also sets:
+
+- `ALERT_EMAIL_QUEUE_ENABLED=false` (live email sending remains disabled)
+
+### Alert backfill scope warning
+
+Alert backfill behavior can still be scoped depending on how `alerts:backfill` is configured at runtime (for example, if `ALERT_BACKFILL_USER_ID` is provided).
