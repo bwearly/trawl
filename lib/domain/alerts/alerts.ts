@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import {
+  alertPreferences,
   alerts,
   disclosures,
   researchSignals,
@@ -268,7 +269,13 @@ export async function backfillAlertsForUser(userId: string) {
 
   const watchlist = watchlistRows[0];
   if (!watchlist) {
-    return { processedSignals: 0 };
+    return {
+      processedSignals: 0,
+      userId,
+      alertsCreated: 0,
+      duplicateOrSkippedAlerts: 0,
+      skippedReason: "no_watchlist",
+    } as const;
   }
 
   const watchItems = await db
@@ -291,7 +298,13 @@ export async function backfillAlertsForUser(userId: string) {
     .map((item) => item.politicianId as number);
 
   if (watchedTickers.length === 0 && watchedPoliticianIds.length === 0) {
-    return { processedSignals: 0 };
+    return {
+      processedSignals: 0,
+      userId,
+      alertsCreated: 0,
+      duplicateOrSkippedAlerts: 0,
+      skippedReason: "no_watchlist_items",
+    } as const;
   }
 
   const signalRows = await db
@@ -319,11 +332,83 @@ export async function backfillAlertsForUser(userId: string) {
     )
     .orderBy(desc(researchSignals.signalDate), desc(researchSignals.id));
 
+  let alertsCreated = 0;
+  let duplicateOrSkippedAlerts = 0;
+
   for (const row of signalRows) {
-    await generateAlertsForSignal(row.id);
+    const result = await generateAlertsForSignal(row.id);
+    const createdForSignal =
+      result.tickerAlertsCreated + result.politicianAlertsCreated;
+    alertsCreated += createdForSignal;
+
+    if (!result.skipped && createdForSignal === 0) {
+      duplicateOrSkippedAlerts += 1;
+    }
   }
 
-  return { processedSignals: signalRows.length };
+  return {
+    userId,
+    processedSignals: signalRows.length,
+    alertsCreated,
+    duplicateOrSkippedAlerts,
+    skippedReason: null,
+  } as const;
+}
+
+export async function backfillAlertsForAllUsers() {
+  const usersWithWatchlistItems = await db
+    .selectDistinct({ userId: watchlists.userId })
+    .from(watchlistItems)
+    .innerJoin(watchlists, eq(watchlists.id, watchlistItems.watchlistId));
+
+  const usersWithPreferences = await db
+    .selectDistinct({ userId: alertPreferences.userId })
+    .from(alertPreferences);
+
+  const uniqueUserIds = [
+    ...new Set([
+      ...usersWithWatchlistItems.map((row) => row.userId),
+      ...usersWithPreferences.map((row) => row.userId),
+    ]),
+  ];
+
+  const summary = {
+    usersConsidered: uniqueUserIds.length,
+    usersProcessed: 0,
+    usersSkipped: 0,
+    alertsCreated: 0,
+    duplicateOrSkippedAlerts: 0,
+    errors: 0,
+  };
+
+  console.log(`[alerts:backfill] users considered: ${summary.usersConsidered}`);
+
+  for (const userId of uniqueUserIds) {
+    try {
+      const result = await backfillAlertsForUser(userId);
+      if (result.skippedReason) {
+        summary.usersSkipped += 1;
+        console.log(`[alerts:backfill] skipped user ${userId}: ${result.skippedReason}`);
+        continue;
+      }
+
+      summary.usersProcessed += 1;
+      summary.alertsCreated += result.alertsCreated;
+      summary.duplicateOrSkippedAlerts += result.duplicateOrSkippedAlerts;
+      console.log(
+        `[alerts:backfill] user ${userId}: processedSignals=${result.processedSignals}, alertsCreated=${result.alertsCreated}, duplicateOrSkippedAlerts=${result.duplicateOrSkippedAlerts}`,
+      );
+    } catch (error) {
+      summary.errors += 1;
+      console.error(`[alerts:backfill] failed for user ${userId}`, error);
+    }
+  }
+
+  console.log(
+    `[alerts:backfill] complete usersProcessed=${summary.usersProcessed} usersSkipped=${summary.usersSkipped} alertsCreated=${summary.alertsCreated} duplicateOrSkippedAlerts=${summary.duplicateOrSkippedAlerts} errors=${summary.errors}`,
+  );
+
+  return summary;
 }
 
 /**
