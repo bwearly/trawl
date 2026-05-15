@@ -77,6 +77,9 @@ export function buildSignalFeedItems<TSignal extends Signal>(
   signals: TSignal[]
 ): SignalFeedItem<TSignal>[] {
   const normalizedSignals = signals.map(normalizeSignal);
+  const signalOrder = new Map<TSignal, number>(
+    normalizedSignals.map((signal, index) => [signal, index])
+  );
   const clusters = clusterSignals(normalizedSignals);
 
   const feedItems = clusters.map<SignalFeedItem<TSignal>>((cluster) => {
@@ -98,9 +101,15 @@ export function buildSignalFeedItems<TSignal extends Signal>(
   });
 
   return feedItems.sort((left, right) => {
-    const leftDate = left.type === "cluster" ? left.cluster.lastTradeDate : left.signal.tradeDate;
-    const rightDate = right.type === "cluster" ? right.cluster.lastTradeDate : right.signal.tradeDate;
+    const leftIndex =
+      left.type === "cluster"
+        ? Math.min(...left.cluster.signals.map((signal) => signalOrder.get(signal) ?? Number.MAX_SAFE_INTEGER))
+        : (signalOrder.get(left.signal) ?? Number.MAX_SAFE_INTEGER);
+    const rightIndex =
+      right.type === "cluster"
+        ? Math.min(...right.cluster.signals.map((signal) => signalOrder.get(signal) ?? Number.MAX_SAFE_INTEGER))
+        : (signalOrder.get(right.signal) ?? Number.MAX_SAFE_INTEGER);
 
-    return rightDate.getTime() - leftDate.getTime();
+    return leftIndex - rightIndex;
   });
 }

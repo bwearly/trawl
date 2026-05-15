@@ -57,7 +57,7 @@ export default function GlobalNav() {
 
         <div className="ml-auto flex items-center gap-2">
           <AuthNavControls />
-          <DevIdentitySwitcher />
+          {process.env.NODE_ENV !== "production" ? <DevIdentitySwitcher /> : null}
         </div>
       </div>
     </header>

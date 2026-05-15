@@ -18,7 +18,6 @@ import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 import { getSignalConfidenceTier } from "@/lib/domain/signals/get-signal-confidence-tier";
 import { getSignalTakeaways } from "@/lib/domain/signals/get-signal-takeaways";
 import {
-  isPoliticianWatched,
   isTickerWatched,
 } from "@/lib/domain/watchlists/watchlists";
 
@@ -279,14 +278,13 @@ export default async function SignalDetailPage({
     tradeSizeScore: signal.tradeSizeScore,
     historicalPoliticianScore: signal.historicalPoliticianScore,
   });
-  const [initialIsWatchingTicker, initialIsWatchingPolitician] = identity
+  const [initialIsWatchingTicker] = identity
     ? await Promise.all([
-        normalizedTicker
-          ? isTickerWatched(identity.userId, normalizedTicker)
-          : Promise.resolve(false),
-        isPoliticianWatched(identity.userId, signal.politicianId),
+      normalizedTicker
+        ? isTickerWatched(identity.userId, normalizedTicker)
+        : Promise.resolve(false),
       ])
-    : [false, false];
+    : [false];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -362,13 +360,6 @@ export default async function SignalDetailPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <WatchButton
-                itemType="politician"
-                politicianId={signal.politicianId}
-                size="sm"
-                variant="ghost"
-                initialIsWatching={initialIsWatchingPolitician}
-              />
               {normalizedTicker ? (
                 <WatchButton
                   itemType="ticker"
