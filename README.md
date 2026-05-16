@@ -246,6 +246,9 @@ npm run senate:import:poc -- --limit=5 --year=2026
 # manual mode: parse a locally downloaded Senate report HTML/text file
 npm run senate:import:poc -- --input-file=tmp/senate-report.html
 
+# manual directory mode: parse all local Senate report .html/.htm files in a folder
+npm run senate:import:poc -- --input-dir="/Users/blakeearly/Downloads/senate-reports" --write
+
 # manual write mode (experimental): writes normalized rows to DB
 npm run senate:import:poc -- --input-file=tmp/senate-report.html --write
 ```

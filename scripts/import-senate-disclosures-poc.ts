@@ -38,6 +38,7 @@ function parseArgs() {
   let limit = DEFAULT_LIMIT;
   let year: number | null = null;
   let inputFile: string | null = null;
+  let inputDir: string | null = null;
   let write = false;
 
   for (const arg of args) {
@@ -60,10 +61,15 @@ function parseArgs() {
       if (!value) throw new Error(`Invalid --input-file value: ${arg}`);
       inputFile = value;
     }
+    if (arg.startsWith("--input-dir=")) {
+      const value = arg.split("=")[1]?.trim();
+      if (!value) throw new Error(`Invalid --input-dir value: ${arg}`);
+      inputDir = value;
+    }
     if (arg === "--write") write = true;
   }
 
-  return { limit, year, inputFile, write };
+  return { limit, year, inputFile, inputDir, write };
 }
 
 function sleep(ms: number) {
@@ -352,6 +358,29 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
   console.log(`Manual input mode used. file=${absolutePath}`);
 }
 
+
+
+async function runManualDirectoryMode(inputDir: string, normalized: SenateNormalizedDisclosure[], failures: ParseFailure[]) {
+  const { readdir } = await import("node:fs/promises");
+  const absoluteDir = resolve(inputDir);
+  const entries = await readdir(absoluteDir, { withFileTypes: true });
+  const htmlFiles = entries
+    .filter((entry) => entry.isFile() && /\.html?$/i.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  console.log(`Manual directory mode used. dir=${absoluteDir}`);
+  console.log(`Files discovered=${htmlFiles.length}`);
+
+  let filesAttempted = 0;
+  for (const fileName of htmlFiles) {
+    filesAttempted += 1;
+    await runManualInputMode(resolve(absoluteDir, fileName), normalized, failures);
+  }
+
+  return { filesDiscovered: htmlFiles.length, filesAttempted };
+}
+
 async function findOrCreatePolitician(row: SenateNormalizedDisclosure) {
   const { db } = await import("../lib/db");
   const { politicians } = await import("../lib/db/schema");
@@ -415,7 +444,7 @@ async function disclosureExists(politicianId: number, row: SenateNormalizedDiscl
 }
 
 async function main() {
-  const { limit, year, inputFile, write } = parseArgs();
+  const { limit, year, inputFile, inputDir, write } = parseArgs();
   const normalized: SenateNormalizedDisclosure[] = [];
   const failures: ParseFailure[] = [];
   const uniquePoliticianKeyToId = new Map<string, number>();
@@ -423,11 +452,23 @@ async function main() {
   let politiciansReused = 0;
   let disclosuresInserted = 0;
   let disclosuresSkippedDuplicates = 0;
+  let filesDiscovered = 0;
+  let filesAttempted = 0;
 
   console.log(`Starting Senate PTR POC (${write ? "write mode" : "read-only"}). limit=${limit}${year ? ` year=${year}` : ""}`);
   console.log(write ? "DB writes enabled via --write. No schema changes. No pipeline integration." : "No DB writes. No schema changes. No pipeline integration.");
+  if (inputFile && inputDir) {
+    throw new Error("Provide exactly one of --input-file or --input-dir, not both.");
+  }
+
   if (inputFile) {
+    filesDiscovered = 1;
+    filesAttempted = 1;
     await runManualInputMode(inputFile, normalized, failures);
+  } else if (inputDir) {
+    const directorySummary = await runManualDirectoryMode(inputDir, normalized, failures);
+    filesDiscovered = directorySummary.filesDiscovered;
+    filesAttempted = directorySummary.filesAttempted;
   } else {
     console.log("Network mode used. NOTE: This POC only performs tiny public fetches and does not bypass access controls.");
 
@@ -439,6 +480,7 @@ async function main() {
     }
 
     const reportUrls = homeHtml ? discoverReportUrls(homeHtml, limit) : [];
+    filesDiscovered = reportUrls.length;
 
     if (reportUrls.length === 0) {
       failures.push({
@@ -449,6 +491,7 @@ async function main() {
     }
 
     for (const url of reportUrls) {
+      filesAttempted += 1;
       try {
         await sleep(REQUEST_DELAY_MS);
         const html = await fetchText(url);
@@ -470,7 +513,11 @@ async function main() {
   if (write) {
     const { db } = await import("../lib/db");
     const { disclosures } = await import("../lib/db/schema");
-    for (const row of normalized) {
+    const rowsForWrite = normalized.slice(0, limit);
+    if (normalized.length > rowsForWrite.length) {
+      console.log(`Applying --limit to DB writes: writing ${rowsForWrite.length} of ${normalized.length} normalized rows.`);
+    }
+    for (const row of rowsForWrite) {
       try {
         const key = `${row.politicianName}::${row.chamber}`;
         let politicianId = uniquePoliticianKeyToId.get(key);
@@ -517,11 +564,12 @@ async function main() {
   console.log(JSON.stringify(normalized, null, 2));
 
   console.log(`\nDone. normalized=${normalized.length} failures=${failures.length}`);
+  console.log(`File summary: files_discovered=${filesDiscovered} files_attempted=${filesAttempted}`);
   console.log(
     `DB summary: politicians_created=${politiciansCreated} politicians_reused=${politiciansReused} disclosures_inserted=${disclosuresInserted} disclosures_skipped_duplicates=${disclosuresSkippedDuplicates}`
   );
-  console.log(`Records attempted=${inputFile ? 1 : limit}`);
-  if (!inputFile && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {
+  console.log(`Records attempted=${filesAttempted}`);
+  if (!inputFile && !inputDir && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {
     console.log("Access limitation note: Senate eFD appears to require additional interactive/session flow not captured by direct fetch in this environment.");
   }
   console.log("Wrote tmp/senate-poc-normalized.json and tmp/senate-poc-failures.json");
