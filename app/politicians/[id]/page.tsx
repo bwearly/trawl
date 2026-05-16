@@ -119,8 +119,14 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
     if (tradeDiff !== 0) return tradeDiff;
     return b.id - a.id;
   });
-  const recentSignals = sortedDisclosures.slice(0, 6);
-  const historicalSignals = sortedDisclosures.slice(6);
+  const tickerBackedDisclosures = sortedDisclosures.filter(
+    (row) => getDisplayTicker(row.ticker) !== null
+  );
+  const noTickerDisclosures = sortedDisclosures.filter(
+    (row) => getDisplayTicker(row.ticker) === null
+  );
+  const recentSignals = tickerBackedDisclosures.slice(0, 6);
+  const historicalSignals = tickerBackedDisclosures.slice(6);
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -252,9 +258,6 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 <p className="mt-1 text-sm text-gray-500">
                   Recent signals are shown first so older historical outliers do not dominate the profile.
                 </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Some disclosures, such as bonds, may not have public ticker symbols.
-                </p>
               </div>
             </div>
 
@@ -338,7 +341,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         colSpan={6}
                         className="px-4 py-10 text-center text-sm text-gray-500"
                       >
-                        <p>No disclosures found for this politician yet.</p>
+                        <p>No ticker-backed research signals yet.</p>
                         <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
                           <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
                             Go to Signals
@@ -395,6 +398,63 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               benchmark-relative outperformance using your current signal and
               performance data.
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-gray-950">
+                Other disclosure activity
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Some disclosures, such as bonds or other non-stock assets, may not have public ticker symbols and are shown for context rather than scored stock research.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-gray-500">
+                <tr className="border-b border-gray-200">
+                  <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Trade type</th>
+                  <th className="px-4 py-3 font-medium">Trade date</th>
+                  <th className="px-4 py-3 font-medium">Filing date</th>
+                  <th className="px-4 py-3 font-medium">Amount range</th>
+                  <th className="px-4 py-3 font-medium">Owner</th>
+                </tr>
+              </thead>
+              <tbody>
+                {noTickerDisclosures.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
+                    <td className="px-4 py-4 text-gray-700">
+                      <span className="block max-w-[18rem] truncate" title={row.assetName}>
+                        {row.assetName}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-gray-700">{row.assetType || "Unknown asset type"}</td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(row.tradeType)}`}>
+                        {row.tradeType ?? "unknown"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-gray-700">{formatDate(row.tradeDate)}</td>
+                    <td className="px-4 py-4 text-gray-700">{formatDate(row.filingDate)}</td>
+                    <td className="px-4 py-4 text-gray-700">{row.amountRangeLabel || "Not provided"}</td>
+                    <td className="px-4 py-4 text-gray-700">{row.ownerType || "Not provided"}</td>
+                  </tr>
+                ))}
+                {noTickerDisclosures.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                      No non-ticker disclosure activity in this view yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 
