@@ -252,6 +252,9 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 <p className="mt-1 text-sm text-gray-500">
                   Recent signals are shown first so older historical outliers do not dominate the profile.
                 </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Some disclosures, such as bonds, may not have public ticker symbols.
+                </p>
               </div>
             </div>
 
