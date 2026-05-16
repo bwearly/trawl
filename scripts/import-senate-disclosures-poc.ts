@@ -32,9 +32,9 @@ const HOME_URL = "https://efdsearch.senate.gov/search/home/";
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 1000;
 const REQUEST_DELAY_MS = 1250;
-const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A", "NONE"]);
+const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A", "NONE", "NULL"]);
 
-function normalizeTickerValue(raw: string | null | undefined): string | null {
+function cleanSenateTicker(raw: string | null | undefined): string | null {
   const cleaned = (raw ?? "").trim().toUpperCase();
   if (!cleaned) return null;
   if (PLACEHOLDER_TICKER_VALUES.has(cleaned)) return null;
@@ -125,14 +125,6 @@ function inferAssetType(assetName: string) {
   }
   if (value.includes("stock") || value.includes("inc") || value.includes("corp") || value.includes("class ")) return "Stock";
   return "Other";
-}
-
-function extractTicker(assetName: string): string | null {
-  const direct = assetName.match(/\(([A-Z]{1,5}(?:\.[A-Z])?)\)/);
-  if (direct) return normalizeTickerValue(direct[1] ?? null);
-  const prefixed = assetName.match(/\b(?:Ticker|Symbol)\s*[:\-]\s*([A-Z]{1,5}(?:\.[A-Z])?)\b/i);
-  if (prefixed) return normalizeTickerValue(prefixed[1] ?? null);
-  return null;
 }
 
 function extractLineValue(content: string, label: string): string | null {
@@ -255,7 +247,7 @@ function normalizeFromText(sourceUrl: string, text: string): { row: SenateNormal
       chamber: "senate",
       party: party || null,
       state: state || null,
-      ticker: extractTicker(assetName),
+      ticker: null,
       assetName,
       assetType: inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeRaw),
@@ -354,7 +346,7 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
       chamber: "senate",
       party: null,
       state: null,
-      ticker: normalizeTickerValue(cells[headerIndex.get("ticker") ?? -1] ?? "") ?? extractTicker(assetName),
+      ticker: cleanSenateTicker(cells[headerIndex.get("ticker") ?? -1] ?? ""),
       assetName,
       assetType: (cells[headerIndex.get("asset type") ?? -1] ?? "").trim() || inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeRaw),
@@ -428,7 +420,7 @@ function toDbDate(value: string | null) {
 async function disclosureExists(politicianId: number, row: SenateNormalizedDisclosure) {
   const { db } = await import("../lib/db");
   const { disclosures } = await import("../lib/db/schema");
-  const normalizedTicker = normalizeTickerValue(row.ticker);
+  const normalizedTicker = cleanSenateTicker(row.ticker);
   const tickerFilter = normalizedTicker
     ? eq(disclosures.ticker, normalizedTicker)
     : or(
@@ -537,7 +529,7 @@ async function main() {
 
   await mkdir(resolve("tmp"), { recursive: true });
   for (const row of normalized) {
-    const normalizedTicker = normalizeTickerValue(row.ticker);
+    const normalizedTicker = cleanSenateTicker(row.ticker);
     if (row.ticker !== normalizedTicker) normalizedTickerPlaceholderCount += 1;
     row.ticker = normalizedTicker;
   }
@@ -559,6 +551,7 @@ async function main() {
             eq(disclosures.ticker, "N/A"),
             eq(disclosures.ticker, "None"),
             eq(disclosures.ticker, "NONE"),
+            eq(disclosures.ticker, "NULL"),
             eq(disclosures.ticker, "")
           )
         )
@@ -594,7 +587,7 @@ async function main() {
 
         await db.insert(disclosures).values({
           politicianId,
-          ticker: normalizeTickerValue(row.ticker),
+          ticker: cleanSenateTicker(row.ticker),
           assetName: row.assetName,
           assetType: row.assetType,
           tradeType: row.tradeType,
@@ -622,7 +615,7 @@ async function main() {
     `DB summary: politicians_created=${politiciansCreated} politicians_reused=${politiciansReused} disclosures_inserted=${disclosuresInserted} disclosures_skipped_duplicates=${disclosuresSkippedDuplicates}`
   );
   console.log(
-    `Ticker summary: placeholder_tickers_normalized=${normalizedTickerPlaceholderCount} legacy_placeholder_rows_cleaned=${cleanedUpLegacyPlaceholderTickerRows}`
+    `Ticker summary: placeholder_tickers_normalized=${normalizedTickerPlaceholderCount} placeholder_tickers_cleaned=${cleanedUpLegacyPlaceholderTickerRows}`
   );
   console.log(`Records attempted=${filesAttempted}`);
   if (!inputFile && !inputDir && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {

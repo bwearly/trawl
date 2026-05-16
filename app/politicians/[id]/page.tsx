@@ -84,6 +84,14 @@ function toTimestamp(value: Date | null | undefined) {
   return new Date(value).getTime();
 }
 
+function getDisplayTicker(rawTicker: string | null | undefined) {
+  const normalized = (rawTicker ?? "").trim();
+  if (!normalized) return null;
+  const upper = normalized.toUpperCase();
+  if (upper === "--" || upper === "—" || upper === "N/A" || upper === "NONE" || upper === "NULL") return null;
+  return upper;
+}
+
 export default async function PoliticianDetailPage({ params }: PageProps) {
   const identity = await getPersonalizedUserIdentity();
   const { id } = await params;
@@ -266,15 +274,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                       className="border-b border-gray-100 last:border-b-0"
                     >
                       <td className="px-4 py-4">
-                        {row.ticker ? (
+                        {getDisplayTicker(row.ticker) ? (
                           <Link
-                            href={`/tickers/${row.ticker}`}
+                            href={`/tickers/${getDisplayTicker(row.ticker)}`}
                             className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-200"
                           >
-                            {row.ticker}
+                            {getDisplayTicker(row.ticker)}
                           </Link>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-400">No ticker</span>
                         )}
                       </td>
 
@@ -415,15 +423,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 {historicalSignals.map((row) => (
                   <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
                     <td className="px-4 py-4">
-                      {row.ticker ? (
+                      {getDisplayTicker(row.ticker) ? (
                         <Link
-                          href={`/tickers/${row.ticker}`}
+                          href={`/tickers/${getDisplayTicker(row.ticker)}`}
                           className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-200"
                         >
-                          {row.ticker}
+                          {getDisplayTicker(row.ticker)}
                         </Link>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">No ticker</span>
                       )}
                     </td>
                     <td className="px-4 py-4 text-gray-700">
