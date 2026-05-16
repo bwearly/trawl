@@ -78,7 +78,6 @@ const FINAL_EXPLICIT_OVERRIDES: Record<string, FinalOverrideRule> = {
   "house|JAMES E BANKS": {
     chamber: "house",
     canonicalIncludes: "Banks",
-    canonicalNamesAny: ["Jim Banks", "James E. Banks"],
     state: "IN",
     termType: "rep",
     party: "Republican",
@@ -331,6 +330,32 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
   return index;
 }
 
+function buildAllTermMetadataMatches(records: LegislatorRecord[]): MetadataMatch[] {
+  const matches: MetadataMatch[] = [];
+
+  for (const record of records) {
+    if (!record.name) continue;
+    const terms = (record.terms ?? []).filter((term) => term.type === "rep" || term.type === "sen");
+    if (terms.length === 0) continue;
+
+    const canonicalName = (record.name.official_full ?? buildNameVariants(record.name)[0] ?? "").trim();
+    if (!canonicalName) continue;
+
+    for (const term of terms) {
+      matches.push({
+        party: normalizeParty(term.party),
+        state: normalizeState(term.state),
+        canonicalName,
+        termType: term.type === "sen" ? "sen" : "rep",
+        termStart: term.start?.trim() ? term.start.trim() : null,
+        termEnd: term.end?.trim() ? term.end.trim() : null,
+      });
+    }
+  }
+
+  return dedupeMatches(matches);
+}
+
 function dedupeMatches(matches: MetadataMatch[]): MetadataMatch[] {
   const out = new Map<string, MetadataMatch>();
   for (const match of matches) {
@@ -350,8 +375,9 @@ async function backfillPoliticianMetadata() {
     fetchLegislators(CURRENT_LEGISLATORS_URL),
     fetchLegislators(HISTORICAL_LEGISLATORS_URL),
   ]);
-  const metadataIndex = buildMetadataIndex([...current, ...historical]);
-  const allMetadataMatches = dedupeMatches([...metadataIndex.values()].flat());
+  const allRecords = [...current, ...historical];
+  const metadataIndex = buildMetadataIndex(allRecords);
+  const allMetadataMatches = buildAllTermMetadataMatches(allRecords);
   const metadataRecordsLoaded = current.length + historical.length;
   console.log(`Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`Loaded metadata entries: ${metadataIndex.size} normalized name keys.`);
