@@ -25,6 +25,7 @@ type SearchParams = {
   politician?: string | string[];
   freshness?: string | string[];
   sort?: string | string[];
+  assetCoverage?: string | string[];
 };
 
 type SignalsPageProps = {
@@ -50,6 +51,7 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     politician: firstParam(params.politician),
     freshness: firstParam(params.freshness),
     sort,
+    assetCoverage: firstParam(params.assetCoverage),
   });
 
   const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([
@@ -80,6 +82,9 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Disclosure data may be delayed, incomplete, amended, or unavailable. Users should verify filings from the original source.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Ticker-backed disclosures are prioritized in research feeds. Some disclosures, such as bonds, may not have public ticker symbols.
             </p>
           </div>
 

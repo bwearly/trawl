@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     politician: searchParams.get("politician") ?? undefined,
     freshness: searchParams.get("freshness") ?? undefined,
     sort,
+    assetCoverage: searchParams.get("assetCoverage") ?? undefined,
   });
 
   const rows = await getSignals(filters);

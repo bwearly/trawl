@@ -9,7 +9,7 @@ import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
 
 type SignalCardProps = {
   signalId: number;
-  ticker: string;
+  ticker: string | null;
   score: string;
   signalStatus: string;
   politicianId: number;
@@ -68,6 +68,10 @@ function getFreshnessStyles(label: string) {
   if (label === "Historical") return "bg-gray-200 text-gray-700 ring-gray-300";
   return "bg-gray-100 text-gray-700 ring-gray-200";
 }
+function getDisplayTicker(rawTicker: string | null | undefined) {
+  const normalized = (rawTicker ?? "").trim();
+  return normalized.length > 0 ? normalized.toUpperCase() : null;
+}
 
 export default function SignalCard({
   signalId,
@@ -92,6 +96,7 @@ export default function SignalCard({
   initialIsWatchingTicker = false,
 }: SignalCardProps) {
   const freshnessLabel = getFilingFreshnessLabel(filingLagDays);
+  const displayTicker = getDisplayTicker(ticker);
   const freshnessBadgeCopy =
     freshnessLabel === "Historical" ? "Historical / Not actionable" : freshnessLabel;
   const alertTier = getSignalAlertTier({
@@ -105,12 +110,18 @@ export default function SignalCard({
     <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1.5">
-          <Link
-            href={`/tickers/${ticker}`}
-            className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-base font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
-          >
-            {ticker}
-          </Link>
+          {displayTicker ? (
+            <Link
+              href={`/tickers/${displayTicker}`}
+              className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-base font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
+            >
+              {displayTicker}
+            </Link>
+          ) : (
+            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-base font-semibold tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
+              No ticker
+            </span>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm text-gray-500">Research signal</p>
             <SignalStrengthBadge tier={alertTier} />
@@ -228,14 +239,16 @@ export default function SignalCard({
           </a>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <WatchButton
-            itemType="ticker"
-            ticker={ticker}
-            size="sm"
-            initialIsWatching={initialIsWatchingTicker}
-          />
-        </div>
+        {displayTicker ? (
+          <div className="ml-auto flex items-center gap-2 sm:ml-0">
+            <WatchButton
+              itemType="ticker"
+              ticker={displayTicker}
+              size="sm"
+              initialIsWatching={initialIsWatchingTicker}
+            />
+          </div>
+        ) : null}
       </div>
     </article>
   );

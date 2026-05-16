@@ -34,11 +34,12 @@ export type SignalFilters = {
     | "politician"
     | "tradeType"
     | "freshness";
+  assetCoverage: "tickerOnly" | "allDisclosures";
 };
 
 export type SignalRow = {
   signalId: number;
-  ticker: string;
+  ticker: string | null;
   score: string;
   signalStatus: string;
   primaryReason: string | null;
@@ -94,6 +95,10 @@ const SORT_OPTIONS = new Set<SignalFilters["sort"]>([
   "tradeType",
   "freshness",
 ]);
+const ASSET_COVERAGE_OPTIONS = new Set<SignalFilters["assetCoverage"]>([
+  "tickerOnly",
+  "allDisclosures",
+]);
 
 export function parseSignalSort(rawSort: string | undefined): SignalFilters["sort"] {
   return SORT_OPTIONS.has(rawSort as SignalFilters["sort"])
@@ -110,6 +115,7 @@ export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
   politician: "",
   freshness: "all",
   sort: "current",
+  assetCoverage: "tickerOnly",
 };
 
 export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, string>>): SignalFilters {
@@ -132,6 +138,11 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
   const freshness = FRESHNESS_OPTIONS.has(raw.freshness as SignalFilters["freshness"])
     ? (raw.freshness as SignalFilters["freshness"])
     : DEFAULT_SIGNAL_FILTERS.freshness;
+  const assetCoverage = ASSET_COVERAGE_OPTIONS.has(
+    raw.assetCoverage as SignalFilters["assetCoverage"]
+  )
+    ? (raw.assetCoverage as SignalFilters["assetCoverage"])
+    : DEFAULT_SIGNAL_FILTERS.assetCoverage;
 
   return {
     minScore,
@@ -142,6 +153,7 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
     politician: raw.politician?.trim() ?? DEFAULT_SIGNAL_FILTERS.politician,
     freshness,
     sort,
+    assetCoverage,
   };
 }
 
@@ -168,6 +180,9 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
   }
   if (filters.politician) {
     whereFilters.push(ilike(politicians.fullName, `%${filters.politician}%`));
+  }
+  if (filters.assetCoverage === "tickerOnly") {
+    whereFilters.push(sql`nullif(trim(${researchSignals.ticker}), '') is not null`);
   }
   if (filters.freshness === "fresh") {
     whereFilters.push(sql`${disclosures.filingLagDays} <= 15`);
