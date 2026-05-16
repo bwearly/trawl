@@ -13,6 +13,7 @@ export type SignalFilters = {
   minScore: "0" | "50" | "70" | "80";
   tradeType: "all" | "purchase" | "sale" | "exchange";
   party: "all" | "Democrat" | "Republican" | "Independent";
+  chamber: "all" | "house" | "senate";
   ticker: string;
   politician: string;
   freshness:
@@ -44,6 +45,7 @@ export type SignalRow = {
   reasonSummary: string | null;
   politicianId: number;
   politicianName: string;
+  chamber: string | null;
   tradeType: string;
   ownerType: string;
   amountRangeLabel: string | null;
@@ -71,6 +73,7 @@ const PARTY_OPTIONS = new Set<SignalFilters["party"]>([
   "Republican",
   "Independent",
 ]);
+const CHAMBER_OPTIONS = new Set<SignalFilters["chamber"]>(["all", "house", "senate"]);
 const FRESHNESS_OPTIONS = new Set<SignalFilters["freshness"]>([
   "all",
   "fresh",
@@ -102,6 +105,7 @@ export const DEFAULT_SIGNAL_FILTERS: SignalFilters = {
   minScore: "0",
   tradeType: "all",
   party: "all",
+  chamber: "all",
   ticker: "",
   politician: "",
   freshness: "all",
@@ -122,6 +126,9 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
     : DEFAULT_SIGNAL_FILTERS.party;
 
   const sort = parseSignalSort(raw.sort);
+  const chamber = CHAMBER_OPTIONS.has(raw.chamber as SignalFilters["chamber"])
+    ? (raw.chamber as SignalFilters["chamber"])
+    : DEFAULT_SIGNAL_FILTERS.chamber;
   const freshness = FRESHNESS_OPTIONS.has(raw.freshness as SignalFilters["freshness"])
     ? (raw.freshness as SignalFilters["freshness"])
     : DEFAULT_SIGNAL_FILTERS.freshness;
@@ -130,6 +137,7 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
     minScore,
     tradeType,
     party,
+    chamber,
     ticker: raw.ticker?.trim() ?? DEFAULT_SIGNAL_FILTERS.ticker,
     politician: raw.politician?.trim() ?? DEFAULT_SIGNAL_FILTERS.politician,
     freshness,
@@ -151,6 +159,9 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
 
   if (filters.party !== "all") {
     whereFilters.push(eq(politicians.party, filters.party));
+  }
+  if (filters.chamber !== "all") {
+    whereFilters.push(eq(politicians.chamber, filters.chamber));
   }
   if (filters.ticker) {
     whereFilters.push(ilike(researchSignals.ticker, `%${filters.ticker}%`));
@@ -214,6 +225,7 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
       reasonSummary: researchSignals.reasonSummary,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
+      chamber: politicians.chamber,
       tradeType: disclosures.tradeType,
       ownerType: disclosures.ownerType,
       amountRangeLabel: disclosures.amountRangeLabel,

@@ -50,6 +50,7 @@ export default function SignalFilters({
   const [minScore, setMinScore] = useState(initialFilters.minScore);
   const [tradeType, setTradeType] = useState(initialFilters.tradeType);
   const [party, setParty] = useState(initialFilters.party);
+  const [chamber, setChamber] = useState(initialFilters.chamber);
   const [ticker, setTicker] = useState(initialFilters.ticker);
   const [politician, setPolitician] = useState(initialFilters.politician);
   const [draftTicker, setDraftTicker] = useState(initialFilters.ticker);
@@ -94,6 +95,7 @@ export default function SignalFilters({
           minScore,
           tradeType,
           party,
+          chamber,
           ticker,
           politician,
           freshness,
@@ -131,6 +133,7 @@ export default function SignalFilters({
     minScore,
     tradeType,
     party,
+    chamber,
     ticker,
     politician,
     freshness,
@@ -420,6 +423,24 @@ export default function SignalFilters({
               <option value="purchase">Purchase</option>
               <option value="sale">Sale</option>
               <option value="exchange">Exchange</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-gray-700">
+              Chamber
+            </span>
+            <select
+              value={chamber}
+              onChange={(event) =>
+                setChamber(event.target.value as SignalFiltersType["chamber"])
+              }
+              disabled={isLoading}
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+            >
+              <option value="all">All Congress</option>
+              <option value="house">House</option>
+              <option value="senate">Senate</option>
             </select>
           </label>
 

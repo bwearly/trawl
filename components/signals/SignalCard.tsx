@@ -14,6 +14,7 @@ type SignalCardProps = {
   signalStatus: string;
   politicianId: number;
   politicianName: string;
+  chamber?: string | null;
   tradeType: string;
   ownerType: string;
   amountRangeLabel: string | null;
@@ -45,6 +46,11 @@ function formatTradeType(tradeType: string) {
 function formatOwnerType(ownerType: string) {
   return ownerType.charAt(0).toUpperCase() + ownerType.slice(1);
 }
+function formatChamber(chamber: string | null | undefined) {
+  if (chamber === "house") return "House";
+  if (chamber === "senate") return "Senate";
+  return "Unknown chamber";
+}
 
 function getScoreStyles(score: string) {
   const value = Number(score);
@@ -70,6 +76,7 @@ export default function SignalCard({
   signalStatus,
   politicianId,
   politicianName,
+  chamber,
   tradeType,
   ownerType,
   amountRangeLabel,
@@ -156,6 +163,11 @@ export default function SignalCard({
           <span className="font-medium text-gray-500">Trade type</span>
           <span className="mx-1.5 text-gray-300">•</span>
           <span className="text-gray-900">{formatTradeType(tradeType)}</span>
+        </p>
+        <p>
+          <span className="font-medium text-gray-500">Chamber</span>
+          <span className="mx-1.5 text-gray-300">•</span>
+          <span className="text-gray-900">{formatChamber(chamber)}</span>
         </p>
         <p>
           <span className="font-medium text-gray-500">Amount</span>
