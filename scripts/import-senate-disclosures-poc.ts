@@ -82,7 +82,7 @@ function parseDate(raw: string | null): Date | null {
 
 function toIsoDate(date: Date | null): string | null {
   if (!date) return null;
-  return date.toISOString();
+  return date.toISOString().slice(0, 10);
 }
 
 function inferOwnerType(raw: string | null): SenateNormalizedDisclosure["ownerType"] {
@@ -148,6 +148,39 @@ function normalizePoliticianName(raw: string) {
     }
   }
   return withoutHonorific.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
+
+function compactSnippet(value: string, maxLength = 140) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}…`;
+}
+
+function cleanHtmlText(html: string) {
+  return decodeHtmlEntities(stripTags(html)).replace(/\s+/g, " ").trim();
+}
+
+function extractReportLevelFields(body: string) {
+  const h2Match = body.match(/<h2[^>]*class=["'][^"']*filedReport[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i);
+  const politicianBlock = h2Match?.[1] ?? "";
+  const politicianRaw = cleanHtmlText(politicianBlock);
+
+  const filedStrongMatch = body.match(/<strong[^>]*class=["'][^"']*noWrap[^"']*["'][^>]*>([\s\S]*?)<\/strong>/i);
+  const filingBlock = filedStrongMatch?.[1] ?? "";
+  const filingText = cleanHtmlText(filingBlock);
+
+  const filingDateMatch = filingText.match(/\bFiled\s*(\d{1,2}\/\d{1,2}\/\d{4})\b/i);
+  const filingDateRaw = filingDateMatch?.[1] ?? "";
+
+  return {
+    politicianRaw,
+    filingDateRaw,
+    debug: {
+      politicianSnippet: compactSnippet(cleanHtmlText(politicianBlock)),
+      filingSnippet: compactSnippet(filingText),
+    },
+  };
 }
 
 function discoverReportUrls(html: string, limit: number) {
@@ -239,12 +272,9 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
   const body = await readFile(absolutePath, "utf8");
   const sourceUrl = `file://${absolutePath}`;
 
-  const h2Match = body.match(/<h2[^>]*class=["'][^"']*filedReport[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i);
-  const h2Text = h2Match ? htmlCellText(h2Match[1] ?? "") : "";
-
-  const filedReportMatch = h2Text.match(/for\s+(.+?)\s+Filed\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*@\s*([0-9: ]+[AP]M)/i);
-  const politicianLabel = filedReportMatch?.[1]?.trim() ?? "";
-  const filingDateRaw = filedReportMatch?.[2]?.trim() ?? "";
+  const reportFields = extractReportLevelFields(body);
+  const politicianLabel = reportFields.politicianRaw;
+  const filingDateRaw = reportFields.filingDateRaw;
 
   const tableMatch = body.match(/<table[^>]*>[\s\S]*?<\/table>/gi) ?? [];
   const transactionTable = tableMatch.find((tableHtml) => {
@@ -256,7 +286,7 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
     failures.push({
       sourceUrl,
       reason: "manual_html_parse_failed",
-      detail: `table=${Boolean(transactionTable)} politician=${Boolean(politicianLabel)} filingDate=${Boolean(filingDateRaw)}`,
+      detail: `table=${Boolean(transactionTable)} politician=${Boolean(politicianLabel)} filingDate=${Boolean(filingDateRaw)} politicianSnippet="${reportFields.debug.politicianSnippet || "n/a"}" filingSnippet="${reportFields.debug.filingSnippet || "n/a"}"`,
     });
     console.log(`Manual input mode used. file=${absolutePath}`);
     return;
