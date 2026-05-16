@@ -55,12 +55,69 @@ type ChamberAwareAliasRule = {
   expectedTermType: "rep" | "sen";
 };
 
+type FinalOverrideRule = {
+  chamber: SupportedChamber;
+  politicianId?: number;
+  canonicalName?: string;
+  state?: string;
+  termType: "rep" | "sen";
+  party?: string;
+};
+
 const CHAMBER_AWARE_ALIAS_RULES: Record<string, ChamberAwareAliasRule> = {
   "house|JAMES E HON BANKS": { chamber: "house", aliasTarget: "JIM BANKS", expectedState: "IN", expectedTermType: "rep" },
   "house|RICHARD DEAN DR MCCORMICK": { chamber: "house", aliasTarget: "RICH MCCORMICK", expectedState: "GA", expectedTermType: "rep" },
   "house|JOHN MCGUIRE": { chamber: "house", aliasTarget: "JOHN J MCGUIRE", expectedState: "VA", expectedTermType: "rep" },
   "house|MARK DR GREEN": { chamber: "house", aliasTarget: "MARK E GREEN", expectedState: "TN", expectedTermType: "rep" },
   "senate|JAMES BANKS": { chamber: "senate", aliasTarget: "JIM BANKS", expectedState: "IN", expectedTermType: "sen" },
+};
+
+const FINAL_EXPLICIT_OVERRIDES: Record<string, FinalOverrideRule> = {
+  "house|JAMES E BANKS": {
+    chamber: "house",
+    canonicalName: "Jim Banks",
+    state: "IN",
+    termType: "rep",
+    party: "Republican",
+  },
+  "house|JAMES E HON BANKS": {
+    chamber: "house",
+    politicianId: 74,
+    canonicalName: "Jim Banks",
+    state: "IN",
+    termType: "rep",
+    party: "Republican",
+  },
+  "house|RICHARD DEAN MCCORMICK": {
+    chamber: "house",
+    canonicalName: "Richard McCormick",
+    state: "GA",
+    termType: "rep",
+    party: "Republican",
+  },
+  "house|RICHARD DEAN DR MCCORMICK": {
+    chamber: "house",
+    politicianId: 52,
+    canonicalName: "Richard McCormick",
+    state: "GA",
+    termType: "rep",
+    party: "Republican",
+  },
+  "house|MARK GREEN": {
+    chamber: "house",
+    canonicalName: "Mark E. Green",
+    state: "TN",
+    termType: "rep",
+    party: "Republican",
+  },
+  "house|MARK DR GREEN": {
+    chamber: "house",
+    politicianId: 95,
+    canonicalName: "Mark E. Green",
+    state: "TN",
+    termType: "rep",
+    party: "Republican",
+  },
 };
 
 const NAME_ALIASES: Record<string, string> = {
@@ -164,6 +221,31 @@ function getRuleScopedMatches(
     scoped = scoped.filter((m) => normalizeState(m.state) === rule.expectedState);
   }
   return { matches: dedupeMatches(scoped), matchedByRule: true };
+}
+
+function getFinalOverride(politician: PoliticianRow & { chamber: SupportedChamber }): FinalOverrideRule | null {
+  const normalized = normalizeName(politician.fullName);
+  const rule = FINAL_EXPLICIT_OVERRIDES[`${politician.chamber}|${normalized}`];
+  if (!rule) return null;
+  if (rule.politicianId !== undefined && rule.politicianId !== politician.id) return null;
+  return rule;
+}
+
+function applyFinalOverride(matches: MetadataMatch[], override: FinalOverrideRule | null): MetadataMatch[] {
+  if (!override) return matches;
+  const canonicalNeedle = override.canonicalName?.toUpperCase();
+  const stateNeedle = override.state ? normalizeState(override.state) : null;
+  const partyNeedle = override.party ? normalizeParty(override.party) : null;
+
+  return dedupeMatches(
+    matches.filter((match) => {
+      if (match.termType !== override.termType) return false;
+      if (canonicalNeedle && !match.canonicalName.toUpperCase().includes(canonicalNeedle)) return false;
+      if (stateNeedle && normalizeState(match.state) !== stateNeedle) return false;
+      if (partyNeedle && normalizeParty(match.party) !== partyNeedle) return false;
+      return true;
+    })
+  );
 }
 
 function buildNameVariants(name: LegislatorName): string[] {
@@ -277,6 +359,7 @@ async function backfillPoliticianMetadata() {
   let matchedByStateDisambiguationCount = 0;
   let matchedByExactCount = 0;
   let matchedByChamberCount = 0;
+  let matchedByFinalOverrideCount = 0;
 
   const houseScannedCount = scopedPoliticians.filter((p) => p.chamber === "house").length;
   const senateScannedCount = scopedPoliticians.filter((p) => p.chamber === "senate").length;
@@ -289,13 +372,57 @@ async function backfillPoliticianMetadata() {
     const expectedTermType = politician.chamber === "house" ? "rep" : "sen";
     const { matches: allMatches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
     const chamberMatches = allMatches.filter((match) => match.termType === expectedTermType);
-    const { matches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
+    const { matches: ruleMatches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
+    const finalOverride = getFinalOverride(politician);
+    const matches = applyFinalOverride(ruleMatches, finalOverride);
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
     if (matchedByAlias || matchedByRule) matchedByAliasCount += 1;
+    if (finalOverride && matches.length > 0) matchedByFinalOverrideCount += 1;
     if (matches.length > 1) {
+      if (finalOverride && (finalOverride.canonicalName || finalOverride.state)) {
+        const recentSorted = [...matches].sort((a, b) => (b.termStart ?? "").localeCompare(a.termStart ?? ""));
+        const mostRecent = recentSorted[0];
+        if (mostRecent) {
+          matched += 1;
+          if (politician.chamber === "house") matchedHouseCount += 1;
+          if (politician.chamber === "senate") matchedSenateCount += 1;
+          const shouldSkipParty = !force && politician.party !== null;
+          const shouldSkipState = !force && politician.state !== null;
+          if (shouldSkipParty && shouldSkipState) {
+            skippedExisting += 1;
+            continue;
+          }
+          const nextParty = force || politician.party === null ? (mostRecent.party ?? politician.party) : politician.party;
+          const nextState = force || politician.state === null ? (mostRecent.state ?? politician.state) : politician.state;
+
+          if (nextParty === politician.party && nextState === politician.state) {
+            noChange += 1;
+            continue;
+          }
+
+          await db
+            .update(politicians)
+            .set({
+              party: nextParty,
+              state: nextState,
+            })
+            .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, politician.chamber)));
+
+          if (nextParty !== politician.party) updatedPartyCount += 1;
+          if (nextState !== politician.state) updatedStateCount += 1;
+          updated += 1;
+          console.log(
+            `✅ Updated ${politician.fullName}: party ${politician.party ?? "NULL"} -> ${nextParty ?? "NULL"}, state ${politician.state ?? "NULL"} -> ${nextState ?? "NULL"}`
+          );
+          console.log(
+            `ℹ️ Matched by final override for id=${politician.id} (${politician.chamber}|${normalizeName(politician.fullName)}) with most recent termStart=${mostRecent.termStart ?? "?"}.`
+          );
+          continue;
+        }
+      }
       const politicianState = normalizeState(politician.state);
       const stateScopedMatches = politicianState
         ? matches.filter((candidate) => normalizeState(candidate.state) === politicianState)
@@ -405,6 +532,7 @@ async function backfillPoliticianMetadata() {
   console.log(`- Matched by alias: ${matchedByAliasCount}`);
   console.log(`- Matched by exact: ${matchedByExactCount}`);
   console.log(`- Matched by chamber: ${matchedByChamberCount}`);
+  console.log(`- Matched by final override: ${matchedByFinalOverrideCount}`);
   console.log(`- Matched by state disambiguation: ${matchedByStateDisambiguationCount}`);
   console.log(`- Skipped existing: ${skippedExisting}`);
   console.log(`- Unchanged: ${noChange}`);
