@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     minScore: searchParams.get("minScore") ?? undefined,
     tradeType: searchParams.get("tradeType") ?? undefined,
     party: searchParams.get("party") ?? undefined,
+    chamber: searchParams.get("chamber") ?? undefined,
     ticker: searchParams.get("ticker") ?? undefined,
     politician: searchParams.get("politician") ?? undefined,
     freshness: searchParams.get("freshness") ?? undefined,

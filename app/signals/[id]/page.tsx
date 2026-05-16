@@ -113,6 +113,7 @@ export default async function SignalDetailPage({
       amountRangeLabel: disclosures.amountRangeLabel,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
+      chamber: politicians.chamber,
       historicalSampleSize: politicianStats.totalDisclosures,
       historicalPoliticianScore: researchSignals.historicalPoliticianScore,
       tradeSizeScore: researchSignals.tradeSizeScore,
@@ -315,6 +316,9 @@ export default async function SignalDetailPage({
               )}
               <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
                 Signal #{signal.id}
+              </span>
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
+                {signal.chamber === "senate" ? "Senate" : "House"}
               </span>
               <SignalStrengthBadge tier={alertTier} />
               <SignalConfidenceBadge

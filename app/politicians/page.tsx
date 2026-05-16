@@ -5,6 +5,9 @@ import {
 } from "@/lib/domain/politicians/get-politicians-leaderboard";
 import Link from "next/link";
 import type { Metadata } from "next";
+type PageProps = {
+  searchParams: Promise<{ chamber?: string | string[] }>;
+};
 
 export const metadata: Metadata = {
   title: "Politician Disclosure Analytics | Trawl",
@@ -47,8 +50,16 @@ function getWinRateTone(value: number | null) {
   return "text-amber-600";
 }
 
-export default async function PoliticiansLeaderboardPage() {
-  const rows = await getPoliticianLeaderboard();
+export default async function PoliticiansLeaderboardPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const chamberParam = Array.isArray(params.chamber) ? params.chamber[0] : params.chamber;
+  const selectedChamber =
+    chamberParam === "house" || chamberParam === "senate" ? chamberParam : "all";
+  const allRows = await getPoliticianLeaderboard();
+  const rows =
+    selectedChamber === "all"
+      ? allRows
+      : allRows.filter((row) => row.chamber === selectedChamber);
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -101,6 +112,12 @@ export default async function PoliticiansLeaderboardPage() {
               </div>
 
             <div className="text-sm text-gray-500">
+              <div className="mb-2">
+                <span className="mr-2">Chamber:</span>
+                <Link href="/politicians" className="mr-2 underline">All Congress</Link>
+                <Link href="/politicians?chamber=house" className="mr-2 underline">House</Link>
+                <Link href="/politicians?chamber=senate" className="underline">Senate</Link>
+              </div>
               {rows.length} politician{rows.length === 1 ? "" : "s"}
             </div>
           </div>
@@ -196,7 +213,10 @@ export default async function PoliticiansLeaderboardPage() {
                       colSpan={10}
                       className="px-4 py-10 text-center text-sm text-gray-500"
                     >
-                      <p>No politician stats are available yet.</p>
+                      <p>
+                        No politician stats are available yet
+                        {selectedChamber === "all" ? "." : ` for ${selectedChamber === "house" ? "House" : "Senate"}.`}
+                      </p>
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
                         <Link
                           href="/signals"

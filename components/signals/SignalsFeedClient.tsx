@@ -80,6 +80,12 @@ export default function SignalsFeedClient({
 }: SignalsFeedClientProps) {
   const [signals, setSignals] = useState<SignalRow[]>(initialSignals);
   const [isLoading, setIsLoading] = useState(false);
+  const selectedChamberLabel =
+    initialFilters.chamber === "house"
+      ? "House"
+      : initialFilters.chamber === "senate"
+      ? "Senate"
+      : "All Congress";
   const watchedTickerSet = new Set(initialWatchedTickers);
 
   const feedItems = useMemo(() => {
@@ -111,7 +117,7 @@ export default function SignalsFeedClient({
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               Try widening your filters or return to the default signals feed to
-              explore more disclosures.
+              explore more disclosures for {selectedChamberLabel}.
             </p>
             <div className="mt-5">
               <Link
@@ -136,6 +142,7 @@ export default function SignalsFeedClient({
                   signalStatus={signal.signalStatus}
                   politicianId={signal.politicianId}
                   politicianName={signal.politicianName}
+                  chamber={signal.chamber}
                   tradeType={signal.tradeType}
                   ownerType={signal.ownerType}
                   amountRangeLabel={signal.amountRangeLabel}
@@ -168,6 +175,9 @@ export default function SignalsFeedClient({
                       </span>
                       <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-700 ring-1 ring-inset ring-gray-200">
                         {item.cluster.dominantTradeType}
+                      </span>
+                      <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
+                        {newestSignal.row.chamber === "senate" ? "Senate" : "House"}
                       </span>
                       <span className="text-xs font-medium text-gray-500">
                         Latest {formatDate(item.cluster.lastTradeDate)} ({formatDaysAgo(item.cluster.lastTradeDate)})

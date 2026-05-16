@@ -325,9 +325,9 @@ async function backfillPoliticianMetadata() {
   console.log(`- House politicians scanned: ${houseScannedCount}`);
   console.log(`- Senate politicians scanned: ${senateScannedCount}`);
   console.log(`- Metadata records loaded: ${metadataRecordsLoaded}`);
-  console.log(`- Matched (single): ${matched}`);
-  console.log(`- Matched by chamber (house): ${matchedHouseCount}`);
-  console.log(`- Matched by chamber (senate): ${matchedSenateCount}`);
+  console.log(`- Matched House: ${matchedHouseCount}`);
+  console.log(`- Matched Senate: ${matchedSenateCount}`);
+  console.log(`- Matched total: ${matched}`);
   console.log(`- Updated: ${updated}`);
   console.log(`- Updated party count: ${updatedPartyCount}`);
   console.log(`- Updated state count: ${updatedStateCount}`);

@@ -36,6 +36,11 @@ function getWinRateTone(value: number | null) {
   if (value < 50) return "text-rose-600";
   return "text-amber-600";
 }
+function formatChamber(chamber: string | null) {
+  if (chamber === "house") return "House";
+  if (chamber === "senate") return "Senate";
+  return "Unknown";
+}
 
 export default function WatchlistContent({
   initialPoliticians,
@@ -104,6 +109,8 @@ export default function WatchlistContent({
               <div>
                 <div className="font-semibold text-gray-900">{p.fullName}</div>
                 <div className="text-xs text-gray-500">
+                  {formatChamber(p.chamber)}
+                  {" · "}
                   {p.party ?? "Unknown"}
                   {p.state ? ` · ${p.state}` : ""}
                 </div>
