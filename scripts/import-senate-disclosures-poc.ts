@@ -30,7 +30,7 @@ type ParseFailure = {
 const SOURCE_LABEL = "Senate Financial Disclosure" as const;
 const HOME_URL = "https://efdsearch.senate.gov/search/home/";
 const DEFAULT_LIMIT = 5;
-const MAX_LIMIT = 10;
+const MAX_LIMIT = 1000;
 const REQUEST_DELAY_MS = 1250;
 const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A", "NONE"]);
 
@@ -113,10 +113,18 @@ function inferOwnerType(raw: string | null): SenateNormalizedDisclosure["ownerTy
 
 function inferAssetType(assetName: string) {
   const value = assetName.toLowerCase();
-  if (value.includes("etf")) return "etf";
-  if (value.includes("option") || value.includes("call") || value.includes("put")) return "option";
-  if (value.includes("stock") || value.includes("inc") || value.includes("corp") || value.includes("class ")) return "stock";
-  return "other";
+  if (value.includes("etf")) return "ETF";
+  if (value.includes("option") || value.includes("call") || value.includes("put")) return "Option";
+  if (
+    value.includes("bond") ||
+    value.includes("note") ||
+    value.includes("coupon") ||
+    value.includes("maturity")
+  ) {
+    return "Corporate Bond";
+  }
+  if (value.includes("stock") || value.includes("inc") || value.includes("corp") || value.includes("class ")) return "Stock";
+  return "Other";
 }
 
 function extractTicker(assetName: string): string | null {
@@ -348,7 +356,7 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
       state: null,
       ticker: normalizeTickerValue(cells[headerIndex.get("ticker") ?? -1] ?? "") ?? extractTicker(assetName),
       assetName,
-      assetType: cells[headerIndex.get("asset type") ?? -1] ?? inferAssetType(assetName),
+      assetType: (cells[headerIndex.get("asset type") ?? -1] ?? "").trim() || inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeRaw),
       ownerType: inferOwnerType(cells[headerIndex.get("owner") ?? -1] ?? null),
       amountRangeLabel: cells[headerIndex.get("amount") ?? -1] ?? null,

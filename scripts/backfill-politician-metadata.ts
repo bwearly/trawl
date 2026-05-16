@@ -59,6 +59,7 @@ type FinalOverrideRule = {
   chamber: SupportedChamber;
   politicianId?: number;
   canonicalName?: string;
+  canonicalIncludes?: string;
   state?: string;
   termType: "rep" | "sen";
   party?: string;
@@ -76,14 +77,7 @@ const FINAL_EXPLICIT_OVERRIDES: Record<string, FinalOverrideRule> = {
   "house|JAMES E BANKS": {
     chamber: "house",
     canonicalName: "Jim Banks",
-    state: "IN",
-    termType: "rep",
-    party: "Republican",
-  },
-  "house|JAMES E HON BANKS": {
-    chamber: "house",
-    politicianId: 74,
-    canonicalName: "Jim Banks",
+    canonicalIncludes: "Banks",
     state: "IN",
     termType: "rep",
     party: "Republican",
@@ -232,13 +226,17 @@ function getFinalOverride(politician: PoliticianRow & { chamber: SupportedChambe
   return rule;
 }
 
-function applyFinalOverride(matches: MetadataMatch[], override: FinalOverrideRule | null): MetadataMatch[] {
-  if (!override) return matches;
+function applyFinalOverride(
+  matches: MetadataMatch[],
+  override: FinalOverrideRule | null
+): { matches: MetadataMatch[]; overrideKeyChecked: string | null; usedFallback: boolean } {
+  if (!override) return { matches, overrideKeyChecked: null, usedFallback: false };
   const canonicalNeedle = override.canonicalName?.toUpperCase();
+  const canonicalIncludesNeedle = override.canonicalIncludes?.toUpperCase();
   const stateNeedle = override.state ? normalizeState(override.state) : null;
   const partyNeedle = override.party ? normalizeParty(override.party) : null;
 
-  return dedupeMatches(
+  const primaryMatches = dedupeMatches(
     matches.filter((match) => {
       if (match.termType !== override.termType) return false;
       if (canonicalNeedle && !match.canonicalName.toUpperCase().includes(canonicalNeedle)) return false;
@@ -247,6 +245,20 @@ function applyFinalOverride(matches: MetadataMatch[], override: FinalOverrideRul
       return true;
     })
   );
+
+  if (primaryMatches.length > 0) return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle, usedFallback: false };
+  if (!canonicalIncludesNeedle) return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle, usedFallback: false };
+
+  const fallbackMatches = dedupeMatches(
+    matches.filter((match) => {
+      if (match.termType !== override.termType) return false;
+      if (stateNeedle && normalizeState(match.state) !== stateNeedle) return false;
+      if (partyNeedle && normalizeParty(match.party) !== partyNeedle) return false;
+      return match.canonicalName.toUpperCase().includes(canonicalIncludesNeedle);
+    })
+  );
+
+  return { matches: fallbackMatches, overrideKeyChecked: canonicalIncludesNeedle, usedFallback: true };
 }
 
 function buildNameVariants(name: LegislatorName): string[] {
@@ -374,14 +386,27 @@ async function backfillPoliticianMetadata() {
     const { matches: allMatches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
     const chamberMatches = allMatches.filter((match) => match.termType === expectedTermType);
     const { matches: ruleMatches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
+    const normalizedName = normalizeName(politician.fullName);
     const finalOverride = getFinalOverride(politician);
-    const matches = applyFinalOverride(ruleMatches, finalOverride);
+    const { matches, overrideKeyChecked, usedFallback } = applyFinalOverride(ruleMatches, finalOverride);
+    if (finalOverride) {
+      console.log(
+        `ℹ️ Final override check: fullName="${politician.fullName}", normalizedKey="${normalizedName}", overrideKey="${overrideKeyChecked ?? "none"}", fallback=${usedFallback ? "yes" : "no"}`
+      );
+    }
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
     if (matchedByAlias || matchedByRule) matchedByAliasCount += 1;
     if (finalOverride && matches.length > 0) matchedByFinalOverrideCount += 1;
+    if (finalOverride && matches.length > 0) {
+      for (const candidate of matches) {
+        console.log(
+          `ℹ️ Final override candidate: canonicalName=${candidate.canonicalName}, state=${candidate.state ?? "NULL"}, party=${candidate.party ?? "NULL"}, termType=${candidate.termType}`
+        );
+      }
+    }
     if (matches.length > 1) {
       if (finalOverride && (finalOverride.canonicalName || finalOverride.state)) {
         const recentSorted = [...matches].sort((a, b) => (b.termStart ?? "").localeCompare(a.termStart ?? ""));
@@ -419,7 +444,7 @@ async function backfillPoliticianMetadata() {
             `✅ Updated ${politician.fullName}: party ${politician.party ?? "NULL"} -> ${nextParty ?? "NULL"}, state ${politician.state ?? "NULL"} -> ${nextState ?? "NULL"}`
           );
           console.log(
-            `ℹ️ Matched by final override for id=${politician.id} (${politician.chamber}|${normalizeName(politician.fullName)}) with most recent termStart=${mostRecent.termStart ?? "?"}.`
+            `ℹ️ Matched by final override for id=${politician.id} (${politician.chamber}|${normalizedName}) with most recent termStart=${mostRecent.termStart ?? "?"}.`
           );
           continue;
         }

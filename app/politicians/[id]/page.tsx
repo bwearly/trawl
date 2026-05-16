@@ -274,13 +274,16 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                             {row.ticker}
                           </Link>
                         ) : (
-                          <span className="text-gray-400">Not available</span>
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
 
                       <td className="px-4 py-4 text-gray-700">
                         <span className="block max-w-[18rem] truncate" title={row.assetName}>
                           {row.assetName}
+                        </span>
+                        <span className="mt-1 block text-xs text-gray-500">
+                          {row.assetType || "Unknown asset type"}
                         </span>
                       </td>
 
@@ -420,12 +423,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                           {row.ticker}
                         </Link>
                       ) : (
-                        <span className="text-gray-400">Not available</span>
+                        <span className="text-gray-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-4 text-gray-700">
                       <span className="block max-w-[18rem] truncate" title={row.assetName}>
                         {row.assetName}
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        {row.assetType || "Unknown asset type"}
                       </span>
                     </td>
                     <td className="px-4 py-4">
