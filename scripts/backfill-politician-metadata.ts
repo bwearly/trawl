@@ -34,10 +34,13 @@ type LegislatorRecord = {
   terms?: LegislatorTerm[];
 };
 
+type SupportedChamber = "house" | "senate";
+
 type MetadataMatch = {
   state: string | null;
   party: string | null;
   canonicalName: string;
+  termType: "rep" | "sen";
 };
 
 const NAME_ALIASES: Record<string, string> = {
@@ -151,6 +154,7 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
     const congressionalTerms = terms.filter((term) => term.type === "rep" || term.type === "sen");
     if (congressionalTerms.length === 0 || !record.name) continue;
     const latestTerm = congressionalTerms[congressionalTerms.length - 1];
+    const termType = latestTerm?.type === "sen" ? "sen" : "rep";
     const party = normalizeParty(latestTerm?.party);
     const state = normalizeState(latestTerm?.state);
     const canonicalName = (record.name.official_full ?? buildNameVariants(record.name)[0] ?? "").trim();
@@ -160,7 +164,7 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
       const key = normalizeName(variant);
       if (!key) continue;
       const existing = index.get(key) ?? [];
-      existing.push({ party, state, canonicalName });
+      existing.push({ party, state, canonicalName, termType });
       index.set(key, existing);
     }
   }
@@ -192,7 +196,7 @@ async function backfillPoliticianMetadata() {
   console.log(`Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`Loaded metadata entries: ${metadataIndex.size} normalized name keys.`);
 
-  const housePoliticians: PoliticianRow[] = await db
+  const allPoliticians: PoliticianRow[] = await db
     .select({
       id: politicians.id,
       fullName: politicians.fullName,
@@ -200,8 +204,12 @@ async function backfillPoliticianMetadata() {
       party: politicians.party,
       state: politicians.state,
     })
-    .from(politicians)
-    .where(eq(politicians.chamber, "house"));
+    .from(politicians);
+
+  const scopedPoliticians = allPoliticians.filter(
+    (politician): politician is PoliticianRow & { chamber: SupportedChamber } =>
+      politician.chamber === "house" || politician.chamber === "senate"
+  );
 
   const unmatched: Array<{ id: number; fullName: string; reason: string; candidates?: MetadataMatch[] }> = [];
   let updated = 0;
@@ -213,10 +221,17 @@ async function backfillPoliticianMetadata() {
   let matchedByAliasCount = 0;
   let matchedByStateDisambiguationCount = 0;
 
-  console.log(`Politicians loaded: ${housePoliticians.length}`);
+  const houseScannedCount = scopedPoliticians.filter((p) => p.chamber === "house").length;
+  const senateScannedCount = scopedPoliticians.filter((p) => p.chamber === "senate").length;
+  let matchedHouseCount = 0;
+  let matchedSenateCount = 0;
 
-  for (const politician of housePoliticians) {
-    const { matches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
+  console.log(`Politicians loaded: ${scopedPoliticians.length}`);
+
+  for (const politician of scopedPoliticians) {
+    const expectedTermType = politician.chamber === "house" ? "rep" : "sen";
+    const { matches: allMatches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
+    const matches = allMatches.filter((match) => match.termType === expectedTermType);
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
@@ -230,6 +245,8 @@ async function backfillPoliticianMetadata() {
       if (stateScopedMatches.length === 1) {
         matchedByStateDisambiguationCount += 1;
         matched += 1;
+        if (politician.chamber === "house") matchedHouseCount += 1;
+        if (politician.chamber === "senate") matchedSenateCount += 1;
         const match = stateScopedMatches[0];
         const shouldSkipParty = !force && politician.party !== null;
         const shouldSkipState = !force && politician.state !== null;
@@ -251,7 +268,7 @@ async function backfillPoliticianMetadata() {
             party: nextParty,
             state: nextState,
           })
-          .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, "house")));
+          .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, politician.chamber)));
 
         if (nextParty !== politician.party) updatedPartyCount += 1;
         if (nextState !== politician.state) updatedStateCount += 1;
@@ -266,6 +283,8 @@ async function backfillPoliticianMetadata() {
       continue;
     }
     matched += 1;
+    if (politician.chamber === "house") matchedHouseCount += 1;
+    if (politician.chamber === "senate") matchedSenateCount += 1;
     const match = matches[0];
     const shouldSkipParty = !force && politician.party !== null;
     const shouldSkipState = !force && politician.state !== null;
@@ -287,7 +306,7 @@ async function backfillPoliticianMetadata() {
         party: nextParty,
         state: nextState,
       })
-      .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, "house")));
+      .where(and(eq(politicians.id, politician.id), eq(politicians.chamber, politician.chamber)));
 
     if (nextParty !== politician.party) updatedPartyCount += 1;
     if (nextState !== politician.state) updatedStateCount += 1;
@@ -303,9 +322,12 @@ async function backfillPoliticianMetadata() {
   const unmatchedAmbiguousCount = unmatched.filter((entry) => entry.reason === "ambiguous_match").length;
 
   console.log("Backfill complete.");
-  console.log(`- House politicians scanned: ${housePoliticians.length}`);
+  console.log(`- House politicians scanned: ${houseScannedCount}`);
+  console.log(`- Senate politicians scanned: ${senateScannedCount}`);
   console.log(`- Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`- Matched (single): ${matched}`);
+  console.log(`- Matched by chamber (house): ${matchedHouseCount}`);
+  console.log(`- Matched by chamber (senate): ${matchedSenateCount}`);
   console.log(`- Updated: ${updated}`);
   console.log(`- Updated party count: ${updatedPartyCount}`);
   console.log(`- Updated state count: ${updatedStateCount}`);
