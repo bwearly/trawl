@@ -120,6 +120,36 @@ function stripTags(html: string) {
   return html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
+}
+
+function htmlCellText(value: string) {
+  return decodeHtmlEntities(stripTags(value)).replace(/\s+/g, " ").trim();
+}
+
+function normalizePoliticianName(raw: string) {
+  const withoutHonorific = raw.replace(/^The Honorable\s+/i, "").trim();
+  const parenMatch = withoutHonorific.match(/\(([^)]+)\)/);
+  if (parenMatch?.[1]) {
+    const inner = parenMatch[1].trim();
+    const lastFirst = inner.match(/^([^,]+),\s*(.+)$/);
+    if (lastFirst?.[1] && lastFirst?.[2]) {
+      const firstName = lastFirst[2].trim().split(/\s+/)[0] ?? lastFirst[2].trim();
+      return `${firstName} ${lastFirst[1].trim()}`;
+    }
+  }
+  return withoutHonorific.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}
+
 function discoverReportUrls(html: string, limit: number) {
   const links = new Set<string>();
   const regex = /href=["']([^"']*(?:\/search\/(?:view|report)[^"']*|\/search\/view\/ptr\/[^"]*))["']/gi;
@@ -207,10 +237,85 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
   const { readFile } = await import("node:fs/promises");
   const absolutePath = resolve(inputFile);
   const body = await readFile(absolutePath, "utf8");
-  const stripped = stripTags(body);
-  const parsed = normalizeFromText(`file://${absolutePath}`, stripped);
-  if (parsed.row) normalized.push(parsed.row);
-  else if (parsed.failure) failures.push(parsed.failure);
+  const sourceUrl = `file://${absolutePath}`;
+
+  const h2Match = body.match(/<h2[^>]*class=["'][^"']*filedReport[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i);
+  const h2Text = h2Match ? htmlCellText(h2Match[1] ?? "") : "";
+
+  const filedReportMatch = h2Text.match(/for\s+(.+?)\s+Filed\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*@\s*([0-9: ]+[AP]M)/i);
+  const politicianLabel = filedReportMatch?.[1]?.trim() ?? "";
+  const filingDateRaw = filedReportMatch?.[2]?.trim() ?? "";
+
+  const tableMatch = body.match(/<table[^>]*>[\s\S]*?<\/table>/gi) ?? [];
+  const transactionTable = tableMatch.find((tableHtml) => {
+    const tableText = htmlCellText(tableHtml).toLowerCase();
+    return tableText.includes("transaction date") && tableText.includes("asset name") && tableText.includes("amount");
+  });
+
+  if (!transactionTable || !politicianLabel || !filingDateRaw) {
+    failures.push({
+      sourceUrl,
+      reason: "manual_html_parse_failed",
+      detail: `table=${Boolean(transactionTable)} politician=${Boolean(politicianLabel)} filingDate=${Boolean(filingDateRaw)}`,
+    });
+    console.log(`Manual input mode used. file=${absolutePath}`);
+    return;
+  }
+
+  const rowMatches = [...transactionTable.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  if (rowMatches.length < 2) {
+    failures.push({ sourceUrl, reason: "manual_html_no_rows" });
+    console.log(`Manual input mode used. file=${absolutePath}`);
+    return;
+  }
+
+  const headerCells = [...(rowMatches[0]?.[1] ?? "").matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((m) => htmlCellText(m[1] ?? ""));
+  const headerIndex = new Map<string, number>();
+  headerCells.forEach((header, index) => headerIndex.set(header.toLowerCase(), index));
+
+  const requiredHeaders = ["transaction date", "owner", "ticker", "asset name", "asset type", "type", "amount", "comment"];
+  if (requiredHeaders.some((header) => !headerIndex.has(header))) {
+    failures.push({ sourceUrl, reason: "manual_html_missing_headers", detail: headerCells.join(" | ") });
+    console.log(`Manual input mode used. file=${absolutePath}`);
+    return;
+  }
+
+  const politicianName = normalizePoliticianName(politicianLabel);
+  const filingDate = parseDate(filingDateRaw);
+
+  for (const rowMatch of rowMatches.slice(1)) {
+    const cellMatches = [...(rowMatch[1] ?? "").matchAll(/<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)];
+    if (cellMatches.length === 0) continue;
+    const cells = cellMatches.map((m) => htmlCellText(m[1] ?? ""));
+    const tradeTypeRaw = cells[headerIndex.get("type") ?? -1] ?? "";
+    const assetName = cells[headerIndex.get("asset name") ?? -1] ?? "";
+    const tradeDateRaw = cells[headerIndex.get("transaction date") ?? -1] ?? "";
+    if (!tradeTypeRaw || !assetName || !tradeDateRaw) continue;
+
+    const tradeDate = parseDate(tradeDateRaw);
+    const filingLagDays = tradeDate && filingDate ? Math.floor((filingDate.getTime() - tradeDate.getTime()) / 86400000) : null;
+    normalized.push({
+      politicianName,
+      chamber: "senate",
+      party: null,
+      state: null,
+      ticker: (cells[headerIndex.get("ticker") ?? -1] ?? "").toUpperCase() || extractTicker(assetName),
+      assetName,
+      assetType: cells[headerIndex.get("asset type") ?? -1] ?? inferAssetType(assetName),
+      tradeType: normalizeTradeType(tradeTypeRaw),
+      ownerType: inferOwnerType(cells[headerIndex.get("owner") ?? -1] ?? null),
+      amountRangeLabel: cells[headerIndex.get("amount") ?? -1] ?? null,
+      tradeDate: toIsoDate(tradeDate),
+      filingDate: toIsoDate(filingDate),
+      filingLagDays,
+      sourceUrl,
+      sourceLabel: SOURCE_LABEL,
+    });
+  }
+
+  if (normalized.length === 0) {
+    failures.push({ sourceUrl, reason: "manual_html_rows_not_normalized" });
+  }
   console.log(`Manual input mode used. file=${absolutePath}`);
 }
 
