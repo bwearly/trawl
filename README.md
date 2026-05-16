@@ -229,7 +229,7 @@ The workflow also sets:
 Alert backfill behavior can still be scoped depending on how `alerts:backfill` is configured at runtime (for example, if `ALERT_BACKFILL_USER_ID` is provided).
 
 
-## Senate PTR importer POC (read-only)
+## Senate PTR importer POC (read-only by default, experimental manual DB write mode)
 
 A Senate importer proof of concept is available for bounded, read-only normalization experiments:
 
@@ -245,14 +245,27 @@ npm run senate:import:poc -- --limit=5 --year=2026
 
 # manual mode: parse a locally downloaded Senate report HTML/text file
 npm run senate:import:poc -- --input-file=tmp/senate-report.html
+
+# manual write mode (experimental): writes normalized rows to DB
+npm run senate:import:poc -- --input-file=tmp/senate-report.html --write
 ```
 
 Notes:
 
-- Senate support is currently **POC-only**.
-- The POC performs **no database writes** and does not change schema.
+- Senate support is currently **POC-only** and manual DB import remains **experimental**.
+- Default behavior remains **read-only** (no DB writes) unless `--write` is explicitly passed.
 - The POC is **not** wired into the daily pipeline/cron jobs.
+- The importer requires a **locally downloaded Senate eFD PTR HTML report** as input for manual mode.
 - Senate eFD source access constraints/terms must be reviewed before any production ingestion path.
+
+After running a manual `--write` import, run downstream scripts manually:
+
+```bash
+npm run prices:import
+npm run performance:backfill:daily
+npm run politicians:backfill
+npm run signals:recalculate
+```
 
 ## House metadata backfill notes
 

@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { and, eq, isNull } from "drizzle-orm";
 import { normalizeTradeType } from "../lib/domain/pipeline/normalization";
 
 type SenateNormalizedDisclosure = {
@@ -37,6 +38,7 @@ function parseArgs() {
   let limit = DEFAULT_LIMIT;
   let year: number | null = null;
   let inputFile: string | null = null;
+  let write = false;
 
   for (const arg of args) {
     if (arg.startsWith("--limit=")) {
@@ -58,9 +60,10 @@ function parseArgs() {
       if (!value) throw new Error(`Invalid --input-file value: ${arg}`);
       inputFile = value;
     }
+    if (arg === "--write") write = true;
   }
 
-  return { limit, year, inputFile };
+  return { limit, year, inputFile, write };
 }
 
 function sleep(ms: number) {
@@ -349,13 +352,80 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
   console.log(`Manual input mode used. file=${absolutePath}`);
 }
 
+async function findOrCreatePolitician(row: SenateNormalizedDisclosure) {
+  const { db } = await import("../lib/db");
+  const { politicians } = await import("../lib/db/schema");
+  const existing = await db
+    .select({ id: politicians.id })
+    .from(politicians)
+    .where(and(eq(politicians.fullName, row.politicianName), eq(politicians.chamber, "senate")))
+    .limit(1);
+
+  if (existing[0]?.id) return { politicianId: existing[0].id, created: false };
+
+  const inserted = await db
+    .insert(politicians)
+    .values({
+      fullName: row.politicianName,
+      chamber: "senate",
+      party: row.party,
+      state: row.state,
+    })
+    .returning({ id: politicians.id });
+
+  return { politicianId: inserted[0]?.id ?? null, created: true };
+}
+
+function toDbDate(value: string | null) {
+  return value ? new Date(`${value}T00:00:00.000Z`) : null;
+}
+
+async function disclosureExists(politicianId: number, row: SenateNormalizedDisclosure) {
+  const { db } = await import("../lib/db");
+  const { disclosures } = await import("../lib/db/schema");
+  const tickerFilter = row.ticker ? eq(disclosures.ticker, row.ticker) : isNull(disclosures.ticker);
+  const amountFilter = row.amountRangeLabel
+    ? eq(disclosures.amountRangeLabel, row.amountRangeLabel)
+    : isNull(disclosures.amountRangeLabel);
+  const tradeDate = toDbDate(row.tradeDate);
+  const filingDate = toDbDate(row.filingDate);
+  const tradeDateFilter = tradeDate ? eq(disclosures.tradeDate, tradeDate) : isNull(disclosures.tradeDate);
+  const filingDateFilter = filingDate ? eq(disclosures.filingDate, filingDate) : isNull(disclosures.filingDate);
+
+  const existing = await db
+    .select({ id: disclosures.id })
+    .from(disclosures)
+    .where(
+      and(
+        eq(disclosures.politicianId, politicianId),
+        eq(disclosures.assetName, row.assetName),
+        eq(disclosures.tradeType, row.tradeType),
+        eq(disclosures.ownerType, row.ownerType),
+        eq(disclosures.sourceLabel, row.sourceLabel),
+        eq(disclosures.assetType, row.assetType),
+        tickerFilter,
+        amountFilter,
+        tradeDateFilter,
+        filingDateFilter
+      )
+    )
+    .limit(1);
+
+  return Boolean(existing[0]?.id);
+}
+
 async function main() {
-  const { limit, year, inputFile } = parseArgs();
+  const { limit, year, inputFile, write } = parseArgs();
   const normalized: SenateNormalizedDisclosure[] = [];
   const failures: ParseFailure[] = [];
+  const uniquePoliticianKeyToId = new Map<string, number>();
+  let politiciansCreated = 0;
+  let politiciansReused = 0;
+  let disclosuresInserted = 0;
+  let disclosuresSkippedDuplicates = 0;
 
-  console.log(`Starting Senate PTR POC (read-only). limit=${limit}${year ? ` year=${year}` : ""}`);
-  console.log("No DB writes. No schema changes. No pipeline integration.");
+  console.log(`Starting Senate PTR POC (${write ? "write mode" : "read-only"}). limit=${limit}${year ? ` year=${year}` : ""}`);
+  console.log(write ? "DB writes enabled via --write. No schema changes. No pipeline integration." : "No DB writes. No schema changes. No pipeline integration.");
   if (inputFile) {
     await runManualInputMode(inputFile, normalized, failures);
   } else {
@@ -397,10 +467,59 @@ async function main() {
   await writeFile(resolve("tmp/senate-poc-normalized.json"), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   await writeFile(resolve("tmp/senate-poc-failures.json"), `${JSON.stringify(failures, null, 2)}\n`, "utf8");
 
+  if (write) {
+    const { db } = await import("../lib/db");
+    const { disclosures } = await import("../lib/db/schema");
+    for (const row of normalized) {
+      try {
+        const key = `${row.politicianName}::${row.chamber}`;
+        let politicianId = uniquePoliticianKeyToId.get(key);
+        if (!politicianId) {
+          const result = await findOrCreatePolitician(row);
+          if (!result.politicianId) {
+            failures.push({ sourceUrl: row.sourceUrl, reason: "politician_upsert_failed", detail: row.politicianName });
+            continue;
+          }
+          politicianId = result.politicianId;
+          uniquePoliticianKeyToId.set(key, politicianId);
+          if (result.created) politiciansCreated += 1;
+          else politiciansReused += 1;
+        }
+
+        const exists = await disclosureExists(politicianId, row);
+        if (exists) {
+          disclosuresSkippedDuplicates += 1;
+          continue;
+        }
+
+        await db.insert(disclosures).values({
+          politicianId,
+          ticker: row.ticker,
+          assetName: row.assetName,
+          assetType: row.assetType,
+          tradeType: row.tradeType,
+          ownerType: row.ownerType,
+          amountRangeLabel: row.amountRangeLabel,
+          tradeDate: toDbDate(row.tradeDate),
+          filingDate: toDbDate(row.filingDate),
+          filingLagDays: row.filingLagDays,
+          sourceUrl: row.sourceUrl,
+          sourceLabel: row.sourceLabel,
+        });
+        disclosuresInserted += 1;
+      } catch (error) {
+        failures.push({ sourceUrl: row.sourceUrl, reason: "db_write_failed", detail: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  }
+
   console.log("\nNormalized sample rows:");
   console.log(JSON.stringify(normalized, null, 2));
 
   console.log(`\nDone. normalized=${normalized.length} failures=${failures.length}`);
+  console.log(
+    `DB summary: politicians_created=${politiciansCreated} politicians_reused=${politiciansReused} disclosures_inserted=${disclosuresInserted} disclosures_skipped_duplicates=${disclosuresSkippedDuplicates}`
+  );
   console.log(`Records attempted=${inputFile ? 1 : limit}`);
   if (!inputFile && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {
     console.log("Access limitation note: Senate eFD appears to require additional interactive/session flow not captured by direct fetch in this environment.");
