@@ -11,9 +11,9 @@ type PageProps = {
 };
 
 export const metadata: Metadata = {
-  title: "Politician Disclosure Analytics | Trawl",
+  title: "Congressional Disclosure Activity | Trawl",
   description:
-    "Compare politicians by historical post-disclosure alpha, win rate, and activity to prioritize further research.",
+    "Review congressional disclosure activity with historical context and chamber filters to guide further research.",
 };
 
 
@@ -68,7 +68,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
               Active disclosure analytics
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
-              Active politician research leaderboard
+              Congressional disclosure activity
             </h1>
             <p className="mt-2 text-sm text-gray-600">
               Compare recent disclosure activity with historical post-filing outcomes for research prioritization.
@@ -102,10 +102,10 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
                 <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                  Active disclosure leaderboard
+                  Disclosure activity table
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Rankings prioritize 30-day alpha, then win rate, then total sample size across currently active disclosure profiles.
+                  Sorted by active disclosure context: 30-day alpha, then win rate, then total sample size.
                 </p>
               </div>
 
@@ -213,7 +213,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     >
                       <p>
                         {chamberDisclosureCount > 0
-                          ? `Disclosure activity exists${selectedChamber === "all" ? "" : ` for ${selectedChamber === "house" ? "House" : "Senate"}`}, but no rows currently satisfy the active leaderboard threshold.`
+                          ? `Disclosure activity exists${selectedChamber === "all" ? "" : ` for ${selectedChamber === "house" ? "House" : "Senate"}`}, but no rows currently satisfy the active table threshold.`
                           : `No politician stats are available yet${selectedChamber === "all" ? "." : ` for ${selectedChamber === "house" ? "House" : "Senate"}.`}`}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">

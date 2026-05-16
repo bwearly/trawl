@@ -426,7 +426,7 @@ export default function SignalFilters({
               <option value="allDisclosures">All disclosures</option>
             </select>
             <span className="mt-1 block text-xs text-gray-500">
-              Ticker-backed disclosures are prioritized in research feeds.
+              Ticker-backed disclosures are prioritized in research feeds. Some disclosures, such as bonds, may not have public ticker symbols.
             </span>
           </label>
 

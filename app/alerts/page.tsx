@@ -87,7 +87,7 @@ export default async function AlertsPage() {
               Personalized notifications
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
-              Alerts
+              Watchlist notifications
             </h1>
             <p className="mt-2 text-sm text-gray-600">
               Research notifications are based on your watchlist and preferences. They are not trading recommendations.
