@@ -32,7 +32,7 @@ const HOME_URL = "https://efdsearch.senate.gov/search/home/";
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const REQUEST_DELAY_MS = 1250;
-const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A"]);
+const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A", "NONE"]);
 
 function normalizeTickerValue(raw: string | null | undefined): string | null {
   const cleaned = (raw ?? "").trim().toUpperCase();
@@ -423,7 +423,15 @@ async function disclosureExists(politicianId: number, row: SenateNormalizedDiscl
   const normalizedTicker = normalizeTickerValue(row.ticker);
   const tickerFilter = normalizedTicker
     ? eq(disclosures.ticker, normalizedTicker)
-    : or(isNull(disclosures.ticker), eq(disclosures.ticker, "--"), eq(disclosures.ticker, "—"), eq(disclosures.ticker, "N/A"));
+    : or(
+        isNull(disclosures.ticker),
+        eq(disclosures.ticker, "--"),
+        eq(disclosures.ticker, "—"),
+        eq(disclosures.ticker, "N/A"),
+        eq(disclosures.ticker, "None"),
+        eq(disclosures.ticker, "NONE"),
+        eq(disclosures.ticker, "")
+      );
   const amountFilter = row.amountRangeLabel
     ? eq(disclosures.amountRangeLabel, row.amountRangeLabel)
     : isNull(disclosures.amountRangeLabel);
@@ -537,7 +545,14 @@ async function main() {
       .where(
         and(
           eq(disclosures.sourceLabel, SOURCE_LABEL),
-          or(eq(disclosures.ticker, "--"), eq(disclosures.ticker, "—"), eq(disclosures.ticker, "N/A"), eq(disclosures.ticker, ""))
+          or(
+            eq(disclosures.ticker, "--"),
+            eq(disclosures.ticker, "—"),
+            eq(disclosures.ticker, "N/A"),
+            eq(disclosures.ticker, "None"),
+            eq(disclosures.ticker, "NONE"),
+            eq(disclosures.ticker, "")
+          )
         )
       )
       .returning({ id: disclosures.id });

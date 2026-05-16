@@ -27,6 +27,8 @@ type LegislatorTerm = {
   type?: string;
   party?: string;
   state?: string;
+  start?: string;
+  end?: string;
 };
 
 type LegislatorRecord = {
@@ -41,6 +43,24 @@ type MetadataMatch = {
   party: string | null;
   canonicalName: string;
   termType: "rep" | "sen";
+  termStart: string | null;
+  termEnd: string | null;
+};
+
+type ChamberAwareAliasRule = {
+  chamber: SupportedChamber;
+  aliasTarget?: string;
+  canonicalIncludes?: string;
+  expectedState?: string;
+  expectedTermType: "rep" | "sen";
+};
+
+const CHAMBER_AWARE_ALIAS_RULES: Record<string, ChamberAwareAliasRule> = {
+  "house|JAMES E HON BANKS": { chamber: "house", aliasTarget: "JIM BANKS", expectedState: "IN", expectedTermType: "rep" },
+  "house|RICHARD DEAN DR MCCORMICK": { chamber: "house", aliasTarget: "RICH MCCORMICK", expectedState: "GA", expectedTermType: "rep" },
+  "house|JOHN MCGUIRE": { chamber: "house", aliasTarget: "JOHN J MCGUIRE", expectedState: "VA", expectedTermType: "rep" },
+  "house|MARK DR GREEN": { chamber: "house", aliasTarget: "MARK E GREEN", expectedState: "TN", expectedTermType: "rep" },
+  "senate|JAMES BANKS": { chamber: "senate", aliasTarget: "JIM BANKS", expectedState: "IN", expectedTermType: "sen" },
 };
 
 const NAME_ALIASES: Record<string, string> = {
@@ -58,9 +78,16 @@ const NAME_ALIASES: Record<string, string> = {
   "ROB BRESNAHAN": "ROBERT P BRESNAHAN",
   "SCOTT SCOTT FRANKLIN": "C SCOTT FRANKLIN",
   "MICHAEL PATRICK GUEST": "MICHAEL GUEST",
+  "RICHARD DEAN DR MCCORMICK": "RICH MCCORMICK",
+  "RICHARD MCCORMICK": "RICH MCCORMICK",
   "JOHN MCGUIRE": "JOHN J MCGUIRE",
   "GREG STEUBE": "W GREGORY STEUBE",
+  "MARK DR GREEN": "MARK E GREEN",
   "MARK GREEN": "MARK E GREEN",
+  "SHELLEY CAPITO": "SHELLEY MOORE CAPITO",
+  "JOHN BOOZMAN": "JOHN BOOZMAN",
+  "JOHN FETTERMAN": "JOHN FETTERMAN",
+  "JAMES BANKS": "JIM BANKS",
   "MICHAEL A COLLINS": "MIKE COLLINS",
   "RUDY C YAKYM": "RUDY YAKYM",
   "LLOYD K SMUCKER": "LLOYD SMUCKER",
@@ -113,6 +140,32 @@ function getMatchesForPoliticianName(
   return { matches: dedupeMatches(all), matchedByAlias: Boolean(aliasTarget) };
 }
 
+
+function getRuleScopedMatches(
+  metadataIndex: Map<string, MetadataMatch[]>,
+  politician: PoliticianRow & { chamber: SupportedChamber },
+  inputMatches: MetadataMatch[]
+): { matches: MetadataMatch[]; matchedByRule: boolean } {
+  const normalized = normalizeName(politician.fullName);
+  const rule = CHAMBER_AWARE_ALIAS_RULES[`${politician.chamber}|${normalized}`];
+  if (!rule) return { matches: inputMatches, matchedByRule: false };
+
+  let scoped = inputMatches.filter((m) => m.termType === rule.expectedTermType);
+  if (rule.aliasTarget) {
+    const aliasCandidates = metadataIndex.get(rule.aliasTarget) ?? [];
+    const allowedCanonicalNames = new Set(aliasCandidates.map((c) => c.canonicalName));
+    if (allowedCanonicalNames.size > 0) scoped = scoped.filter((m) => allowedCanonicalNames.has(m.canonicalName));
+  }
+  if (rule.canonicalIncludes) {
+    const needle = rule.canonicalIncludes.toUpperCase();
+    scoped = scoped.filter((m) => m.canonicalName.toUpperCase().includes(needle));
+  }
+  if (rule.expectedState) {
+    scoped = scoped.filter((m) => normalizeState(m.state) === rule.expectedState);
+  }
+  return { matches: dedupeMatches(scoped), matchedByRule: true };
+}
+
 function buildNameVariants(name: LegislatorName): string[] {
   const full = [name.first, name.middle, name.last, name.suffix].filter(Boolean).join(" ").trim();
   const firstLast = [name.first, name.last].filter(Boolean).join(" ").trim();
@@ -157,6 +210,8 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
     const termType = latestTerm?.type === "sen" ? "sen" : "rep";
     const party = normalizeParty(latestTerm?.party);
     const state = normalizeState(latestTerm?.state);
+    const termStart = latestTerm?.start?.trim() ? latestTerm.start.trim() : null;
+    const termEnd = latestTerm?.end?.trim() ? latestTerm.end.trim() : null;
     const canonicalName = (record.name.official_full ?? buildNameVariants(record.name)[0] ?? "").trim();
     if (!canonicalName) continue;
 
@@ -164,7 +219,7 @@ function buildMetadataIndex(records: LegislatorRecord[]): Map<string, MetadataMa
       const key = normalizeName(variant);
       if (!key) continue;
       const existing = index.get(key) ?? [];
-      existing.push({ party, state, canonicalName, termType });
+      existing.push({ party, state, canonicalName, termType, termStart, termEnd });
       index.set(key, existing);
     }
   }
@@ -220,6 +275,8 @@ async function backfillPoliticianMetadata() {
   let updatedStateCount = 0;
   let matchedByAliasCount = 0;
   let matchedByStateDisambiguationCount = 0;
+  let matchedByExactCount = 0;
+  let matchedByChamberCount = 0;
 
   const houseScannedCount = scopedPoliticians.filter((p) => p.chamber === "house").length;
   const senateScannedCount = scopedPoliticians.filter((p) => p.chamber === "senate").length;
@@ -231,12 +288,13 @@ async function backfillPoliticianMetadata() {
   for (const politician of scopedPoliticians) {
     const expectedTermType = politician.chamber === "house" ? "rep" : "sen";
     const { matches: allMatches, matchedByAlias } = getMatchesForPoliticianName(metadataIndex, politician.fullName);
-    const matches = allMatches.filter((match) => match.termType === expectedTermType);
+    const chamberMatches = allMatches.filter((match) => match.termType === expectedTermType);
+    const { matches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
-    if (matchedByAlias) matchedByAliasCount += 1;
+    if (matchedByAlias || matchedByRule) matchedByAliasCount += 1;
     if (matches.length > 1) {
       const politicianState = normalizeState(politician.state);
       const stateScopedMatches = politicianState
@@ -279,9 +337,22 @@ async function backfillPoliticianMetadata() {
         continue;
       }
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "ambiguous_match", candidates: matches });
-      console.log(`⚠️ Ambiguous metadata match for "${politician.fullName}" (${matches.length} candidates).`);
+      console.log(`⚠️ Ambiguous metadata match for fullName="${politician.fullName}" chamber="${politician.chamber}" reason="ambiguous_match" (${matches.length} candidates).`);
+      for (const candidate of matches) {
+        console.log(
+          `   - fullName=${politician.fullName} chamber=${politician.chamber} reason=ambiguous_match candidate=${candidate.canonicalName} state=${candidate.state ?? "NULL"} party=${candidate.party ?? "NULL"} termType=${candidate.termType} term=${candidate.termStart ?? "?"}..${candidate.termEnd ?? "present"}`
+        );
+      }
       continue;
     }
+
+    if (allMatches.length > chamberMatches.length) matchedByChamberCount += 1;
+    else if (matchedByAlias) {
+      // accounted above; retained for summary clarity
+    } else {
+      matchedByExactCount += 1;
+    }
+
     matched += 1;
     if (politician.chamber === "house") matchedHouseCount += 1;
     if (politician.chamber === "senate") matchedSenateCount += 1;
@@ -332,12 +403,20 @@ async function backfillPoliticianMetadata() {
   console.log(`- Updated party count: ${updatedPartyCount}`);
   console.log(`- Updated state count: ${updatedStateCount}`);
   console.log(`- Matched by alias: ${matchedByAliasCount}`);
+  console.log(`- Matched by exact: ${matchedByExactCount}`);
+  console.log(`- Matched by chamber: ${matchedByChamberCount}`);
   console.log(`- Matched by state disambiguation: ${matchedByStateDisambiguationCount}`);
   console.log(`- Skipped existing: ${skippedExisting}`);
   console.log(`- Unchanged: ${noChange}`);
   console.log(`- Remaining unmatched: ${unmatchedNoMatchCount}`);
   console.log(`- Remaining ambiguous: ${unmatchedAmbiguousCount}`);
   console.log(`- Unmatched total: ${unmatched.length}`);
+  if (unmatched.length > 0) {
+    console.log("- Unmatched list:");
+    for (const entry of unmatched) {
+      console.log(`  - [${entry.reason}] ${entry.fullName}`);
+    }
+  }
   console.log(`- Unmatched output: tmp/unmatched-politician-metadata.json`);
 }
 
