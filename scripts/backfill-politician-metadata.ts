@@ -77,7 +77,7 @@ const CHAMBER_AWARE_ALIAS_RULES: Record<string, ChamberAwareAliasRule> = {
 const FINAL_EXPLICIT_OVERRIDES: Record<string, FinalOverrideRule> = {
   "house|JAMES E BANKS": {
     chamber: "house",
-    canonicalName: "Jim Banks",
+    canonicalIncludes: "Banks",
     canonicalNamesAny: ["Jim Banks", "James E. Banks"],
     state: "IN",
     termType: "rep",
@@ -229,17 +229,19 @@ function getFinalOverride(politician: PoliticianRow & { chamber: SupportedChambe
 
 function applyFinalOverride(
   matches: MetadataMatch[],
-  override: FinalOverrideRule | null
- ): { matches: MetadataMatch[]; overrideKeyChecked: string | null; usedFallback: boolean } {
+  override: FinalOverrideRule | null,
+  fallbackSearchPool: MetadataMatch[] = []
+): { matches: MetadataMatch[]; overrideKeyChecked: string | null; usedFallback: boolean } {
   if (!override) return { matches, overrideKeyChecked: null, usedFallback: false };
   const canonicalNeedle = override.canonicalName?.toUpperCase();
   const canonicalIncludesNeedle = override.canonicalIncludes?.toUpperCase();
   const canonicalNamesAny = (override.canonicalNamesAny ?? []).map((name) => normalizeName(name));
   const stateNeedle = override.state ? normalizeState(override.state) : null;
   const partyNeedle = override.party ? normalizeParty(override.party) : null;
+  const searchPool = matches.length > 0 ? matches : fallbackSearchPool;
 
   const primaryMatches = dedupeMatches(
-    matches.filter((match) => {
+    searchPool.filter((match) => {
       if (match.termType !== override.termType) return false;
       if (canonicalNeedle && !match.canonicalName.toUpperCase().includes(canonicalNeedle)) return false;
       if (canonicalNamesAny.length > 0 && !canonicalNamesAny.includes(normalizeName(match.canonicalName))) return false;
@@ -249,11 +251,15 @@ function applyFinalOverride(
     })
   );
 
-  if (primaryMatches.length > 0) return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle, usedFallback: false };
-  if (!canonicalIncludesNeedle) return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle, usedFallback: false };
+  if (primaryMatches.length > 0) {
+    return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle ?? null, usedFallback: false };
+  }
+  if (!canonicalIncludesNeedle) {
+    return { matches: primaryMatches, overrideKeyChecked: canonicalNeedle ?? null, usedFallback: false };
+  }
 
   const fallbackMatches = dedupeMatches(
-    matches.filter((match) => {
+    searchPool.filter((match) => {
       if (match.termType !== override.termType) return false;
       if (stateNeedle && normalizeState(match.state) !== stateNeedle) return false;
       if (partyNeedle && normalizeParty(match.party) !== partyNeedle) return false;
@@ -261,7 +267,7 @@ function applyFinalOverride(
     })
   );
 
-  return { matches: fallbackMatches, overrideKeyChecked: canonicalIncludesNeedle, usedFallback: true };
+  return { matches: fallbackMatches, overrideKeyChecked: canonicalIncludesNeedle ?? null, usedFallback: true };
 }
 
 function buildNameVariants(name: LegislatorName): string[] {
@@ -345,6 +351,7 @@ async function backfillPoliticianMetadata() {
     fetchLegislators(HISTORICAL_LEGISLATORS_URL),
   ]);
   const metadataIndex = buildMetadataIndex([...current, ...historical]);
+  const allMetadataMatches = dedupeMatches([...metadataIndex.values()].flat());
   const metadataRecordsLoaded = current.length + historical.length;
   console.log(`Metadata records loaded: ${metadataRecordsLoaded}`);
   console.log(`Loaded metadata entries: ${metadataIndex.size} normalized name keys.`);
@@ -391,7 +398,7 @@ async function backfillPoliticianMetadata() {
     const { matches: ruleMatches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
     const normalizedName = normalizeName(politician.fullName);
     const finalOverride = getFinalOverride(politician);
-    const { matches } = applyFinalOverride(ruleMatches, finalOverride);
+    const { matches } = applyFinalOverride(ruleMatches, finalOverride, allMetadataMatches);
 
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
@@ -452,6 +459,10 @@ async function backfillPoliticianMetadata() {
         if (politician.chamber === "house") matchedHouseCount += 1;
         if (politician.chamber === "senate") matchedSenateCount += 1;
         const match = stateScopedMatches[0];
+        if (!match) {
+          unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "ambiguous_match", candidates: matches });
+          continue;
+        }
         const shouldSkipParty = !force && politician.party !== null;
         const shouldSkipState = !force && politician.state !== null;
         if (shouldSkipParty && shouldSkipState) {
@@ -503,6 +514,10 @@ async function backfillPoliticianMetadata() {
     if (politician.chamber === "house") matchedHouseCount += 1;
     if (politician.chamber === "senate") matchedSenateCount += 1;
     const match = matches[0];
+    if (!match) {
+      unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
+      continue;
+    }
     const shouldSkipParty = !force && politician.party !== null;
     const shouldSkipState = !force && politician.state !== null;
     if (shouldSkipParty && shouldSkipState) {
