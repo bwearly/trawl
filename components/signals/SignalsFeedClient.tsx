@@ -42,7 +42,7 @@ function toFeedSignal(row: SignalRow): FeedSignal {
 
   return {
     signalId: row.signalId,
-    ticker: row.ticker,
+    ticker: row.ticker ?? "NO_TICKER",
     politician: row.politicianName,
     tradeType: row.tradeType,
     tradeDate,
@@ -89,8 +89,18 @@ export default function SignalsFeedClient({
   const watchedTickerSet = new Set(initialWatchedTickers);
 
   const feedItems = useMemo(() => {
-    const normalized = signals.map(toFeedSignal);
-    return buildSignalFeedItems(normalized);
+    const tickerBackedSignals = signals.filter((signal) => signal.ticker);
+    const noTickerSignals = signals.filter((signal) => !signal.ticker);
+    const normalized = tickerBackedSignals.map(toFeedSignal);
+    const clusteredItems = buildSignalFeedItems(normalized);
+
+    return [
+      ...clusteredItems,
+      ...noTickerSignals.map((signal) => ({
+        type: "single" as const,
+        signal: toFeedSignal(signal),
+      })),
+    ];
   }, [signals]);
 
   return (
@@ -137,7 +147,7 @@ export default function SignalsFeedClient({
                 <SignalCard
                   key={`single-${item.signal.signalId}`}
                   signalId={signal.signalId}
-                  ticker={signal.ticker}
+                  ticker={signal.ticker === "NO_TICKER" ? null : signal.ticker}
                   score={signal.score}
                   signalStatus={signal.signalStatus}
                   politicianId={signal.politicianId}
@@ -155,7 +165,7 @@ export default function SignalsFeedClient({
                   sourceUrl={signal.sourceUrl}
                   primaryReason={signal.primaryReason}
                   reasonSummary={signal.reasonSummary}
-                  initialIsWatchingTicker={signal.ticker ? watchedTickerSet.has(signal.ticker) : false}
+                  initialIsWatchingTicker={signal.ticker && signal.ticker !== "NO_TICKER" ? watchedTickerSet.has(signal.ticker) : false}
                 />
               );
             }
