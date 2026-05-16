@@ -60,6 +60,7 @@ type FinalOverrideRule = {
   politicianId?: number;
   canonicalName?: string;
   canonicalIncludes?: string;
+  canonicalNamesAny?: string[];
   state?: string;
   termType: "rep" | "sen";
   party?: string;
@@ -77,7 +78,7 @@ const FINAL_EXPLICIT_OVERRIDES: Record<string, FinalOverrideRule> = {
   "house|JAMES E BANKS": {
     chamber: "house",
     canonicalName: "Jim Banks",
-    canonicalIncludes: "Banks",
+    canonicalNamesAny: ["Jim Banks", "James E. Banks"],
     state: "IN",
     termType: "rep",
     party: "Republican",
@@ -229,10 +230,11 @@ function getFinalOverride(politician: PoliticianRow & { chamber: SupportedChambe
 function applyFinalOverride(
   matches: MetadataMatch[],
   override: FinalOverrideRule | null
-): { matches: MetadataMatch[]; overrideKeyChecked: string | null; usedFallback: boolean } {
+ ): { matches: MetadataMatch[]; overrideKeyChecked: string | null; usedFallback: boolean } {
   if (!override) return { matches, overrideKeyChecked: null, usedFallback: false };
   const canonicalNeedle = override.canonicalName?.toUpperCase();
   const canonicalIncludesNeedle = override.canonicalIncludes?.toUpperCase();
+  const canonicalNamesAny = (override.canonicalNamesAny ?? []).map((name) => normalizeName(name));
   const stateNeedle = override.state ? normalizeState(override.state) : null;
   const partyNeedle = override.party ? normalizeParty(override.party) : null;
 
@@ -240,6 +242,7 @@ function applyFinalOverride(
     matches.filter((match) => {
       if (match.termType !== override.termType) return false;
       if (canonicalNeedle && !match.canonicalName.toUpperCase().includes(canonicalNeedle)) return false;
+      if (canonicalNamesAny.length > 0 && !canonicalNamesAny.includes(normalizeName(match.canonicalName))) return false;
       if (stateNeedle && normalizeState(match.state) !== stateNeedle) return false;
       if (partyNeedle && normalizeParty(match.party) !== partyNeedle) return false;
       return true;
@@ -388,25 +391,15 @@ async function backfillPoliticianMetadata() {
     const { matches: ruleMatches, matchedByRule } = getRuleScopedMatches(metadataIndex, politician, chamberMatches);
     const normalizedName = normalizeName(politician.fullName);
     const finalOverride = getFinalOverride(politician);
-    const { matches, overrideKeyChecked, usedFallback } = applyFinalOverride(ruleMatches, finalOverride);
-    if (finalOverride) {
-      console.log(
-        `ℹ️ Final override check: fullName="${politician.fullName}", normalizedKey="${normalizedName}", overrideKey="${overrideKeyChecked ?? "none"}", fallback=${usedFallback ? "yes" : "no"}`
-      );
-    }
+    const { matches } = applyFinalOverride(ruleMatches, finalOverride);
+
     if (matches.length === 0) {
       unmatched.push({ id: politician.id, fullName: politician.fullName, reason: "no_match" });
       continue;
     }
     if (matchedByAlias || matchedByRule) matchedByAliasCount += 1;
     if (finalOverride && matches.length > 0) matchedByFinalOverrideCount += 1;
-    if (finalOverride && matches.length > 0) {
-      for (const candidate of matches) {
-        console.log(
-          `ℹ️ Final override candidate: canonicalName=${candidate.canonicalName}, state=${candidate.state ?? "NULL"}, party=${candidate.party ?? "NULL"}, termType=${candidate.termType}`
-        );
-      }
-    }
+
     if (matches.length > 1) {
       if (finalOverride && (finalOverride.canonicalName || finalOverride.state)) {
         const recentSorted = [...matches].sort((a, b) => (b.termStart ?? "").localeCompare(a.termStart ?? ""));
@@ -443,9 +436,9 @@ async function backfillPoliticianMetadata() {
           console.log(
             `✅ Updated ${politician.fullName}: party ${politician.party ?? "NULL"} -> ${nextParty ?? "NULL"}, state ${politician.state ?? "NULL"} -> ${nextState ?? "NULL"}`
           );
-          console.log(
-            `ℹ️ Matched by final override for id=${politician.id} (${politician.chamber}|${normalizedName}) with most recent termStart=${mostRecent.termStart ?? "?"}.`
-          );
+          if (normalizedName === "JAMES E BANKS" || normalizedName === "JAMES E HON BANKS") {
+            console.log("Final override selected: James E Hon Banks -> Jim Banks, IN, Republican, rep");
+          }
           continue;
         }
       }
