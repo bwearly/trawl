@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { normalizeTradeType } from "../lib/domain/pipeline/normalization";
 
 type SenateNormalizedDisclosure = {
@@ -32,6 +32,14 @@ const HOME_URL = "https://efdsearch.senate.gov/search/home/";
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const REQUEST_DELAY_MS = 1250;
+const PLACEHOLDER_TICKER_VALUES = new Set(["--", "—", "N/A"]);
+
+function normalizeTickerValue(raw: string | null | undefined): string | null {
+  const cleaned = (raw ?? "").trim().toUpperCase();
+  if (!cleaned) return null;
+  if (PLACEHOLDER_TICKER_VALUES.has(cleaned)) return null;
+  return cleaned;
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -113,9 +121,9 @@ function inferAssetType(assetName: string) {
 
 function extractTicker(assetName: string): string | null {
   const direct = assetName.match(/\(([A-Z]{1,5}(?:\.[A-Z])?)\)/);
-  if (direct) return direct[1] ?? null;
+  if (direct) return normalizeTickerValue(direct[1] ?? null);
   const prefixed = assetName.match(/\b(?:Ticker|Symbol)\s*[:\-]\s*([A-Z]{1,5}(?:\.[A-Z])?)\b/i);
-  if (prefixed) return (prefixed[1] ?? "").toUpperCase();
+  if (prefixed) return normalizeTickerValue(prefixed[1] ?? null);
   return null;
 }
 
@@ -338,7 +346,7 @@ async function runManualInputMode(inputFile: string, normalized: SenateNormalize
       chamber: "senate",
       party: null,
       state: null,
-      ticker: (cells[headerIndex.get("ticker") ?? -1] ?? "").toUpperCase() || extractTicker(assetName),
+      ticker: normalizeTickerValue(cells[headerIndex.get("ticker") ?? -1] ?? "") ?? extractTicker(assetName),
       assetName,
       assetType: cells[headerIndex.get("asset type") ?? -1] ?? inferAssetType(assetName),
       tradeType: normalizeTradeType(tradeTypeRaw),
@@ -412,7 +420,10 @@ function toDbDate(value: string | null) {
 async function disclosureExists(politicianId: number, row: SenateNormalizedDisclosure) {
   const { db } = await import("../lib/db");
   const { disclosures } = await import("../lib/db/schema");
-  const tickerFilter = row.ticker ? eq(disclosures.ticker, row.ticker) : isNull(disclosures.ticker);
+  const normalizedTicker = normalizeTickerValue(row.ticker);
+  const tickerFilter = normalizedTicker
+    ? eq(disclosures.ticker, normalizedTicker)
+    : or(isNull(disclosures.ticker), eq(disclosures.ticker, "--"), eq(disclosures.ticker, "—"), eq(disclosures.ticker, "N/A"));
   const amountFilter = row.amountRangeLabel
     ? eq(disclosures.amountRangeLabel, row.amountRangeLabel)
     : isNull(disclosures.amountRangeLabel);
@@ -454,6 +465,8 @@ async function main() {
   let disclosuresSkippedDuplicates = 0;
   let filesDiscovered = 0;
   let filesAttempted = 0;
+  let normalizedTickerPlaceholderCount = 0;
+  let cleanedUpLegacyPlaceholderTickerRows = 0;
 
   console.log(`Starting Senate PTR POC (${write ? "write mode" : "read-only"}). limit=${limit}${year ? ` year=${year}` : ""}`);
   console.log(write ? "DB writes enabled via --write. No schema changes. No pipeline integration." : "No DB writes. No schema changes. No pipeline integration.");
@@ -507,12 +520,29 @@ async function main() {
   }
 
   await mkdir(resolve("tmp"), { recursive: true });
+  for (const row of normalized) {
+    const normalizedTicker = normalizeTickerValue(row.ticker);
+    if (row.ticker !== normalizedTicker) normalizedTickerPlaceholderCount += 1;
+    row.ticker = normalizedTicker;
+  }
   await writeFile(resolve("tmp/senate-poc-normalized.json"), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   await writeFile(resolve("tmp/senate-poc-failures.json"), `${JSON.stringify(failures, null, 2)}\n`, "utf8");
 
   if (write) {
     const { db } = await import("../lib/db");
     const { disclosures } = await import("../lib/db/schema");
+    const cleanup = await db
+      .update(disclosures)
+      .set({ ticker: null })
+      .where(
+        and(
+          eq(disclosures.sourceLabel, SOURCE_LABEL),
+          or(eq(disclosures.ticker, "--"), eq(disclosures.ticker, "—"), eq(disclosures.ticker, "N/A"), eq(disclosures.ticker, ""))
+        )
+      )
+      .returning({ id: disclosures.id });
+    cleanedUpLegacyPlaceholderTickerRows = cleanup.length;
+
     const rowsForWrite = normalized.slice(0, limit);
     if (normalized.length > rowsForWrite.length) {
       console.log(`Applying --limit to DB writes: writing ${rowsForWrite.length} of ${normalized.length} normalized rows.`);
@@ -541,7 +571,7 @@ async function main() {
 
         await db.insert(disclosures).values({
           politicianId,
-          ticker: row.ticker,
+          ticker: normalizeTickerValue(row.ticker),
           assetName: row.assetName,
           assetType: row.assetType,
           tradeType: row.tradeType,
@@ -567,6 +597,9 @@ async function main() {
   console.log(`File summary: files_discovered=${filesDiscovered} files_attempted=${filesAttempted}`);
   console.log(
     `DB summary: politicians_created=${politiciansCreated} politicians_reused=${politiciansReused} disclosures_inserted=${disclosuresInserted} disclosures_skipped_duplicates=${disclosuresSkippedDuplicates}`
+  );
+  console.log(
+    `Ticker summary: placeholder_tickers_normalized=${normalizedTickerPlaceholderCount} legacy_placeholder_rows_cleaned=${cleanedUpLegacyPlaceholderTickerRows}`
   );
   console.log(`Records attempted=${filesAttempted}`);
   if (!inputFile && !inputDir && failures.some((f) => f.reason === "home_fetch_failed" || f.reason === "no_report_links_discovered")) {

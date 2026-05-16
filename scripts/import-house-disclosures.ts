@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { resolveHouseTicker, type TickerResolutionSource } from "./lib/house-asset-resolution";
 import { normalizeTradeType } from "../lib/domain/pipeline/normalization";
+import { normalizePoliticianDisplayName } from "../lib/domain/politicians/normalize-display-name";
 import { db } from "../lib/db";
 import { alerts, disclosurePerformanceWindows, disclosures, politicians, researchSignals } from "../lib/db/schema";
 
@@ -897,9 +898,9 @@ function parsePtrTransactionsFromPdfText(params: {
   const normalized: NormalizedDisclosure[] = [];
   const suspiciousAssetSamples: PtrSuspiciousAssetSample[] = [];
   const beforeAfterSamples: PtrBeforeAfterSample[] = [];
-  const politicianName = sanitizeParsedTextOrEmpty(
+  const politicianName = normalizePoliticianDisplayName(sanitizeParsedTextOrEmpty(
     buildPoliticianNameFromHouseRow(sourceRow) ?? "Unknown House Member"
-  );
+  ));
   const filingDate = parseDate(getValue(sourceRow, ["filing date", "filingdate", "filed"]));
   const party = normalizeParty(getValue(sourceRow, ["party"]));
   const stateFromRow = parseStateFromDistrictValue(
@@ -1166,7 +1167,7 @@ function normalizeRow(row: HouseRow, year: number): NormalizedDisclosure | null 
   const finalTicker = sanitizedTicker && isAllowedTickerToken(sanitizedTicker) ? sanitizedTicker : null;
 
   return {
-    politicianName: sanitizeParsedTextOrEmpty(politicianName),
+    politicianName: normalizePoliticianDisplayName(sanitizeParsedTextOrEmpty(politicianName)),
     party: normalizeParty(getValue(row, ["party"])),
     state: sanitizeParsedText(getValue(row, ["state", "district state", "st"])),
     chamber: "house",

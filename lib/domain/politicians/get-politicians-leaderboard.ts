@@ -5,7 +5,7 @@ import {
   politicianStats,
   politicians
 } from "@/lib/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 export const ACTIVE_LEADERBOARD_LOOKBACK_DAYS = 365;
 export const ACTIVE_LEADERBOARD_MIN_DISCLOSURES = 3;
@@ -31,9 +31,16 @@ export type PoliticianLeaderboardRow = {
   lastTradeDate: Date | null;
 };
 
-export async function getPoliticianLeaderboard(): Promise<
+type ChamberFilter = "all" | "house" | "senate";
+
+function buildChamberFilter(chamber: ChamberFilter) {
+  return chamber === "all" ? undefined : eq(politicians.chamber, chamber);
+}
+
+export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): Promise<
   PoliticianLeaderboardRow[]
 > {
+  const chamberFilter = buildChamberFilter(chamber);
   const activeFilter = sql`(
     select count(*)
     from ${disclosures} as d_recent
@@ -43,6 +50,7 @@ export async function getPoliticianLeaderboard(): Promise<
       )}'
   ) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`;
 
+  const baseWhere = chamberFilter ? and(chamberFilter, activeFilter) : activeFilter;
   const rows = await db
     .select({
       id: politicians.id,
@@ -60,7 +68,7 @@ export async function getPoliticianLeaderboard(): Promise<
     })
     .from(politicians)
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
-    .where(activeFilter)
+    .where(baseWhere)
     .orderBy(
       desc(politicianStats.lastTradeDate),
       desc(sql`COALESCE(${politicianStats.winRate30d}, -999999)`),
@@ -70,6 +78,13 @@ export async function getPoliticianLeaderboard(): Promise<
     );
 
   if (rows.length === 0) {
+    const includeAllDisclosuresForChamber = chamber !== "all";
+    const fallbackWhere = chamberFilter
+      ? and(
+          chamberFilter,
+          includeAllDisclosuresForChamber ? sql`true` : activeFilter
+        )
+      : activeFilter;
     const fallbackRows = await db
       .select({
         id: politicians.id,
@@ -104,7 +119,7 @@ export async function getPoliticianLeaderboard(): Promise<
         disclosurePerformanceWindows,
         eq(disclosurePerformanceWindows.disclosureId, disclosures.id)
       )
-      .where(activeFilter)
+      .where(fallbackWhere)
       .groupBy(
         politicians.id,
         politicians.fullName,
@@ -112,7 +127,11 @@ export async function getPoliticianLeaderboard(): Promise<
         politicians.party,
         politicians.state
       )
-      .having(sql`count(${disclosures.id}) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`)
+      .having(
+        includeAllDisclosuresForChamber
+          ? sql`count(${disclosures.id}) >= 1`
+          : sql`count(${disclosures.id}) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`
+      )
       .orderBy(
         desc(sql`max(${disclosures.tradeDate})`),
         desc(sql`COALESCE(round(100.0 * avg(case
@@ -164,4 +183,18 @@ export async function getPoliticianLeaderboard(): Promise<
     avgFilingLagDays: toNumber(row.avgFilingLagDays),
     lastTradeDate: row.lastTradeDate,
   }));
+}
+
+export async function getPoliticianDisclosureCountForChamber(
+  chamber: ChamberFilter
+): Promise<number> {
+  const chamberFilter = buildChamberFilter(chamber);
+  const whereClause = chamberFilter ? chamberFilter : sql`true`;
+  const result = await db
+    .select({ count: sql<number>`count(${disclosures.id})` })
+    .from(disclosures)
+    .innerJoin(politicians, eq(disclosures.politicianId, politicians.id))
+    .where(whereClause);
+
+  return Number(result[0]?.count ?? 0);
 }
