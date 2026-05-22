@@ -8,6 +8,7 @@ import {
   researchSignals,
 } from "@/lib/db/schema";
 import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
+import { scoreSignal } from "@/lib/domain/scoring/scoreSignals";
 
 export type SignalFilters = {
   minScore: "0" | "50" | "70" | "80";
@@ -56,9 +57,13 @@ export type SignalRow = {
   filingFreshnessLabel: "Fresh" | "Normal" | "Delayed" | "Stale" | "Historical" | "Unknown";
   return7d: string | null;
   return30d: string | null;
+  spyReturn7d: string | null;
+  spyReturn30d: string | null;
   historicalSampleSize: number | null;
   sourceUrl: string | null;
   signalDate: Date;
+  performanceScore: string | null;
+  signalStage: string;
 };
 
 const MIN_SCORE_OPTIONS = new Set<SignalFilters["minScore"]>(["0", "50", "70", "80"]);
@@ -249,6 +254,8 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
       filingLagDays: disclosures.filingLagDays,
       return7d: disclosurePerformanceWindows.return7d,
       return30d: disclosurePerformanceWindows.return30d,
+      spyReturn7d: disclosurePerformanceWindows.spyReturn7d,
+      spyReturn30d: disclosurePerformanceWindows.spyReturn30d,
       historicalSampleSize: politicianStats.totalDisclosures,
       sourceUrl: disclosures.sourceUrl,
       signalDate: researchSignals.signalDate,
@@ -264,9 +271,27 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
     .where(whereFilters.length ? and(...whereFilters) : undefined)
     .orderBy(...orderBy)
     .then((rows) =>
-      rows.map((row) => ({
-        ...row,
-        filingFreshnessLabel: getFilingFreshnessLabel(row.filingLagDays),
-      }))
+      rows.map((row) => {
+        const daysSinceFiling = row.filingDate
+          ? Math.floor((Date.now() - row.filingDate.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+        const scored = scoreSignal({
+          tradeType: row.tradeType,
+          amountMin: null,
+          amountMax: null,
+          filingLagDays: row.filingLagDays,
+          daysSinceFiling,
+          return7d: row.return7d,
+          spyReturn7d: row.spyReturn7d,
+          return30d: row.return30d,
+          spyReturn30d: row.spyReturn30d,
+        });
+        return {
+          ...row,
+          filingFreshnessLabel: getFilingFreshnessLabel(row.filingLagDays),
+          performanceScore: scored.performanceScore == null ? null : scored.performanceScore.toFixed(2),
+          signalStage: scored.signalStage,
+        };
+      })
     );
 }

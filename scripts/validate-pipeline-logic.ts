@@ -120,39 +120,53 @@ function runAlertEligibilityValidations() {
 
 function runScoringValidations() {
   const c = "scoring-thresholds";
-  const base = {
-    amountMin: 100000,
-    amountMax: 250000,
-    filingLagDays: 10,
-    return7d: 2,
+
+  const freshStrong = scoreSignal({
+    tradeType: "purchase",
+    amountMin: 250000,
+    amountMax: 500000,
+    filingLagDays: 5,
+    daysSinceFiling: 2,
+    historicalPoliticianScore: 85,
+    historicalSampleSize: 25,
+    committeeRelevanceScore: 70,
+    clusterScore: 60,
+    userRelevanceScore: 50,
+    return7d: null,
+    spyReturn7d: null,
+    return30d: null,
+    spyReturn30d: null,
+  });
+  assertTrue(c, "fresh signal can score high without mature windows", freshStrong.signalScore >= 70, `signalScore=${freshStrong.signalScore}`);
+
+  const baseInput = {
+    tradeType: "purchase",
+    amountMin: 250000,
+    amountMax: 500000,
+    filingLagDays: 6,
+    daysSinceFiling: 6,
+    historicalPoliticianScore: 80,
+    historicalSampleSize: 20,
+    committeeRelevanceScore: 70,
+    clusterScore: 55,
+    userRelevanceScore: 40,
+    return7d: 4,
     spyReturn7d: 1,
-    return30d: 6,
-    spyReturn30d: 2,
-    historicalPoliticianScore: 12,
-    committeeRelevanceScore: 5,
-    clusterScore: 3,
-    userRelevanceScore: 2,
+    return30d: null,
+    spyReturn30d: null,
   };
+  const missing30 = scoreSignal({ ...baseInput, return7d: 4, spyReturn7d: 1, return30d: null, spyReturn30d: null });
+  const with30 = scoreSignal({ ...baseInput, return7d: 4, spyReturn7d: 1, return30d: 12, spyReturn30d: 3 });
+  assertEqual(c, "missing 30d alpha does not lower Signal Score", missing30.signalScore, with30.signalScore);
 
-  const purchase = scoreSignal({ ...base, tradeType: "purchase" });
-  const sale = scoreSignal({ ...base, tradeType: "sale" });
-  const exchange = scoreSignal({ ...base, tradeType: "exchange" });
-  assertTrue(c, "purchase > sale", purchase.totalScore > sale.totalScore, `${purchase.totalScore} <= ${sale.totalScore}`);
-  assertTrue(c, "purchase > exchange", purchase.totalScore > exchange.totalScore, `${purchase.totalScore} <= ${exchange.totalScore}`);
+  const staleLag = scoreSignal({ tradeType: "purchase", amountMin: 250000, amountMax: 500000, filingLagDays: 300, daysSinceFiling: 3, historicalPoliticianScore: 85, historicalSampleSize: 25, committeeRelevanceScore: 70, clusterScore: 60, userRelevanceScore: 50 });
+  assertTrue(c, "extreme filing lag not highly actionable", staleLag.signalScore < 60, `signalScore=${staleLag.signalScore}`);
 
-  const fresh = scoreSignal({ ...base, tradeType: "purchase", filingLagDays: 10 });
-  const stale = scoreSignal({ ...base, tradeType: "purchase", filingLagDays: 120 });
-  assertTrue(c, "fresh > stale", fresh.totalScore > stale.totalScore, `${fresh.totalScore} <= ${stale.totalScore}`);
+  const oneTrade = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 1 });
+  assertTrue(c, "single lucky trade is confidence-adjusted", oneTrade.breakdown.historicalPoliticianScore < 14, `historical=${oneTrade.breakdown.historicalPoliticianScore}`);
 
-  const pos = scoreSignal({ ...base, tradeType: "purchase", return7d: 8, spyReturn7d: 1, return30d: 14, spyReturn30d: 3 });
-  const neg = scoreSignal({ ...base, tradeType: "purchase", return7d: -3, spyReturn7d: 2, return30d: -7, spyReturn30d: 4 });
-  assertTrue(c, "positive alpha raises score", pos.totalScore > neg.totalScore, `${pos.totalScore} <= ${neg.totalScore}`);
-
-  const missingAlpha = scoreSignal({ ...base, tradeType: "purchase", return7d: null, spyReturn7d: null, return30d: null, spyReturn30d: null });
-  assertEqual(c, "missing alpha baseline momentum=8", missingAlpha.breakdown.momentumScore, 8);
-
-  assertTrue(c, "score bounds purchase", purchase.totalScore >= 0 && purchase.totalScore <= 100, `out of bounds ${purchase.totalScore}`);
-  assertTrue(c, "score bounds negative", neg.totalScore >= 0 && neg.totalScore <= 100, `out of bounds ${neg.totalScore}`);
+  const mature = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 10, daysSinceFiling: 60, historicalPoliticianScore: 70, historicalSampleSize: 20, return7d: 6, spyReturn7d: 1, return30d: 14, spyReturn30d: 3, return90d: 25, spyReturn90d: 8 });
+  assertTrue(c, "mature includes realized performance score", (mature.performanceScore ?? 0) > 50, `performanceScore=${mature.performanceScore}`);
 }
 
 function runPerformanceWindowValidations() {
