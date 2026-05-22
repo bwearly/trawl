@@ -296,7 +296,7 @@ export default async function SignalDetailPage({
             fallbackHref="/signals"
             className="text-sm font-medium text-gray-600 hover:text-gray-900"
           >
-            ← Back to signals
+            ← Back
           </BackButton>
         </div>
 
@@ -590,7 +590,7 @@ export default async function SignalDetailPage({
                   fallbackHref="/signals"
                   className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
-                  Back to signal list
+                  ← Back
                 </BackButton>
               </div>
             </section>
