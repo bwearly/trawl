@@ -97,7 +97,7 @@ export default async function TickerDetailPage({ params }: PageProps) {
               fallbackHref="/signals"
               className="text-gray-600 transition hover:text-gray-900"
             >
-              ← Back to signals
+              ← Back
             </BackButton>
             <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
               Explore politicians
