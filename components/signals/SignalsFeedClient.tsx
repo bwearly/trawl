@@ -119,7 +119,7 @@ export default function SignalsFeedClient({
         </div>
       </div>
 
-      <div className="space-y-3.5">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
         {feedItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -177,7 +177,7 @@ export default function SignalsFeedClient({
             return (
               <article
                 key={`cluster-${item.cluster.ticker}-${item.cluster.politician}-${item.cluster.lastTradeDate.toISOString()}`}
-                className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
+                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
