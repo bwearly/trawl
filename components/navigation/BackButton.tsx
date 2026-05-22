@@ -17,13 +17,9 @@ export default function BackButton({
   ariaLabel,
 }: BackButtonProps) {
   const router = useRouter();
+  void fallbackHref;
 
   function handleBack() {
-    if (typeof document !== "undefined" && !document.referrer && fallbackHref) {
-      router.push(fallbackHref);
-      return;
-    }
-
     router.back();
   }
 

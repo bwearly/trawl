@@ -294,7 +294,7 @@ export default async function SignalDetailPage({
         <div className="mb-6">
           <BackButton
             fallbackHref="/signals"
-            className="text-sm font-medium text-gray-600 hover:text-gray-900"
+            className="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-900"
           >
             ← Back
           </BackButton>
@@ -581,14 +581,14 @@ export default async function SignalDetailPage({
               <div className="mt-5 flex flex-col gap-3">
                 <a
                   href="#price-chart"
-                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   View chart
                 </a>
 
                 <BackButton
                   fallbackHref="/signals"
-                  className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   ← Back
                 </BackButton>
