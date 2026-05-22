@@ -92,6 +92,10 @@ function getDisplayTicker(rawTicker: string | null | undefined) {
   return upper;
 }
 
+function getSignalHref(signalId: number) {
+  return `/signals/${signalId}`;
+}
+
 export default async function PoliticianDetailPage({ params }: PageProps) {
   const identity = await getPersonalizedUserIdentity();
   const { id } = await params;
@@ -277,7 +281,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                   {recentSignals.map((row) => (
                     <tr
                       key={row.id}
-                      className="border-b border-gray-100 last:border-b-0"
+                      className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0"
                     >
                       <td className="px-4 py-4">
                         {getDisplayTicker(row.ticker) ? (
@@ -292,45 +296,70 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-gray-700">
-                        <span className="block max-w-[18rem] truncate" title={row.assetName}>
-                          {row.assetName}
-                        </span>
-                        <span className="mt-1 block text-xs text-gray-500">
-                          {row.assetType || "Unknown asset type"}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(
-                            row.tradeType
-                          )}`}
+                      <td className="px-4 py-0 text-gray-700">
+                        <Link
+                          href={getSignalHref(row.id)}
+                          className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
                         >
-                          {row.tradeType ?? "unknown"}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4 text-gray-700">
-                        {formatDate(row.tradeDate)}
-                      </td>
-
-                      <td className="px-4 py-4">
-                        {row.score !== null ? (
-                          <span className="font-semibold text-gray-900">
-                            {row.score}
+                          <span className="block max-w-[18rem] truncate" title={row.assetName}>
+                            {row.assetName}
                           </span>
-                        ) : (
-                          <span className="text-gray-400">Not scored yet</span>
-                        )}
+                          <span className="mt-1 block text-xs text-gray-500">
+                            {row.assetType || "Unknown asset type"}
+                          </span>
+                        </Link>
+                      </td>
+
+                      <td className="px-4 py-0">
+                        <Link
+                          href={getSignalHref(row.id)}
+                          className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                        >
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(
+                              row.tradeType
+                            )}`}
+                          >
+                            {row.tradeType ?? "unknown"}
+                          </span>
+                        </Link>
+                      </td>
+
+                      <td className="px-4 py-0 text-gray-700">
+                        <Link
+                          href={getSignalHref(row.id)}
+                          className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                        >
+                          {formatDate(row.tradeDate)}
+                        </Link>
+                      </td>
+
+                      <td className="px-4 py-0">
+                        <Link
+                          href={getSignalHref(row.id)}
+                          className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                        >
+                          {row.score !== null ? (
+                            <span className="font-semibold text-gray-900">
+                              {row.score}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">Not scored yet</span>
+                          )}
+                        </Link>
                       </td>
 
                       <td
-                        className={`px-4 py-4 font-semibold ${toneToClass(
+                        className={`px-4 py-0 font-semibold ${toneToClass(
                           getPerformanceTone(row.alpha30d)
                         )}`}
                       >
-                        {formatPercent(row.alpha30d)}
+                        <Link
+                          href={getSignalHref(row.id)}
+                          className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                        >
+                          {formatPercent(row.alpha30d)}
+                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -428,7 +457,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               </thead>
               <tbody>
                 {noTickerDisclosures.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
+                  <tr key={row.id} className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4 text-gray-700">
                       <span className="block max-w-[18rem] truncate" title={row.assetName}>
                         {row.assetName}
@@ -484,7 +513,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               </thead>
               <tbody>
                 {historicalSignals.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
+                  <tr key={row.id} className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4">
                       {getDisplayTicker(row.ticker) ? (
                         <Link
@@ -497,25 +526,52 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         <span className="text-gray-400">No ticker</span>
                       )}
                     </td>
-                    <td className="px-4 py-4 text-gray-700">
-                      <span className="block max-w-[18rem] truncate" title={row.assetName}>
-                        {row.assetName}
-                      </span>
-                      <span className="mt-1 block text-xs text-gray-500">
-                        {row.assetType || "Unknown asset type"}
-                      </span>
+                    <td className="px-4 py-0 text-gray-700">
+                      <Link
+                        href={getSignalHref(row.id)}
+                        className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        <span className="block max-w-[18rem] truncate" title={row.assetName}>
+                          {row.assetName}
+                        </span>
+                        <span className="mt-1 block text-xs text-gray-500">
+                          {row.assetType || "Unknown asset type"}
+                        </span>
+                      </Link>
                     </td>
-                    <td className="px-4 py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(row.tradeType)}`}>
-                        {row.tradeType ?? "unknown"}
-                      </span>
+                    <td className="px-4 py-0">
+                      <Link
+                        href={getSignalHref(row.id)}
+                        className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${getTradeTypeClasses(row.tradeType)}`}>
+                          {row.tradeType ?? "unknown"}
+                        </span>
+                      </Link>
                     </td>
-                    <td className="px-4 py-4 text-gray-700">{formatDate(row.tradeDate)}</td>
-                    <td className="px-4 py-4">
-                      {row.score !== null ? <span className="font-semibold text-gray-900">{row.score}</span> : <span className="text-gray-400">Not scored yet</span>}
+                    <td className="px-4 py-0 text-gray-700">
+                      <Link
+                        href={getSignalHref(row.id)}
+                        className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        {formatDate(row.tradeDate)}
+                      </Link>
                     </td>
-                    <td className={`px-4 py-4 font-semibold ${toneToClass(getPerformanceTone(row.alpha30d))}`}>
-                      {formatPercent(row.alpha30d)}
+                    <td className="px-4 py-0">
+                      <Link
+                        href={getSignalHref(row.id)}
+                        className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        {row.score !== null ? <span className="font-semibold text-gray-900">{row.score}</span> : <span className="text-gray-400">Not scored yet</span>}
+                      </Link>
+                    </td>
+                    <td className={`px-4 py-0 font-semibold ${toneToClass(getPerformanceTone(row.alpha30d))}`}>
+                      <Link
+                        href={getSignalHref(row.id)}
+                        className="block px-0 py-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        {formatPercent(row.alpha30d)}
+                      </Link>
                     </td>
                   </tr>
                 ))}
