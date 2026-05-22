@@ -111,23 +111,23 @@ export default function SignalCard({
   });
 
   return (
-    <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1.5">
+    <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
           {displayTicker ? (
             <Link
               href={`/tickers/${displayTicker}`}
-              className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-base font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
+              className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
             >
               {displayTicker}
             </Link>
           ) : (
-            <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-base font-semibold tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
+            <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
               No ticker
             </span>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-gray-500">Research signal</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-xs text-gray-500">Research signal</p>
             <SignalStrengthBadge tier={alertTier} />
             <SignalConfidenceBadge
               hasReturn7d={return7d != null}
@@ -136,7 +136,7 @@ export default function SignalCard({
               filingLagDays={filingLagDays}
             />
             <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getFreshnessStyles(
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getFreshnessStyles(
                 freshnessLabel
               )}`}
               title="Filing freshness shows how quickly the trade was filed: fresh is recent, stale/historical is older."
@@ -148,7 +148,7 @@ export default function SignalCard({
         </div>
 
         <div
-          className={`inline-flex rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 ring-inset ${getScoreStyles(
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${getScoreStyles(
             score
           )}`}
           title="Signal Score ranks forward-looking opportunity quality based on filing context and supporting data. Not investment advice."
@@ -158,17 +158,19 @@ export default function SignalCard({
         </div>
       </div>
 
-      <p className="mt-2 text-xs text-gray-500">
-        Signal Score ranks research priority (not investment advice).
-      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+        <p>Signal Score ranks research priority (not investment advice).</p>
+        <p>
+          Performance Score:{" "}
+          {performanceScore == null
+            ? signalStage === "fresh"
+              ? "Pending (fresh signal)"
+              : "In progress"
+            : `${Math.round(Number(performanceScore))}/100`}
+        </p>
+      </div>
 
-
-
-      <p className="mt-2 text-xs text-gray-500">
-        Performance Score: {performanceScore == null ? (signalStage === "fresh" ? "Pending (fresh signal)" : "In progress") : `${Math.round(Number(performanceScore))}/100`}
-      </p>
-
-      <div className="mt-5 grid gap-x-5 gap-y-2.5 text-sm text-gray-700 md:grid-cols-2">
+      <div className="mt-3.5 grid gap-x-4 gap-y-2 text-sm text-gray-700 md:grid-cols-2">
         <p>
           <span className="font-medium text-gray-500">Reported by</span>
           <span className="mx-1.5 text-gray-300">•</span>
@@ -219,21 +221,21 @@ export default function SignalCard({
         </p>
       </div>
 
-      <div className="mt-5 rounded-xl bg-gray-50 p-4 ring-1 ring-inset ring-gray-200">
+      <div className="mt-3.5 rounded-xl bg-gray-50 p-3 ring-1 ring-inset ring-gray-200">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           Why this is worth researching
         </p>
-        <p className="mt-2 text-sm leading-6 text-gray-700">
+        <p className="mt-1.5 text-sm leading-5 text-gray-700">
           {reasonSummary ||
             primaryReason ||
             "Not enough context yet — check the filing details and recent price action."}
         </p>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2.5">
+      <div className="mt-3.5 flex flex-wrap items-center gap-2">
         <Link
           href={`/signals/${signalId}`}
-          className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+          className="inline-flex items-center rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-black"
         >
           View details
         </Link>
@@ -243,7 +245,7 @@ export default function SignalCard({
             href={sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             View filing
           </a>
