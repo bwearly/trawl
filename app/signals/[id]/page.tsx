@@ -11,7 +11,7 @@ import {
   researchSignals,
 } from "@/lib/db/schema";
 import SignalPriceChart from "./SignalPriceChart";
-import BackLink from "@/components/navigation/BackLink";
+import BackButton from "@/components/navigation/BackButton";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import WatchButton from "@/components/watchlist/WatchButton";
@@ -292,12 +292,12 @@ export default async function SignalDetailPage({
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <BackLink
+          <BackButton
             fallbackHref="/signals"
             className="text-sm font-medium text-gray-600 hover:text-gray-900"
           >
             ← Back to signals
-          </BackLink>
+          </BackButton>
         </div>
 
         <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-start md:justify-between">
@@ -586,12 +586,12 @@ export default async function SignalDetailPage({
                   View chart
                 </a>
 
-                <BackLink
+                <BackButton
                   fallbackHref="/signals"
                   className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   Back to signal list
-                </BackLink>
+                </BackButton>
               </div>
             </section>
           </div>
