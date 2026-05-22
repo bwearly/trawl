@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import BackLink from "@/components/navigation/BackLink";
+import BackButton from "@/components/navigation/BackButton";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getTickerDetail } from "@/lib/domain/tickers/get-ticker-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
@@ -93,12 +93,12 @@ export default async function TickerDetailPage({ params }: PageProps) {
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-            <BackLink
+            <BackButton
               fallbackHref="/signals"
               className="text-gray-600 transition hover:text-gray-900"
             >
               ← Back to signals
-            </BackLink>
+            </BackButton>
             <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
               Explore politicians
             </Link>
