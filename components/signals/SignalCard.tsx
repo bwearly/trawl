@@ -11,6 +11,8 @@ type SignalCardProps = {
   signalId: number;
   ticker: string | null;
   score: string;
+  performanceScore?: string | null;
+  signalStage?: string;
   signalStatus: string;
   politicianId: number;
   politicianName: string;
@@ -93,6 +95,8 @@ export default function SignalCard({
   sourceUrl,
   primaryReason,
   reasonSummary,
+  performanceScore = null,
+  signalStage = "fresh",
   initialIsWatchingTicker = false,
 }: SignalCardProps) {
   const freshnessLabel = getFilingFreshnessLabel(filingLagDays);
@@ -147,15 +151,21 @@ export default function SignalCard({
           className={`inline-flex rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 ring-inset ${getScoreStyles(
             score
           )}`}
-          title="Score is a research ranking signal based on filing context and supporting data. Not investment advice."
-          aria-label={`Score ${Math.round(Number(score))} out of 100. Research ranking signal, not investment advice.`}
+          title="Signal Score ranks forward-looking opportunity quality based on filing context and supporting data. Not investment advice."
+          aria-label={`Signal Score ${Math.round(Number(score))} out of 100.`}
         >
-          Score {Math.round(Number(score))}/100
+          Signal Score {Math.round(Number(score))}/100
         </div>
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
-        Score ranks research priority (not investment advice).
+        Signal Score ranks research priority (not investment advice).
+      </p>
+
+
+
+      <p className="mt-2 text-xs text-gray-500">
+        Performance Score: {performanceScore == null ? (signalStage === "fresh" ? "Pending (fresh signal)" : "In progress") : `${Math.round(Number(performanceScore))}/100`}
       </p>
 
       <div className="mt-5 grid gap-x-5 gap-y-2.5 text-sm text-gray-700 md:grid-cols-2">

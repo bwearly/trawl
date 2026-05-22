@@ -1,31 +1,36 @@
-import { SCORE_MAX, SCORE_WEIGHTS } from "./weights";
 import { getFilingLagPenalty } from "@/lib/domain/signals/filing-freshness";
+
+export type SignalStage = "fresh" | "developing" | "mature" | "historical";
 
 export type ScoreSignalInput = {
   tradeType: string;
   amountMin: number | null;
   amountMax: number | null;
   filingLagDays: number | null;
+  daysSinceFiling?: number | null;
 
-  // Optional benchmark-relative performance inputs
   return7d?: number | string | null;
   spyReturn7d?: number | string | null;
   return30d?: number | string | null;
   spyReturn30d?: number | string | null;
+  return90d?: number | string | null;
+  spyReturn90d?: number | string | null;
 
-  // Optional direct component overrides
-  historicalPoliticianScore?: number | null; // 0-20
-  momentumScore?: number | null; // 0-22
-  committeeRelevanceScore?: number | null; // 0-10
-  clusterScore?: number | null; // 0-5
-  userRelevanceScore?: number | null; // 0-5
+  historicalPoliticianScore?: number | null; // 0-100
+  committeeRelevanceScore?: number | null; // 0-100
+  clusterScore?: number | null; // 0-100
+  userRelevanceScore?: number | null; // 0-100
+  dataConfidenceScore?: number | null; // 0-100
+  historicalSampleSize?: number | null;
 };
 
 export type ScoreSignalResult = {
   totalScore: number;
+  signalScore: number;
+  performanceScore: number | null;
+  signalStage: SignalStage;
   primaryReason: string;
   reasonSummary: string;
-
   breakdown: {
     tradeTypeScore: number;
     tradeSizeScore: number;
@@ -35,16 +40,17 @@ export type ScoreSignalResult = {
     committeeRelevanceScore: number;
     clusterScore: number;
     userRelevanceScore: number;
+    dataConfidenceScore: number;
+    alpha7dScore: number | null;
+    alpha30dScore: number | null;
+    alpha90dScore: number | null;
+    winLossScore: number | null;
   };
 };
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
+const round2 = (v: number) => Math.round(v * 100) / 100;
+export const clamp = (v: number, min = 0, max = 100) => Math.max(min, Math.min(max, v));
+export const normalizeScore = (v: number, min: number, max: number) => clamp(((v - min) / (max - min)) * 100, 0, 100);
 
 function parseNumeric(value: number | string | null | undefined): number | null {
   if (value == null) return null;
@@ -52,312 +58,127 @@ function parseNumeric(value: number | string | null | undefined): number | null 
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function calcAlpha(
-  stockReturn: number | string | null | undefined,
-  benchmarkReturn: number | string | null | undefined
-): number | null {
+export function calcAlpha(stockReturn: number | string | null | undefined, benchmarkReturn: number | string | null | undefined): number | null {
   const stock = parseNumeric(stockReturn);
   const benchmark = parseNumeric(benchmarkReturn);
-
   if (stock == null || benchmark == null) return null;
   return round2(stock - benchmark);
 }
 
+export function alphaToScore(alpha: number | null): number | null {
+  if (alpha == null) return null;
+  return round2(normalizeScore(alpha, -15, 15));
+}
+
+export function sampleSizeConfidenceAdjustment(rawScore: number, sampleSize: number | null | undefined): number {
+  const n = Math.max(0, sampleSize ?? 0);
+  const confidence = n / (n + 8);
+  return round2(50 + (rawScore - 50) * confidence);
+}
+
+export function classifySignalStage(daysSinceFiling: number | null | undefined, filingLagDays: number | null | undefined): SignalStage {
+  const age = daysSinceFiling ?? null;
+  if ((filingLagDays ?? 0) > 365) return "historical";
+  if (age == null || age <= 7) return "fresh";
+  if (age <= 30) return "developing";
+  return "mature";
+}
+
+export function scoreFreshnessAndLag(filingLagDays: number | null): number {
+  if (filingLagDays == null) return 45;
+  if (filingLagDays <= 7) return 95;
+  if (filingLagDays <= 15) return 85;
+  if (filingLagDays <= 45) return 65;
+  if (filingLagDays <= 90) return 45;
+  if (filingLagDays <= 180) return 30;
+  if (filingLagDays <= 365) return 15;
+  return 5;
+}
+
 function scoreTradeType(tradeType: string): number {
-  switch (tradeType.toLowerCase()) {
-    case "purchase":
-      return SCORE_WEIGHTS.tradeType;
-    case "exchange":
-      return 10;
-    case "sale":
-      return 4;
-    default:
-      return 0;
-  }
+  const t = tradeType.toLowerCase();
+  if (t === "purchase") return 90;
+  if (t === "exchange") return 60;
+  if (t === "sale") return 35;
+  return 45;
 }
 
 function scoreTradeSize(amountMin: number | null, amountMax: number | null): number {
   const value = amountMax ?? amountMin ?? 0;
-
-  if (value >= 250000) return SCORE_WEIGHTS.tradeSize;
-  if (value >= 100000) return 13;
-  if (value >= 50000) return 10;
-  if (value >= 15000) return 6;
-  if (value >= 1000) return 3;
-
-  return 0;
-}
-
-function scoreFilingFreshness(filingLagDays: number | null): number {
-  if (filingLagDays == null) return 0;
-
-  if (filingLagDays <= 15) return SCORE_WEIGHTS.filingFreshness;
-  if (filingLagDays <= 45) return 1;
-
-  return 0;
-}
-
-function scoreMomentumFromAlpha(
-  return7d: number | string | null | undefined,
-  spyReturn7d: number | string | null | undefined,
-  return30d: number | string | null | undefined,
-  spyReturn30d: number | string | null | undefined
-): number {
-  const alpha7d = calcAlpha(return7d, spyReturn7d);
-  const alpha30d = calcAlpha(return30d, spyReturn30d);
-
-  const has7d = alpha7d != null;
-  const has30d = alpha30d != null;
-
-  if (!has7d && !has30d) {
-    return 8;
-  }
-
-  const resolved7d = alpha7d ?? 0;
-  const resolved30d = alpha30d ?? 0;
-
-  // Keep short-term bias, but reward confirmed 30d strength more than before.
-  const blendedAlpha = resolved7d * 0.6 + resolved30d * 0.4;
-
-  let rawScore = 8 + blendedAlpha * 2.2;
-
-  // Strong negative relative performance should get punished harder.
-  if (blendedAlpha <= -2) rawScore -= 3;
-  if (blendedAlpha <= -5) rawScore -= 3;
-
-  // Strong positive relative performance should have a path to top-end scores.
-  if (blendedAlpha >= 5) rawScore += 2;
-  if (blendedAlpha >= 10) rawScore += 2;
-
-  return round2(clamp(rawScore, 0, SCORE_WEIGHTS.momentum));
-}
-
-function calculateEliteUpsideBonus(
-  input: ScoreSignalInput,
-  breakdown: ScoreSignalResult["breakdown"]
-): number {
-  const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
-  const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
-
-  let bonus = 0;
-
-  // Unlock additional upside only for truly exceptional momentum context.
-  if (breakdown.momentumScore >= 20) {
-    bonus += 1;
-  }
-
-  if (breakdown.momentumScore >= 21.5) {
-    bonus += 1;
-  }
-
-  // Reward material 30d benchmark-relative outperformance.
-  if (alpha30d != null && alpha30d >= 6) {
-    bonus += 1.5;
-  }
-
-  if (alpha30d != null && alpha30d >= 10) {
-    bonus += 1.5;
-  }
-
-  // Reward strongest factor alignment without lifting mediocre setups.
-  if (
-    breakdown.momentumScore >= 20 &&
-    input.tradeType.toLowerCase() === "purchase" &&
-    breakdown.historicalPoliticianScore >= 12
-  ) {
-    bonus += 1;
-  }
-
-  if (
-    breakdown.momentumScore >= 20 &&
-    alpha30d != null &&
-    alpha30d >= 8 &&
-    alpha7d != null &&
-    alpha7d >= 3
-  ) {
-    bonus += 1;
-  }
-
-  return round2(clamp(bonus, 0, 7));
-}
-
-function getPrimaryReason(
-  result: ScoreSignalResult["breakdown"],
-  input: ScoreSignalInput
-): string {
-  const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
-  const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
-  const bestAlpha = Math.max(
-    alpha7d ?? Number.NEGATIVE_INFINITY,
-    alpha30d ?? Number.NEGATIVE_INFINITY
-  );
-
-  const entries = [
-    {
-      key: "tradeTypeScore",
-      label: "Strong purchase signal",
-      value: result.tradeTypeScore,
-    },
-    {
-      key: "tradeSizeScore",
-      label: "Large reported trade",
-      value: result.tradeSizeScore,
-    },
-    {
-      key: "filingFreshnessScore",
-      label: "Fresh disclosure timing",
-      value: result.filingFreshnessScore,
-    },
-    {
-      key: "historicalPoliticianScore",
-      label: "Historically strong politician profile",
-      value: result.historicalPoliticianScore,
-    },
-    {
-      key: "momentumScore",
-      label:
-        bestAlpha > 0
-          ? "Outperformance versus SPY"
-          : "Positive momentum context",
-      value: result.momentumScore,
-    },
-    {
-      key: "committeeRelevanceScore",
-      label: "Strong committee relevance",
-      value: result.committeeRelevanceScore,
-    },
-    {
-      key: "clusterScore",
-      label: "Clustered activity",
-      value: result.clusterScore,
-    },
-    {
-      key: "userRelevanceScore",
-      label: "High user relevance",
-      value: result.userRelevanceScore,
-    },
-  ];
-
-  entries.sort((a, b) => b.value - a.value);
-  return entries[0]?.label ?? "Not enough signal data";
-}
-
-function getReasonSummary(
-  breakdown: ScoreSignalResult["breakdown"],
-  input: ScoreSignalInput,
-  eliteUpsideBonus = 0
-): string {
-  const reasons: string[] = [];
-  const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
-  const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
-
-  if (
-    breakdown.tradeTypeScore >= 15 &&
-    input.tradeType.toLowerCase() === "purchase"
-  ) {
-    reasons.push("purchase disclosure");
-  }
-
-  if (breakdown.tradeSizeScore >= 12) {
-    reasons.push("large reported trade size");
-  }
-
-  if (breakdown.filingFreshnessScore >= 4) {
-    reasons.push("fresh filing timing");
-  }
-
-  if (breakdown.historicalPoliticianScore >= 14) {
-    reasons.push("strong historical politician profile");
-  }
-
-  if (alpha7d != null && alpha7d >= 2) {
-    reasons.push("strong 7-day outperformance vs SPY");
-  } else if (alpha30d != null && alpha30d >= 2) {
-    reasons.push("strong 30-day outperformance vs SPY");
-  } else if (breakdown.momentumScore >= 14) {
-    reasons.push("positive momentum context");
-  }
-
-  if (breakdown.committeeRelevanceScore >= 7) {
-    reasons.push("committee and sector overlap");
-  }
-
-  if (breakdown.clusterScore >= 4) {
-    reasons.push("clustered activity in related names");
-  }
-
-  if (breakdown.userRelevanceScore >= 4) {
-    reasons.push("match with user preferences");
-  }
-
-  if (eliteUpsideBonus >= 2) {
-    reasons.push("elite momentum and outperformance alignment");
-  }
-
-  if (reasons.length === 0) {
-    return "This signal scored based on a mix of disclosure characteristics, though no single factor strongly dominated.";
-  }
-
-  return `This signal scored well due to ${reasons.join(", ")}.`;
+  if (value >= 1_000_000) return 95;
+  if (value >= 250_000) return 85;
+  if (value >= 100_000) return 70;
+  if (value >= 50_000) return 60;
+  if (value >= 15_000) return 50;
+  if (value >= 1_000) return 40;
+  return 30;
 }
 
 export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
-  const resolvedMomentumScore =
-    input.momentumScore != null
-      ? clamp(input.momentumScore, 0, SCORE_WEIGHTS.momentum)
-      : scoreMomentumFromAlpha(
-          input.return7d,
-          input.spyReturn7d,
-          input.return30d,
-          input.spyReturn30d
-        );
+  const alpha7d = calcAlpha(input.return7d, input.spyReturn7d);
+  const alpha30d = calcAlpha(input.return30d, input.spyReturn30d);
+  const alpha90d = calcAlpha(input.return90d, input.spyReturn90d);
 
-  const breakdown = {
-    tradeTypeScore: scoreTradeType(input.tradeType),
-    tradeSizeScore: scoreTradeSize(input.amountMin, input.amountMax),
-    filingFreshnessScore: scoreFilingFreshness(input.filingLagDays),
-    historicalPoliticianScore: clamp(
-      input.historicalPoliticianScore ?? 0,
-      0,
-      SCORE_WEIGHTS.historicalPolitician
-    ),
-    momentumScore: resolvedMomentumScore,
-    committeeRelevanceScore: clamp(
-      input.committeeRelevanceScore ?? 0,
-      0,
-      SCORE_WEIGHTS.committeeRelevance
-    ),
-    clusterScore: clamp(input.clusterScore ?? 0, 0, SCORE_WEIGHTS.cluster),
-    userRelevanceScore: clamp(
-      input.userRelevanceScore ?? 0,
-      0,
-      SCORE_WEIGHTS.userRelevance
-    ),
-  };
+  const signalStage = classifySignalStage(input.daysSinceFiling, input.filingLagDays);
 
-  const rawTotal =
-    breakdown.tradeTypeScore +
-    breakdown.tradeSizeScore +
-    breakdown.filingFreshnessScore +
-    breakdown.historicalPoliticianScore +
-    breakdown.momentumScore +
-    breakdown.committeeRelevanceScore +
-    breakdown.clusterScore +
-    breakdown.userRelevanceScore;
+  const politicianEdgeRaw = clamp(input.historicalPoliticianScore ?? 50);
+  const politicianEdge = sampleSizeConfidenceAdjustment(politicianEdgeRaw, input.historicalSampleSize);
+  const tradeStrength = round2((scoreTradeType(input.tradeType) * 0.55) + (scoreTradeSize(input.amountMin, input.amountMax) * 0.45));
+  const assetContext = round2((clamp(input.committeeRelevanceScore ?? 50) * 0.6) + (clamp(input.clusterScore ?? 50) * 0.25) + (clamp(input.userRelevanceScore ?? 50) * 0.15));
+  const freshness = scoreFreshnessAndLag(input.filingLagDays);
+  const dataConfidence = clamp(input.dataConfidenceScore ?? 70);
+
+  const signalScore = round2(
+    politicianEdge * 0.35 +
+      tradeStrength * 0.25 +
+      assetContext * 0.20 +
+      freshness * 0.15 +
+      dataConfidence * 0.05
+  );
+
+  const alpha7dScore = alphaToScore(alpha7d);
+  const alpha30dScore = alphaToScore(alpha30d);
+  const alpha90dScore = alphaToScore(alpha90d);
+  const wins = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).filter((a) => a > 0).length;
+  const samples = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).length;
+  const winLossScore = samples === 0 ? null : round2((wins / samples) * 100);
+
+  let weighted = 0;
+  let totalWeight = 0;
+  if (signalStage === "developing" || signalStage === "mature" || signalStage === "historical") {
+    if (alpha7dScore != null) { weighted += alpha7dScore * 0.25; totalWeight += 0.25; }
+  }
+  if (signalStage === "mature" || signalStage === "historical") {
+    if (alpha30dScore != null) { weighted += alpha30dScore * 0.4; totalWeight += 0.4; }
+    if (alpha90dScore != null) { weighted += alpha90dScore * 0.25; totalWeight += 0.25; }
+  }
+  if (winLossScore != null) { weighted += winLossScore * 0.1; totalWeight += 0.1; }
+  const performanceScore = totalWeight > 0 ? round2(weighted / totalWeight) : null;
 
   const filingLagPenalty = getFilingLagPenalty(input.filingLagDays);
-  const eliteUpsideBonus = calculateEliteUpsideBonus(input, breakdown);
-
-  const totalScore = round2(
-    clamp(rawTotal - filingLagPenalty + eliteUpsideBonus, 0, SCORE_MAX)
-  );
-  const primaryReason = getPrimaryReason(breakdown, input);
-  const reasonSummary = getReasonSummary(breakdown, input, eliteUpsideBonus);
+  const totalScore = round2(clamp(signalScore - filingLagPenalty, 0, 100));
 
   return {
     totalScore,
-    primaryReason,
-    reasonSummary,
-    breakdown,
+    signalScore: totalScore,
+    performanceScore,
+    signalStage,
+    primaryReason: politicianEdge >= tradeStrength ? "Historically strong politician edge" : "Strong trade context and timing",
+    reasonSummary: `Signal score prioritizes politician edge, trade strength, asset context, freshness, and data confidence. Stage: ${signalStage}.`,
+    breakdown: {
+      tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * 18),
+      tradeSizeScore: round2((scoreTradeSize(input.amountMin, input.amountMax) / 100) * 16),
+      filingFreshnessScore: round2((freshness / 100) * 5),
+      historicalPoliticianScore: round2((politicianEdge / 100) * 20),
+      momentumScore: round2(((alpha7dScore ?? 50) / 100) * 22),
+      committeeRelevanceScore: round2((clamp(input.committeeRelevanceScore ?? 50) / 100) * 10),
+      clusterScore: round2((clamp(input.clusterScore ?? 50) / 100) * 5),
+      userRelevanceScore: round2((clamp(input.userRelevanceScore ?? 50) / 100) * 5),
+      dataConfidenceScore: dataConfidence,
+      alpha7dScore,
+      alpha30dScore,
+      alpha90dScore,
+      winLossScore,
+    },
   };
 }

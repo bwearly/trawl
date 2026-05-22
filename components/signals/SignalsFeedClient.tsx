@@ -165,6 +165,8 @@ export default function SignalsFeedClient({
                   sourceUrl={signal.sourceUrl}
                   primaryReason={signal.primaryReason}
                   reasonSummary={signal.reasonSummary}
+                  performanceScore={signal.performanceScore}
+                  signalStage={signal.signalStage}
                   initialIsWatchingTicker={signal.ticker && signal.ticker !== "NO_TICKER" ? watchedTickerSet.has(signal.ticker) : false}
                 />
               );
