@@ -55,6 +55,7 @@ export async function getPoliticianDetail(politicianId: number) {
   const recentDisclosures = await db
     .select({
       id: disclosures.id,
+      researchSignalId: researchSignals.id,
       ticker: disclosures.ticker,
       assetName: disclosures.assetName,
       assetType: disclosures.assetType,
@@ -126,6 +127,7 @@ export async function getPoliticianDetail(politicianId: number) {
 
       return {
         id: row.id,
+        researchSignalId: row.researchSignalId,
         ticker: row.ticker,
         assetName: row.assetName,
         assetType: row.assetType,
