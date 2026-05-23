@@ -63,8 +63,8 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
+        <div className="mb-6 space-y-4">
+          <div className="w-full">
             <p className="text-sm font-medium text-gray-500">Ranked research feed</p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
               Research Signals
@@ -88,32 +88,34 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/watchlist"
-              className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
-            >
-              Watchlist
-            </Link>
-
-            <Link
-              href="/alerts"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
-            >
-              <span>Watchlist Notifications</span>
-              {unreadAlertsCount > 0 && (
-                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-gray-900 px-1.5 py-0.5 text-xs font-semibold text-white">
-                  {unreadAlertsCount}
-                </span>
-              )}
-            </Link>
-
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href="/"
               className="text-sm font-medium text-gray-600 hover:text-gray-900"
             >
               ← Back home
             </Link>
+
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+              <Link
+                href="/watchlist"
+                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+              >
+                Watchlist
+              </Link>
+
+              <Link
+                href="/alerts"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+              >
+                <span>Watchlist Notifications</span>
+                {unreadAlertsCount > 0 && (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-gray-900 px-1.5 py-0.5 text-xs font-semibold text-white">
+                    {unreadAlertsCount}
+                  </span>
+                )}
+              </Link>
+            </div>
           </div>
         </div>
 
