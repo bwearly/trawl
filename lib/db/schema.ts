@@ -282,6 +282,9 @@ export const notificationJobs = pgTable(
 
     channel: text("channel").notNull().default("email"),
     recipient: text("recipient"),
+    subject: text("subject"),
+    textBody: text("text_body"),
+    htmlBody: text("html_body"),
 
     status: text("status").notNull().default("queued"),
 
@@ -308,6 +311,31 @@ export const notificationJobs = pgTable(
     alertIdIdx: index("notification_jobs_alert_id_idx").on(table.alertId),
     idempotencyKeyUnique: uniqueIndex("notification_jobs_idempotency_key_idx").on(
       table.idempotencyKey
+    ),
+  })
+);
+
+export const watchlistDigestDeliveries = pgTable(
+  "watchlist_digest_deliveries",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    researchSignalId: integer("research_signal_id")
+      .notNull()
+      .references(() => researchSignals.id),
+    deliveryType: text("delivery_type").notNull().default("daily_digest"),
+    status: text("status").notNull().default("sent"),
+    sentAt: timestamp("sent_at"),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("watchlist_digest_deliveries_user_id_idx").on(table.userId),
+    signalIdx: index("watchlist_digest_deliveries_signal_idx").on(table.researchSignalId),
+    dedupeUnique: uniqueIndex("watchlist_digest_deliveries_unique_idx").on(
+      table.userId,
+      table.researchSignalId,
+      table.deliveryType
     ),
   })
 );

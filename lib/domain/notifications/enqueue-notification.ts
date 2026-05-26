@@ -2,10 +2,13 @@ import { db } from "@/lib/db";
 import { notificationEvents, notificationJobs } from "@/lib/db/schema";
 
 export async function enqueueEmailNotificationJob(input: {
-  alertId: number;
+  alertId: number | null;
   userId: string;
   recipient?: string | null;
   idempotencyKey: string;
+  subject?: string | null;
+  textBody?: string | null;
+  htmlBody?: string | null;
 }) {
   const rows = await db
     .insert(notificationJobs)
@@ -14,6 +17,9 @@ export async function enqueueEmailNotificationJob(input: {
       userId: input.userId,
       channel: "email",
       recipient: input.recipient ?? null,
+      subject: input.subject ?? null,
+      textBody: input.textBody ?? null,
+      htmlBody: input.htmlBody ?? null,
       status: "queued",
       idempotencyKey: input.idempotencyKey,
       attemptCount: 0,
