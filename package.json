@@ -33,7 +33,9 @@
     "performance:backfill:daily": "tsx scripts/backfill-performance.ts --recent-days=180 --missing-only",
     "senate:import:poc": "tsx scripts/import-senate-disclosures-poc.ts",
     "diagnostics:scoring-leaderboard": "tsx scripts/diagnose-scoring-leaderboard.ts",
-    "alerts:digest": "tsx scripts/send-watchlist-digest.ts"
+    "alerts:digest": "tsx scripts/send-watchlist-digest.ts",
+    "users:audit-duplicates": "tsx scripts/audit-duplicate-users.ts",
+    "users:merge-duplicates": "tsx scripts/merge-duplicate-users.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
