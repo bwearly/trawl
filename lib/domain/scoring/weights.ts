@@ -1,12 +1,12 @@
 export const SCORE_MAX = 100;
 
 export const SCORE_WEIGHTS = {
-  tradeType: 18,
-  tradeSize: 16,
-  filingFreshness: 5,
-  historicalPolitician: 20,
-  momentum: 22,
-  committeeRelevance: 10,
+  tradeType: 16,
+  tradeSize: 14,
+  filingFreshness: 18,
+  historicalPolitician: 24,
+  momentum: 10,
+  committeeRelevance: 8,
   cluster: 5,
   userRelevance: 5,
 } as const;

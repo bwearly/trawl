@@ -6,6 +6,7 @@ import {
   politicians
 } from "@/lib/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { computeLeaderboardScore } from "@/lib/domain/politicians/leaderboard-score";
 
 export const ACTIVE_LEADERBOARD_LOOKBACK_DAYS = 365;
 export const ACTIVE_LEADERBOARD_MIN_DISCLOSURES = 3;
@@ -29,6 +30,8 @@ export type PoliticianLeaderboardRow = {
   winRate30d: number | null;
   avgFilingLagDays: number | null;
   lastTradeDate: Date | null;
+  validPerformanceCount: number;
+  leaderboardScore: number;
 };
 
 type ChamberFilter = "all" | "house" | "senate";
@@ -65,17 +68,30 @@ export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): 
       winRate30d: politicianStats.winRate30d,
       avgFilingLagDays: politicianStats.avgFilingLagDays,
       lastTradeDate: politicianStats.lastTradeDate,
+      validPerformanceCount: sql<number>`(
+        select count(*)::int
+        from ${disclosures} d
+        inner join ${disclosurePerformanceWindows} p on p.disclosure_id = d.id
+        where d.politician_id = ${politicians.id}
+          and p.return_30d is not null
+          and p.spy_return_30d is not null
+      )`,
     })
     .from(politicians)
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(baseWhere)
-    .orderBy(
-      desc(politicianStats.lastTradeDate),
-      desc(sql`COALESCE(${politicianStats.winRate30d}, -999999)`),
-      desc(sql`COALESCE(${politicianStats.avgAlpha30d}, -999999)`),
-      desc(politicianStats.totalDisclosures),
-      politicians.fullName
-    );
+    .orderBy(desc(politicianStats.totalDisclosures), politicians.fullName);
+
+  const normalize = (row: Omit<PoliticianLeaderboardRow, "avgAlpha30d" | "winRate30d" | "avgFilingLagDays" | "leaderboardScore"> & { avgAlpha30d: number | null; winRate30d: number | null; avgFilingLagDays: number | null; }) => ({
+    ...row,
+    leaderboardScore: computeLeaderboardScore({
+      avgAlpha30d: row.avgAlpha30d,
+      winRate30d: row.winRate30d,
+      totalDisclosures: row.totalDisclosures,
+      validPerformanceCount: row.validPerformanceCount,
+      avgFilingLagDays: row.avgFilingLagDays,
+    }),
+  });
 
   if (rows.length === 0) {
     const includeAllDisclosuresForChamber = chamber !== "all";
@@ -95,23 +111,11 @@ export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): 
         totalDisclosures: sql<number>`count(${disclosures.id})`,
         purchaseCount: sql<number>`sum(case when ${disclosures.tradeType} = 'purchase' then 1 else 0 end)`,
         saleCount: sql<number>`sum(case when ${disclosures.tradeType} = 'sale' then 1 else 0 end)`,
-        avgAlpha30d: sql<number | null>`round(avg(case
-          when ${disclosurePerformanceWindows.return30d} is not null
-            and ${disclosurePerformanceWindows.spyReturn30d} is not null
-          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
-          else null
-        end), 2)`,
-        winRate30d: sql<number | null>`round(100.0 * avg(case
-          when ${disclosurePerformanceWindows.return30d} is not null
-            and ${disclosurePerformanceWindows.spyReturn30d} is not null
-          then case
-            when (${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}) > 0 then 1.0
-            else 0.0
-          end
-          else null
-        end), 2)`,
+        avgAlpha30d: sql<number | null>`round(avg(case when ${disclosurePerformanceWindows.return30d} is not null and ${disclosurePerformanceWindows.spyReturn30d} is not null then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d} else null end), 2)`,
+        winRate30d: sql<number | null>`round(100.0 * avg(case when ${disclosurePerformanceWindows.return30d} is not null and ${disclosurePerformanceWindows.spyReturn30d} is not null then case when (${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}) > 0 then 1.0 else 0.0 end else null end), 2)`,
         avgFilingLagDays: sql<number | null>`avg(${disclosures.filingLagDays})`,
         lastTradeDate: sql<Date | null>`max(${disclosures.tradeDate})`,
+        validPerformanceCount: sql<number>`count(*) filter (where ${disclosurePerformanceWindows.return30d} is not null and ${disclosurePerformanceWindows.spyReturn30d} is not null)::int`,
       })
       .from(politicians)
       .innerJoin(disclosures, eq(disclosures.politicianId, politicians.id))
@@ -131,29 +135,29 @@ export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): 
         includeAllDisclosuresForChamber
           ? sql`count(${disclosures.id}) >= 1`
           : sql`count(${disclosures.id}) >= ${ACTIVE_LEADERBOARD_MIN_DISCLOSURES}`
-      )
-      .orderBy(
-        desc(sql`max(${disclosures.tradeDate})`),
-        desc(sql`COALESCE(round(100.0 * avg(case
-          when ${disclosurePerformanceWindows.return30d} is not null
-            and ${disclosurePerformanceWindows.spyReturn30d} is not null
-          then case
-            when (${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}) > 0 then 1.0
-            else 0.0
-          end
-          else null
-        end), 2), -999999)`),
-        desc(sql`COALESCE(round(avg(case
-          when ${disclosurePerformanceWindows.return30d} is not null
-            and ${disclosurePerformanceWindows.spyReturn30d} is not null
-          then ${disclosurePerformanceWindows.return30d} - ${disclosurePerformanceWindows.spyReturn30d}
-          else null
-        end), 2), -999999)`),
-        desc(sql`count(${disclosures.id})`),
-        politicians.fullName
       );
 
-    return fallbackRows.map((row) => ({
+    return fallbackRows
+      .map((row) => normalize({
+        id: row.id,
+        fullName: row.fullName,
+        chamber: row.chamber,
+        party: row.party,
+        state: row.state,
+        totalDisclosures: row.totalDisclosures,
+        purchaseCount: row.purchaseCount,
+        saleCount: row.saleCount,
+        avgAlpha30d: toNumber(row.avgAlpha30d),
+        winRate30d: toNumber(row.winRate30d),
+        avgFilingLagDays: toNumber(row.avgFilingLagDays),
+        lastTradeDate: row.lastTradeDate,
+        validPerformanceCount: Number(row.validPerformanceCount ?? 0),
+      }))
+      .sort((a, b) => b.leaderboardScore - a.leaderboardScore || b.validPerformanceCount - a.validPerformanceCount || b.totalDisclosures - a.totalDisclosures || ((b.lastTradeDate?.getTime() ?? 0) - (a.lastTradeDate?.getTime() ?? 0)) || a.fullName.localeCompare(b.fullName));
+  }
+
+  return rows
+    .map((row) => normalize({
       id: row.id,
       fullName: row.fullName,
       chamber: row.chamber,
@@ -166,23 +170,9 @@ export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): 
       winRate30d: toNumber(row.winRate30d),
       avgFilingLagDays: toNumber(row.avgFilingLagDays),
       lastTradeDate: row.lastTradeDate,
-    }));
-  }
-
-  return rows.map((row) => ({
-    id: row.id,
-    fullName: row.fullName,
-    chamber: row.chamber,
-    party: row.party,
-    state: row.state,
-    totalDisclosures: row.totalDisclosures,
-    purchaseCount: row.purchaseCount,
-    saleCount: row.saleCount,
-    avgAlpha30d: toNumber(row.avgAlpha30d),
-    winRate30d: toNumber(row.winRate30d),
-    avgFilingLagDays: toNumber(row.avgFilingLagDays),
-    lastTradeDate: row.lastTradeDate,
-  }));
+      validPerformanceCount: Number(row.validPerformanceCount ?? 0),
+    }))
+    .sort((a, b) => b.leaderboardScore - a.leaderboardScore || b.validPerformanceCount - a.validPerformanceCount || b.totalDisclosures - a.totalDisclosures || ((b.lastTradeDate?.getTime() ?? 0) - (a.lastTradeDate?.getTime() ?? 0)) || a.fullName.localeCompare(b.fullName));
 }
 
 export async function getPoliticianDisclosureCountForChamber(
