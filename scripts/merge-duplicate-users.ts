@@ -45,18 +45,26 @@ function parseBoolEnv(value: string | undefined, defaultValue: boolean): boolean
 }
 
 function getConfig() {
-  const targetEmail = normalizeEmail(process.env.TARGET_EMAIL);
-  const canonicalUserId = process.env.CANONICAL_USER_ID?.trim() || null;
-  const dryRun = parseBoolEnv(process.env.DRY_RUN, true);
-  const confirmMerge = parseBoolEnv(process.env.CONFIRM_MERGE, false);
-  return { targetEmail, canonicalUserId, dryRun, confirmMerge };
+  return {
+    targetEmail: normalizeEmail(process.env.TARGET_EMAIL),
+    canonicalUserId: process.env.CANONICAL_USER_ID?.trim() || null,
+    dryRun: parseBoolEnv(process.env.DRY_RUN, true),
+    confirmMerge: parseBoolEnv(process.env.CONFIRM_MERGE, false),
+    debugMode: parseBoolEnv(process.env.MERGE_DEBUG, false),
+  };
+}
+
+function debugLog(enabled: boolean, message: string, extra?: Record<string, unknown>) {
+  if (!enabled) return;
+  const payload = extra ? { message, ...extra } : { message };
+  console.log(`[merge-duplicate-users][debug] ${JSON.stringify(payload)}`);
 }
 
 export function buildDuplicateUserCondition<TColumn>(column: TColumn, duplicateIds: string[]) {
   return inArray(column as never, duplicateIds);
 }
 
-async function countPlannedMoves(canonicalUserId: string, duplicateIds: string[]): Promise<MoveCounts> {
+async function countPlannedMoves(duplicateIds: string[]): Promise<MoveCounts> {
   const byTable: MoveCounts = {};
 
   const [watchlistsCount] = await db
@@ -64,6 +72,13 @@ async function countPlannedMoves(canonicalUserId: string, duplicateIds: string[]
     .from(watchlists)
     .where(buildDuplicateUserCondition(watchlists.userId, duplicateIds));
   byTable.watchlists = Number(watchlistsCount?.count ?? 0);
+
+  const [itemsCount] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(watchlistItems)
+    .innerJoin(watchlists, eq(watchlistItems.watchlistId, watchlists.id))
+    .where(buildDuplicateUserCondition(watchlists.userId, duplicateIds));
+  byTable.watchlistItems = Number(itemsCount?.count ?? 0);
 
   const countingTables = [
     { name: "alertPreferences", table: alertPreferences, column: alertPreferences.userId },
@@ -81,55 +96,12 @@ async function countPlannedMoves(canonicalUserId: string, duplicateIds: string[]
     byTable[item.name] = Number(row?.count ?? 0);
   }
 
-  byTable.watchlistItems = 0;
-  const [itemsCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(watchlistItems)
-    .innerJoin(watchlists, eq(watchlistItems.watchlistId, watchlists.id))
-    .where(buildDuplicateUserCondition(watchlists.userId, duplicateIds));
-  byTable.watchlistItems = Number(itemsCount?.count ?? 0);
-
-  // This count is diagnostic only; watchlist items move implicitly through watchlist ownership updates.
-  if (canonicalUserId.length === 0) {
-    throw new Error("Canonical user ID cannot be empty.");
-  }
-
   return byTable;
-}
-
-export async function moveUserRows(tx: typeof db, canonicalUserId: string, duplicateIds: string[]) {
-  const movedWatchlists = await tx
-    .update(watchlists)
-    .set({ userId: canonicalUserId })
-    .where(buildDuplicateUserCondition(watchlists.userId, duplicateIds))
-    .returning({ id: watchlists.id });
-
-  const duplicateTables = [
-    { name: "alertPreferences", table: alertPreferences, column: alertPreferences.userId },
-    { name: "alerts", table: alerts, column: alerts.userId },
-    { name: "notificationJobs", table: notificationJobs, column: notificationJobs.userId },
-    { name: "notificationEvents", table: notificationEvents, column: notificationEvents.userId },
-    { name: "watchlistDigestDeliveries", table: watchlistDigestDeliveries, column: watchlistDigestDeliveries.userId },
-  ] as const;
-
-  const movedCounts: MoveCounts = {
-    watchlists: movedWatchlists.length,
-  };
-
-  for (const item of duplicateTables) {
-    const rows = await tx
-      .update(item.table)
-      .set({ userId: canonicalUserId })
-      .where(buildDuplicateUserCondition(item.column, duplicateIds))
-      .returning({ userId: item.column });
-    movedCounts[item.name] = rows.length;
-  }
-
-  return movedCounts;
 }
 
 async function validateWatchlistMove(canonicalUserId: string, duplicateIds: string[]) {
   const issues: string[] = [];
+  const warnings: string[] = [];
 
   const canonicalDefault = await db
     .select({ id: watchlists.id })
@@ -137,9 +109,7 @@ async function validateWatchlistMove(canonicalUserId: string, duplicateIds: stri
     .where(and(eq(watchlists.userId, canonicalUserId), eq(watchlists.isDefault, true)));
 
   if (canonicalDefault.length > 1) {
-    issues.push(
-      `Canonical user has multiple default watchlists: ${canonicalDefault.map((r) => r.id).join(", ")}`
-    );
+    issues.push(`Canonical user has multiple default watchlists: ${canonicalDefault.map((r) => r.id).join(", ")}`);
   }
 
   const duplicateDefaultRows = await db
@@ -158,21 +128,101 @@ async function validateWatchlistMove(canonicalUserId: string, duplicateIds: stri
     }
   }
 
-  const warnings: string[] = [];
-  const totalDuplicateDefaults = duplicateDefaultRows.length;
-  if (canonicalDefault.length > 0 && totalDuplicateDefaults > 0) {
+  if (canonicalDefault.length > 0 && duplicateDefaultRows.length > 0) {
     warnings.push(
-      `Canonical user already has a default watchlist and ${totalDuplicateDefaults} duplicate default watchlist(s) will also be moved.`
+      `Canonical user already has a default watchlist and ${duplicateDefaultRows.length} duplicate default watchlist(s) will also be moved.`
     );
   }
 
   return { issues, warnings };
 }
 
+async function moveUserRows(tx: typeof db, canonicalUserId: string, duplicateIds: string[]) {
+  const movedCounts: MoveCounts = {
+    watchlists: 0,
+    watchlistItems: 0,
+    alerts: 0,
+    notificationJobs: 0,
+    notificationEvents: 0,
+    watchlistDigestDeliveries: 0,
+    alertPreferences: 0,
+  };
+
+  const movedWatchlists = await tx
+    .update(watchlists)
+    .set({ userId: canonicalUserId })
+    .where(buildDuplicateUserCondition(watchlists.userId, duplicateIds))
+    .returning({ id: watchlists.id });
+  movedCounts.watchlists = movedWatchlists.length;
+
+  // moved implicitly by watchlists.userId update
+  const [movedWatchlistItems] = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(watchlistItems)
+    .innerJoin(watchlists, eq(watchlistItems.watchlistId, watchlists.id))
+    .where(eq(watchlists.userId, canonicalUserId));
+  movedCounts.watchlistItems = Number(movedWatchlistItems?.count ?? 0);
+
+  const movedAlerts = await tx
+    .update(alerts)
+    .set({ userId: canonicalUserId })
+    .where(buildDuplicateUserCondition(alerts.userId, duplicateIds))
+    .returning({ id: alerts.id });
+  movedCounts.alerts = movedAlerts.length;
+
+  const movedNotificationJobs = await tx
+    .update(notificationJobs)
+    .set({ userId: canonicalUserId })
+    .where(buildDuplicateUserCondition(notificationJobs.userId, duplicateIds))
+    .returning({ id: notificationJobs.id });
+  movedCounts.notificationJobs = movedNotificationJobs.length;
+
+  const movedNotificationEvents = await tx
+    .update(notificationEvents)
+    .set({ userId: canonicalUserId })
+    .where(buildDuplicateUserCondition(notificationEvents.userId, duplicateIds))
+    .returning({ id: notificationEvents.id });
+  movedCounts.notificationEvents = movedNotificationEvents.length;
+
+  const movedDigests = await tx
+    .update(watchlistDigestDeliveries)
+    .set({ userId: canonicalUserId })
+    .where(
+      and(
+        buildDuplicateUserCondition(watchlistDigestDeliveries.userId, duplicateIds),
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM watchlist_digest_deliveries wd2
+          WHERE wd2.user_id = ${canonicalUserId}
+            AND wd2.research_signal_id = ${watchlistDigestDeliveries.researchSignalId}
+            AND wd2.delivery_type = ${watchlistDigestDeliveries.deliveryType}
+        )`
+      )
+    )
+    .returning({ id: watchlistDigestDeliveries.id });
+  movedCounts.watchlistDigestDeliveries = movedDigests.length;
+
+  const [canonicalPrefsCount] = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(alertPreferences)
+    .where(eq(alertPreferences.userId, canonicalUserId));
+
+  if (Number(canonicalPrefsCount?.count ?? 0) === 0) {
+    const movedPrefs = await tx
+      .update(alertPreferences)
+      .set({ userId: canonicalUserId })
+      .where(buildDuplicateUserCondition(alertPreferences.userId, duplicateIds))
+      .returning({ id: alertPreferences.id });
+    movedCounts.alertPreferences = movedPrefs.length;
+  }
+
+  return movedCounts;
+}
+
 function emitFinalResult(result: MergeResult, exitCode: number) {
   console.log(JSON.stringify(result, null, 2));
   if (exitCode !== 0) {
-    process.exit(exitCode);
+    process.exitCode = exitCode;
   }
 }
 
@@ -195,103 +245,77 @@ export async function main() {
   };
 
   try {
-    const { targetEmail, canonicalUserId, dryRun, confirmMerge } = getConfig();
+    const { targetEmail, canonicalUserId, dryRun, confirmMerge, debugMode } = getConfig();
+    debugLog(debugMode, "script started");
+
     result.targetEmail = targetEmail;
     result.canonicalUserIdInput = canonicalUserId;
     result.dryRun = dryRun;
     result.confirmMerge = confirmMerge;
 
-    if (!targetEmail && !canonicalUserId) {
-      throw new Error("Missing required input: set TARGET_EMAIL or CANONICAL_USER_ID.");
+    debugLog(debugMode, "parsed env", { targetEmail, canonicalUserId, dryRun, confirmMerge });
+
+    if (!targetEmail || !canonicalUserId) {
+      throw new Error("Missing required input: TARGET_EMAIL and CANONICAL_USER_ID must both be set.");
     }
 
-    const targetUsers = targetEmail
-      ? await db
-          .select({ id: users.id, email: users.email, createdAt: users.createdAt })
-          .from(users)
-          .where(sql`lower(trim(${users.email})) = ${targetEmail}`)
-          .orderBy(asc(users.createdAt))
-      : await db
-          .select({ id: users.id, email: users.email, createdAt: users.createdAt })
-          .from(users)
-          .where(eq(users.id, canonicalUserId!));
+    const targetUsers = await db
+      .select({ id: users.id, email: users.email, createdAt: users.createdAt })
+      .from(users)
+      .where(sql`lower(trim(${users.email})) = ${targetEmail}`)
+      .orderBy(asc(users.createdAt));
+
+    debugLog(debugMode, "resolved target email", { matches: targetUsers.map((u) => u.id) });
 
     if (targetUsers.length === 0) {
       result.status = "error";
-      result.reason = targetEmail
-        ? `No users found for TARGET_EMAIL=${targetEmail}.`
-        : `No user found for CANONICAL_USER_ID=${canonicalUserId}.`;
+      result.reason = `No users found for TARGET_EMAIL=${targetEmail}.`;
       return emitFinalResult(result, 1);
     }
 
-    if (targetUsers.length < 2) {
-      result.status = "no-op";
-      result.reason = targetEmail
-        ? `No duplicate users found for TARGET_EMAIL=${targetEmail}.`
-        : `Only CANONICAL_USER_ID=${canonicalUserId} was resolved; no duplicate users to move.`;
-      return emitFinalResult(result, 0);
-    }
-
-    const scored = await Promise.all(
-      targetUsers.map(async (u) => {
-        const [wItems] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(watchlistItems)
-          .innerJoin(watchlists, eq(watchlistItems.watchlistId, watchlists.id))
-          .where(eq(watchlists.userId, u.id));
-        const [prefs] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(alertPreferences)
-          .where(eq(alertPreferences.userId, u.id));
-        const [digests] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(watchlistDigestDeliveries)
-          .where(eq(watchlistDigestDeliveries.userId, u.id));
-
-        return {
-          ...u,
-          score: Number(wItems?.count ?? 0) * 10 + Number(prefs?.count ?? 0) * 3 + Number(digests?.count ?? 0),
-        };
-      })
-    );
-
-    const canonical = canonicalUserId
-      ? scored.find((u) => u.id === canonicalUserId)
-      : [...scored].sort((a, b) => b.score - a.score || a.createdAt.getTime() - b.createdAt.getTime())[0];
+    const canonical = targetUsers.find((u) => u.id === canonicalUserId);
+    debugLog(debugMode, "resolved canonical", { canonicalUserId, found: Boolean(canonical) });
 
     if (!canonical) {
-      throw new Error(`Canonical user could not be resolved from CANONICAL_USER_ID=${canonicalUserId}.`);
+      result.status = "error";
+      result.reason = `CANONICAL_USER_ID=${canonicalUserId} is not among users for TARGET_EMAIL=${targetEmail}.`;
+      return emitFinalResult(result, 1);
     }
 
-    const duplicateIds = scored.filter((u) => u.id !== canonical.id).map((d) => d.id);
+    const duplicateIds = targetUsers.filter((u) => u.id !== canonical.id).map((u) => u.id);
     result.canonicalUserIdResolved = canonical.id;
     result.duplicateUserIds = duplicateIds;
 
+    debugLog(debugMode, "duplicate IDs found", { duplicateIds });
+
     if (duplicateIds.length === 0) {
       result.status = "no-op";
-      result.reason = "No duplicate users to move after canonical resolution.";
+      result.reason = `No duplicate users found for TARGET_EMAIL=${targetEmail}.`;
       return emitFinalResult(result, 0);
     }
 
-    result.plannedRowMovesByTable = await countPlannedMoves(canonical.id, duplicateIds);
+    result.plannedRowMovesByTable = await countPlannedMoves(duplicateIds);
 
     const watchlistValidation = await validateWatchlistMove(canonical.id, duplicateIds);
     result.blockingWarningsOrErrors.push(...watchlistValidation.warnings);
+    debugLog(debugMode, "blockers found", {
+      warnings: watchlistValidation.warnings,
+      issues: watchlistValidation.issues,
+    });
 
     if (watchlistValidation.issues.length > 0) {
       result.status = "blocked";
       result.reason = "Watchlist conflict blocks merge.";
       result.blockingWarningsOrErrors.push(...watchlistValidation.issues);
-      result.manualNextSteps.push(
-        "Resolve conflicting default watchlists before rerunning merge.",
-        "Example SQL: UPDATE watchlists SET is_default = false WHERE id IN (<conflicting_watchlist_ids>) AND id <> <chosen_default_id>;"
-      );
       return emitFinalResult(result, 1);
     }
+
+    debugLog(debugMode, "dry-run/confirmed path selected", { dryRun, confirmMerge });
 
     if (dryRun) {
       result.status = "dry-run";
       result.reason = "Dry-run complete. No rows were modified.";
+      debugLog(debugMode, "final result printed", { status: result.status });
       return emitFinalResult(result, 0);
     }
 
@@ -305,8 +329,13 @@ export async function main() {
     result.movedRowsByTable = movedCounts;
     result.transactionCommitted = true;
     result.status = "committed";
-    result.reason = "Merge committed.";
+    result.reason = "Merge committed. Duplicate user rows were not deleted.";
+    result.skippedOrConflictingRows.push(
+      "alert_preferences rows for duplicates were skipped when canonical alert preferences already existed.",
+      "watchlist_digest_deliveries rows were skipped when canonical already had the same (research_signal_id, delivery_type)."
+    );
     result.manualNextSteps.push("Manual final step required: delete duplicate user rows only after verifying moved data.");
+    debugLog(debugMode, "final result printed", { status: result.status });
     return emitFinalResult(result, 0);
   } catch (error) {
     result.status = "error";
@@ -317,5 +346,5 @@ export async function main() {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
