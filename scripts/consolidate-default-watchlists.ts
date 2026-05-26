@@ -139,6 +139,7 @@ async function main() {
     skippedDuplicateItemIds: [] as number[],
     demotedWatchlistIds: [] as number[],
     deletedWatchlistIds: [] as number[],
+    transactionUsed: null as boolean | null,
   };
 
   if (dryRun || !confirm) {
@@ -147,38 +148,91 @@ async function main() {
     return;
   }
 
-  await db.transaction(async (tx) => {
-    for (const item of duplicateItems) {
-      const inserted = await tx
-        .insert(watchlistItems)
-        .values({
-          watchlistId: canonical.id,
-          itemType: item.itemType,
-          ticker: item.ticker,
-          politicianId: item.politicianId,
-        })
-        .onConflictDoNothing()
-        .returning({ id: watchlistItems.id });
+  const hasItemMoves = movePlan.length > 0;
+  const duplicateDefaultIds = duplicates.map((d) => d.id);
 
-      if (inserted.length > 0) {
-        (result.movedItemIds as number[]).push(item.id);
-      } else {
-        (result.skippedDuplicateItemIds as number[]).push(item.id);
+  try {
+    await db.transaction(async (tx) => {
+      for (const item of duplicateItems) {
+        const inserted = await tx
+          .insert(watchlistItems)
+          .values({
+            watchlistId: canonical.id,
+            itemType: item.itemType,
+            ticker: item.ticker,
+            politicianId: item.politicianId,
+          })
+          .onConflictDoNothing()
+          .returning({ id: watchlistItems.id });
+
+        if (inserted.length > 0) {
+          (result.movedItemIds as number[]).push(item.id);
+        } else {
+          (result.skippedDuplicateItemIds as number[]).push(item.id);
+        }
       }
+
+      await tx
+        .update(watchlists)
+        .set({ isDefault: false, updatedAt: new Date() })
+        .where(inArray(watchlists.id, duplicateDefaultIds))
+        .returning({ id: watchlists.id })
+        .then((rows) => {
+          (result.demotedWatchlistIds as number[]).push(...rows.map((r) => r.id));
+        });
+    });
+
+    result.status = "committed";
+    result.transactionUsed = true;
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const txUnsupported = /transaction/i.test(message) && /neon-http/i.test(message);
+
+    if (!txUnsupported) throw error;
+
+    if (hasItemMoves) {
+      console.log(
+        JSON.stringify(
+          {
+            ...result,
+            status: "blocked",
+            transactionUsed: false,
+            reason: "transaction required for item moves",
+            manualNextSteps: [
+              "Use a transaction-capable database driver/session for confirmed consolidation.",
+              "Re-run with DRY_RUN=true first to review movePlan, then confirm once transactions are available.",
+            ],
+          },
+          null,
+          2
+        )
+      );
+      process.exitCode = 1;
+      return;
     }
 
-    await tx
+    const demoted = await db
       .update(watchlists)
       .set({ isDefault: false, updatedAt: new Date() })
-      .where(inArray(watchlists.id, duplicates.map((d) => d.id)))
-      .returning({ id: watchlists.id })
-      .then((rows) => {
-        (result.demotedWatchlistIds as number[]).push(...rows.map((r) => r.id));
-      });
-  });
+      .where(
+        and(
+          eq(watchlists.userId, targetUserId),
+          inArray(watchlists.id, duplicateDefaultIds),
+          sql`${watchlists.id} <> ${canonical.id}`
+        )
+      )
+      .returning({ id: watchlists.id });
 
-  result.status = "committed";
-  console.log(JSON.stringify(result, null, 2));
+    result.status = "committed";
+    result.transactionUsed = false;
+    result.reason =
+      "Consolidation committed via low-risk no-transaction fallback: movePlan is empty and only duplicate defaults were demoted.";
+    (result.demotedWatchlistIds as number[]).push(...demoted.map((row) => row.id));
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
 }
 
 main().catch((error) => {

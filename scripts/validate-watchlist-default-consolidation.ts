@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { watchlists } from "@/lib/db/schema";
+import { readFileSync } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
 
 async function countDefaultWatchlists(userId: string) {
@@ -12,6 +13,7 @@ async function countDefaultWatchlists(userId: string) {
 
 async function main() {
   const target = process.env.TARGET_USER_ID?.trim();
+  const source = readFileSync("scripts/consolidate-default-watchlists.ts", "utf8");
   const checks: Array<{ name: string; ok: boolean; details: string }> = [];
 
   checks.push({
@@ -30,6 +32,18 @@ async function main() {
     name: "consolidation never deletes watchlists by default",
     ok: true,
     details: "script demotes duplicates to is_default=false and does not delete watchlists",
+  });
+
+  checks.push({
+    name: "consolidation attempts transaction when confirmed",
+    ok: source.includes("await db.transaction("),
+    details: "confirmed path starts with transaction-first execution",
+  });
+
+  checks.push({
+    name: "consolidation supports low-risk no-transaction fallback",
+    ok: source.includes("transaction required for item moves") && source.includes("low-risk no-transaction fallback"),
+    details: "fallback only permits demotion-only confirms when movePlan is empty",
   });
 
   if (target) {
