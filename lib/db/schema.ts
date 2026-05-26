@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   integer,
   numeric,
@@ -11,16 +12,24 @@ import {
 } from "drizzle-orm/pg-core";
 
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email"),
-  name: text("name"),
-  image: text("image"),
-  emailVerifiedAt: timestamp("email_verified_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  lastSignInAt: timestamp("last_sign_in_at"),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: text("email"),
+    name: text("name"),
+    image: text("image"),
+    emailVerifiedAt: timestamp("email_verified_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    lastSignInAt: timestamp("last_sign_in_at"),
+  },
+  (table) => ({
+    normalizedEmailUnique: uniqueIndex("users_normalized_email_unique")
+      .on(sql`lower(trim(${table.email}))`)
+      .where(sql`${table.email} is not null`),
+  })
+);
 
 export const politicians = pgTable("politicians", {
   id: serial("id").primaryKey(),
