@@ -7,6 +7,7 @@ import {
 } from "../lib/db/schema";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { getPoliticianLeaderboard } from "../lib/domain/politicians/get-politicians-leaderboard";
+import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
 
 function fmt(v: number | string | null | undefined, digits = 2) {
   if (v == null) return "—";
@@ -46,6 +47,10 @@ async function printTopSignals() {
       userRelevanceScore: researchSignals.userRelevanceScore,
       return30d: disclosurePerformanceWindows.return30d,
       spyReturn30d: disclosurePerformanceWindows.spyReturn30d,
+      return7d: disclosurePerformanceWindows.return7d,
+      spyReturn7d: disclosurePerformanceWindows.spyReturn7d,
+      return90d: disclosurePerformanceWindows.return90d,
+      spyReturn90d: disclosurePerformanceWindows.spyReturn90d,
     })
     .from(researchSignals)
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
@@ -55,9 +60,56 @@ async function printTopSignals() {
     .limit(20);
 
   console.log("\n=== Top 20 signals by score ===");
+  const staleSignals: Array<{
+    signalId: number;
+    ticker: string | null;
+    politicianName: string;
+    storedScore: number;
+    recomputedScore: number;
+    delta: number;
+    storedReason: string | null;
+    recomputedReason: string;
+    missingPerformance: boolean;
+  }> = [];
+
   for (const row of rows) {
     const amount = row.amountRangeLabel ?? `${row.amountMin ?? "?"}-${row.amountMax ?? "?"}`;
     const missingPerformance = row.return30d == null || row.spyReturn30d == null ? "yes" : "no";
+    const daysSinceFiling = row.filingDate
+      ? Math.floor((Date.now() - row.filingDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+    const recomputed = scoreSignal({
+      tradeType: row.tradeType,
+      amountMin: row.amountMin,
+      amountMax: row.amountMax,
+      filingLagDays: row.filingLagDays,
+      daysSinceFiling,
+      return7d: row.return7d,
+      spyReturn7d: row.spyReturn7d,
+      return30d: row.return30d,
+      spyReturn30d: row.spyReturn30d,
+      return90d: row.return90d,
+      spyReturn90d: row.spyReturn90d,
+    });
+    const storedScore = Number(row.score);
+    const delta = Number.isFinite(storedScore) ? Math.round((storedScore - recomputed.totalScore) * 100) / 100 : 0;
+    const scoreStale = Math.abs(delta) > 0.5;
+    const reasonStale = (row.primaryReason ?? "") !== recomputed.primaryReason;
+    const stale = scoreStale || reasonStale;
+    if (stale) {
+      staleSignals.push({
+        signalId: row.signalId,
+        ticker: row.ticker,
+        politicianName: row.politicianName,
+        storedScore,
+        recomputedScore: recomputed.totalScore,
+        delta,
+        storedReason: row.primaryReason,
+        recomputedReason: recomputed.primaryReason,
+        missingPerformance: missingPerformance === "yes",
+      });
+    }
+
     console.log(
       `#${row.signalId} ${row.ticker} | ${row.politicianName} | ${row.tradeType} | amount=${amount} | lag=${row.filingLagDays ?? "NULL"}d | score=${fmt(row.score)}`
     );
@@ -65,6 +117,26 @@ async function printTopSignals() {
       `   breakdown: tradeType=${fmt(row.tradeTypeScore)}, tradeSize=${fmt(row.tradeSizeScore)}, freshness=${fmt(row.filingFreshnessScore)}, historical=${fmt(row.historicalPoliticianScore)}, momentum=${fmt(row.momentumScore)}, committee=${fmt(row.committeeRelevanceScore)}, cluster=${fmt(row.clusterScore)}, user=${fmt(row.userRelevanceScore)} | missingPerf=${missingPerformance}`
     );
     console.log(`   reason: ${row.primaryReason ?? "—"} | ${row.reasonSummary ?? "—"}`);
+    console.log(
+      `   recomputed: score=${fmt(recomputed.totalScore)} (delta=${fmt(delta)}), reason=${recomputed.primaryReason} | stale=${stale ? "yes" : "no"}`
+    );
+    console.log(
+      `   recomputed breakdown: tradeType=${fmt(recomputed.breakdown.tradeTypeScore)}, tradeSize=${fmt(recomputed.breakdown.tradeSizeScore)}, freshness=${fmt(recomputed.breakdown.filingFreshnessScore)}, historical=${fmt(recomputed.breakdown.historicalPoliticianScore)}, momentum=${fmt(recomputed.breakdown.momentumScore)}, committee=${fmt(recomputed.breakdown.committeeRelevanceScore)}, cluster=${fmt(recomputed.breakdown.clusterScore)}, user=${fmt(recomputed.breakdown.userRelevanceScore)}`
+    );
+  }
+
+  console.log("\n=== Stored vs recomputed staleness summary (top 20 by stored score) ===");
+  if (staleSignals.length === 0) {
+    console.log("None");
+  } else {
+    for (const row of staleSignals) {
+      console.log(
+        `#${row.signalId} ${row.ticker} | ${row.politicianName} | stored=${fmt(row.storedScore)} | recomputed=${fmt(row.recomputedScore)} | delta=${fmt(row.delta)} | missingPerf=${row.missingPerformance ? "yes" : "no"}`
+      );
+      console.log(
+        `   reason stored="${row.storedReason ?? "—"}" | recomputed="${row.recomputedReason}"`
+      );
+    }
   }
 }
 
@@ -101,6 +173,32 @@ async function printTopLeaderboard() {
 }
 
 async function printSignalWarnings() {
+  const strongReasonBelowThreshold = await db
+    .select({
+      signalId: researchSignals.id,
+      ticker: researchSignals.ticker,
+      score: researchSignals.score,
+      politicianName: politicians.fullName,
+      primaryReason: researchSignals.primaryReason,
+    })
+    .from(researchSignals)
+    .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
+    .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
+    .where(
+      and(
+        sql`${researchSignals.score}::numeric < 70`,
+        sql`${researchSignals.primaryReason} ilike '%Strong trade context and timing%'`
+      )
+    )
+    .orderBy(desc(researchSignals.score))
+    .limit(20);
+
+  console.log("\n=== Warning: stored reason says 'Strong trade context and timing' with score < 70 ===");
+  if (strongReasonBelowThreshold.length === 0) console.log("None");
+  for (const row of strongReasonBelowThreshold) {
+    console.log(`${row.signalId} ${row.ticker} | ${row.politicianName} | score=${fmt(row.score)} | reason=${row.primaryReason ?? "—"}`);
+  }
+
   const staleHighScore = await db
     .select({
       signalId: researchSignals.id,
@@ -143,6 +241,35 @@ async function printSignalWarnings() {
   for (const row of missingPerformance) {
     console.log(`${row.signalId} ${row.ticker} | ${row.politicianName} | score=${fmt(row.score)} | lag=${row.filingLagDays ?? "NULL"}`);
   }
+
+  const missingPerformanceWithoutConservativeReason = await db
+    .select({
+      signalId: researchSignals.id,
+      ticker: researchSignals.ticker,
+      score: researchSignals.score,
+      politicianName: politicians.fullName,
+      primaryReason: researchSignals.primaryReason,
+    })
+    .from(researchSignals)
+    .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
+    .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
+    .leftJoin(disclosurePerformanceWindows, eq(disclosurePerformanceWindows.disclosureId, disclosures.id))
+    .where(
+      and(
+        or(isNull(disclosurePerformanceWindows.return30d), isNull(disclosurePerformanceWindows.spyReturn30d)),
+        sql`${researchSignals.primaryReason} not ilike '%Limited confidence due to missing performance history%'`
+      )
+    )
+    .orderBy(desc(researchSignals.score))
+    .limit(20);
+
+  console.log("\n=== Warning: missingPerf=yes but stored reason lacks conservative wording ===");
+  if (missingPerformanceWithoutConservativeReason.length === 0) console.log("None");
+  for (const row of missingPerformanceWithoutConservativeReason) {
+    console.log(`${row.signalId} ${row.ticker} | ${row.politicianName} | score=${fmt(row.score)} | reason=${row.primaryReason ?? "—"}`);
+  }
+
+  console.log("\nHint: if many rows are stale, run `npm run signals:recalculate` then re-run this diagnostic.");
 }
 
 async function main() {

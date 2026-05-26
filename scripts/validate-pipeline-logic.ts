@@ -167,6 +167,21 @@ function runScoringValidations() {
   const missingPerformance = scoreSignal({ tradeType: "purchase", amountMin: 25000, amountMax: 50000, filingLagDays: 20, daysSinceFiling: 5, historicalPoliticianScore: 60, historicalSampleSize: 5, return7d: null, spyReturn7d: null });
   assertTrue(c, "missing price/performance does not crash and is conservative", missingPerformance.signalScore <= freshStrong.signalScore, `missing=${missingPerformance.signalScore}, freshStrong=${freshStrong.signalScore}`);
   assertEqual(c, "missing performance uses conservative primary reason", missingPerformance.primaryReason, "Limited confidence due to missing performance history");
+  const subStrong = scoreSignal({
+    tradeType: "exchange",
+    amountMin: 15000,
+    amountMax: 50000,
+    filingLagDays: 25,
+    daysSinceFiling: 9,
+    historicalPoliticianScore: 55,
+    historicalSampleSize: 8,
+    committeeRelevanceScore: 50,
+    clusterScore: 40,
+    userRelevanceScore: 40,
+    return7d: 1,
+    spyReturn7d: 0,
+  });
+  assertTrue(c, "score below 70 cannot produce strong context reason", !(subStrong.signalScore < 70 && subStrong.primaryReason === "Strong trade context and timing"), `signalScore=${subStrong.signalScore}, reason=${subStrong.primaryReason}`);
 
   const oneTrade = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 1 });
   assertTrue(c, "single lucky trade is confidence-adjusted", oneTrade.breakdown.historicalPoliticianScore < 14, `historical=${oneTrade.breakdown.historicalPoliticianScore}`);
