@@ -35,7 +35,10 @@
     "diagnostics:scoring-leaderboard": "tsx scripts/diagnose-scoring-leaderboard.ts",
     "alerts:digest": "tsx scripts/send-watchlist-digest.ts",
     "users:audit-duplicates": "tsx scripts/audit-duplicate-users.ts",
-    "users:merge-duplicates": "tsx scripts/merge-duplicate-users.ts"
+    "users:merge-duplicates": "tsx scripts/merge-duplicate-users.ts",
+    "watchlists:audit-duplicates": "tsx scripts/audit-duplicate-default-watchlists.ts",
+    "watchlists:consolidate-defaults": "tsx scripts/consolidate-default-watchlists.ts",
+    "watchlists:validate-default-consolidation": "tsx scripts/validate-watchlist-default-consolidation.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
