@@ -345,6 +345,17 @@ export async function main() {
   }
 }
 
-if (import.meta.main) {
-  void main();
-}
+main().catch((error) => {
+  console.error(
+    JSON.stringify(
+      {
+        status: "error",
+        reason: "merge-duplicate-users failed",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      null,
+      2
+    )
+  );
+  process.exitCode = 1;
+});
