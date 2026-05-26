@@ -1,4 +1,5 @@
 import { getFilingLagPenalty } from "@/lib/domain/signals/filing-freshness";
+import { SCORE_MAX, SCORE_WEIGHTS } from "@/lib/domain/scoring/weights";
 
 export type SignalStage = "fresh" | "developing" | "mature" | "historical";
 
@@ -49,7 +50,7 @@ export type ScoreSignalResult = {
 };
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
-export const clamp = (v: number, min = 0, max = 100) => Math.max(min, Math.min(max, v));
+export const clamp = (v: number, min = 0, max = SCORE_MAX) => Math.max(min, Math.min(max, v));
 export const normalizeScore = (v: number, min: number, max: number) => clamp(((v - min) / (max - min)) * 100, 0, 100);
 
 function parseNumeric(value: number | string | null | undefined): number | null {
@@ -124,21 +125,25 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
   const politicianEdgeRaw = clamp(input.historicalPoliticianScore ?? 50);
   const politicianEdge = sampleSizeConfidenceAdjustment(politicianEdgeRaw, input.historicalSampleSize);
   const tradeStrength = round2((scoreTradeType(input.tradeType) * 0.55) + (scoreTradeSize(input.amountMin, input.amountMax) * 0.45));
-  const assetContext = round2((clamp(input.committeeRelevanceScore ?? 50) * 0.6) + (clamp(input.clusterScore ?? 50) * 0.25) + (clamp(input.userRelevanceScore ?? 50) * 0.15));
   const freshness = scoreFreshnessAndLag(input.filingLagDays);
   const dataConfidence = clamp(input.dataConfidenceScore ?? 70);
-
-  const signalScore = round2(
-    politicianEdge * 0.35 +
-      tradeStrength * 0.25 +
-      assetContext * 0.20 +
-      freshness * 0.15 +
-      dataConfidence * 0.05
-  );
 
   const alpha7dScore = alphaToScore(alpha7d);
   const alpha30dScore = alphaToScore(alpha30d);
   const alpha90dScore = alphaToScore(alpha90d);
+
+  const baseWeighted =
+    (scoreTradeType(input.tradeType) / 100) * SCORE_WEIGHTS.tradeType +
+    (scoreTradeSize(input.amountMin, input.amountMax) / 100) * SCORE_WEIGHTS.tradeSize +
+    (freshness / 100) * SCORE_WEIGHTS.filingFreshness +
+    (politicianEdge / 100) * SCORE_WEIGHTS.historicalPolitician +
+    (clamp(input.committeeRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.committeeRelevance +
+    (clamp(input.clusterScore ?? 50) / 100) * SCORE_WEIGHTS.cluster +
+    (clamp(input.userRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.userRelevance +
+    (dataConfidence / 100) * 4;
+
+  const momentumComponent = ((alpha7dScore ?? 40) / 100) * SCORE_WEIGHTS.momentum;
+  const signalScore = round2(clamp(baseWeighted + momentumComponent, 0, SCORE_MAX));
   const wins = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).filter((a) => a > 0).length;
   const samples = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).length;
   const winLossScore = samples === 0 ? null : round2((wins / samples) * 100);
@@ -156,7 +161,7 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
   const performanceScore = totalWeight > 0 ? round2(weighted / totalWeight) : null;
 
   const filingLagPenalty = getFilingLagPenalty(input.filingLagDays);
-  const totalScore = round2(clamp(signalScore - filingLagPenalty, 0, 100));
+  const totalScore = round2(clamp(signalScore - filingLagPenalty, 0, SCORE_MAX));
 
   return {
     totalScore,
@@ -164,16 +169,16 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     performanceScore,
     signalStage,
     primaryReason: politicianEdge >= tradeStrength ? "Historically strong politician edge" : "Strong trade context and timing",
-    reasonSummary: `Signal score prioritizes politician edge, trade strength, asset context, freshness, and data confidence. Stage: ${signalStage}.`,
+    reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}.`,
     breakdown: {
-      tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * 18),
-      tradeSizeScore: round2((scoreTradeSize(input.amountMin, input.amountMax) / 100) * 16),
-      filingFreshnessScore: round2((freshness / 100) * 5),
-      historicalPoliticianScore: round2((politicianEdge / 100) * 20),
-      momentumScore: round2(((alpha7dScore ?? 50) / 100) * 22),
-      committeeRelevanceScore: round2((clamp(input.committeeRelevanceScore ?? 50) / 100) * 10),
-      clusterScore: round2((clamp(input.clusterScore ?? 50) / 100) * 5),
-      userRelevanceScore: round2((clamp(input.userRelevanceScore ?? 50) / 100) * 5),
+      tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * SCORE_WEIGHTS.tradeType),
+      tradeSizeScore: round2((scoreTradeSize(input.amountMin, input.amountMax) / 100) * SCORE_WEIGHTS.tradeSize),
+      filingFreshnessScore: round2((freshness / 100) * SCORE_WEIGHTS.filingFreshness),
+      historicalPoliticianScore: round2((politicianEdge / 100) * SCORE_WEIGHTS.historicalPolitician),
+      momentumScore: round2(((alpha7dScore ?? 40) / 100) * SCORE_WEIGHTS.momentum),
+      committeeRelevanceScore: round2((clamp(input.committeeRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.committeeRelevance),
+      clusterScore: round2((clamp(input.clusterScore ?? 50) / 100) * SCORE_WEIGHTS.cluster),
+      userRelevanceScore: round2((clamp(input.userRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.userRelevance),
       dataConfidenceScore: dataConfidence,
       alpha7dScore,
       alpha30dScore,

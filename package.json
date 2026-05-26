@@ -31,7 +31,8 @@
     "db:remove-seed": "tsx scripts/remove-seeded-records.ts",
     "notifications:process": "tsx scripts/process-notification-jobs.ts",
     "performance:backfill:daily": "tsx scripts/backfill-performance.ts --recent-days=180 --missing-only",
-    "senate:import:poc": "tsx scripts/import-senate-disclosures-poc.ts"
+    "senate:import:poc": "tsx scripts/import-senate-disclosures-poc.ts",
+    "diagnostics:scoring-leaderboard": "tsx scripts/diagnose-scoring-leaderboard.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

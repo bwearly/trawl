@@ -9,6 +9,7 @@ import {
   findClosestPriceOnOrAfter,
 } from "../lib/domain/pipeline/performance";
 import { classifyMissingPriceTicker, type MissingPriceClassification } from "../lib/domain/pipeline/missing-price-classification";
+import { computeLeaderboardScore } from "../lib/domain/politicians/leaderboard-score";
 
 type Failure = { category: string; test: string; detail: string };
 const failures: Failure[] = [];
@@ -161,6 +162,10 @@ function runScoringValidations() {
 
   const staleLag = scoreSignal({ tradeType: "purchase", amountMin: 250000, amountMax: 500000, filingLagDays: 300, daysSinceFiling: 3, historicalPoliticianScore: 85, historicalSampleSize: 25, committeeRelevanceScore: 70, clusterScore: 60, userRelevanceScore: 50 });
   assertTrue(c, "extreme filing lag not highly actionable", staleLag.signalScore < 60, `signalScore=${staleLag.signalScore}`);
+  assertTrue(c, "score clamped 0-100", staleLag.signalScore >= 0 && staleLag.signalScore <= 100, `signalScore=${staleLag.signalScore}`);
+
+  const missingPerformance = scoreSignal({ tradeType: "purchase", amountMin: 25000, amountMax: 50000, filingLagDays: 20, daysSinceFiling: 5, historicalPoliticianScore: 60, historicalSampleSize: 5, return7d: null, spyReturn7d: null });
+  assertTrue(c, "missing price/performance does not crash and is conservative", missingPerformance.signalScore <= freshStrong.signalScore, `missing=${missingPerformance.signalScore}, freshStrong=${freshStrong.signalScore}`);
 
   const oneTrade = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 1 });
   assertTrue(c, "single lucky trade is confidence-adjusted", oneTrade.breakdown.historicalPoliticianScore < 14, `historical=${oneTrade.breakdown.historicalPoliticianScore}`);
@@ -169,6 +174,17 @@ function runScoringValidations() {
   assertTrue(c, "mature includes realized performance score", (mature.performanceScore ?? 0) > 50, `performanceScore=${mature.performanceScore}`);
 }
 
+
+function runLeaderboardRankingValidations() {
+  const c = "leaderboard-ranking";
+  const proven = computeLeaderboardScore({ avgAlpha30d: 4.2, winRate30d: 58, totalDisclosures: 38, validPerformanceCount: 28, avgFilingLagDays: 28 });
+  const luckyFew = computeLeaderboardScore({ avgAlpha30d: 9.5, winRate30d: 100, totalDisclosures: 2, validPerformanceCount: 1, avgFilingLagDays: 12 });
+  const staleRecent = computeLeaderboardScore({ avgAlpha30d: 3.2, winRate30d: 57, totalDisclosures: 25, validPerformanceCount: 20, avgFilingLagDays: 150 });
+
+  assertTrue(c, "scores stay in 0-100 range", proven >= 0 && proven <= 100 && luckyFew >= 0 && luckyFew <= 100, `proven=${proven}, luckyFew=${luckyFew}`);
+  assertTrue(c, "small sample does not outrank proven history", proven > luckyFew, `proven=${proven}, luckyFew=${luckyFew}`);
+  assertTrue(c, "filing lag affects historical usefulness", proven > staleRecent, `proven=${proven}, staleRecent=${staleRecent}`);
+}
 function runPerformanceWindowValidations() {
   const c = "performance-windows";
 
@@ -344,7 +360,7 @@ function runMissingPriceClassificationValidations() {
 }
 
 function printSummary() {
-  const categories = ["ticker-normalization", "house-asset-resolution", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "performance-windows", "missing-price-classification"];
+  const categories = ["ticker-normalization", "house-asset-resolution", "trade-type-normalization", "alert-eligibility", "scoring-thresholds", "leaderboard-ranking", "performance-windows", "missing-price-classification"];
   console.log("\nPipeline deterministic validation summary\n");
   for (const category of categories) {
     const categoryFailures = failures.filter((f) => f.category === category);
@@ -368,6 +384,7 @@ function main() {
   runTradeTypeValidations();
   runAlertEligibilityValidations();
   runScoringValidations();
+  runLeaderboardRankingValidations();
   runPerformanceWindowValidations();
   runMissingPriceClassificationValidations();
   printSummary();
