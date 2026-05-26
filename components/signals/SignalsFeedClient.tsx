@@ -167,6 +167,11 @@ export default function SignalsFeedClient({
                   reasonSummary={signal.reasonSummary}
                   performanceScore={signal.performanceScore}
                   signalStage={signal.signalStage}
+                  tradeTypeScore={signal.tradeTypeScore}
+                  tradeSizeScore={signal.tradeSizeScore}
+                  filingFreshnessScore={signal.filingFreshnessScore}
+                  historicalPoliticianScore={signal.historicalPoliticianScore}
+                  momentumScore={signal.momentumScore}
                   initialIsWatchingTicker={signal.ticker && signal.ticker !== "NO_TICKER" ? watchedTickerSet.has(signal.ticker) : false}
                 />
               );

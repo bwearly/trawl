@@ -64,6 +64,14 @@ export type SignalRow = {
   signalDate: Date;
   performanceScore: string | null;
   signalStage: string;
+  tradeTypeScore: string | null;
+  tradeSizeScore: string | null;
+  filingFreshnessScore: string | null;
+  historicalPoliticianScore: string | null;
+  momentumScore: string | null;
+  committeeRelevanceScore: string | null;
+  clusterScore: string | null;
+  userRelevanceScore: string | null;
 };
 
 const MIN_SCORE_OPTIONS = new Set<SignalFilters["minScore"]>(["0", "50", "70", "80"]);
@@ -259,6 +267,14 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
       historicalSampleSize: politicianStats.totalDisclosures,
       sourceUrl: disclosures.sourceUrl,
       signalDate: researchSignals.signalDate,
+      tradeTypeScore: researchSignals.tradeTypeScore,
+      tradeSizeScore: researchSignals.tradeSizeScore,
+      filingFreshnessScore: researchSignals.filingFreshnessScore,
+      historicalPoliticianScore: researchSignals.historicalPoliticianScore,
+      momentumScore: researchSignals.momentumScore,
+      committeeRelevanceScore: researchSignals.committeeRelevanceScore,
+      clusterScore: researchSignals.clusterScore,
+      userRelevanceScore: researchSignals.userRelevanceScore,
     })
     .from(researchSignals)
     .innerJoin(politicians, eq(researchSignals.politicianId, politicians.id))
