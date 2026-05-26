@@ -6,7 +6,7 @@ import {
   disclosures,
   researchSignals,
 } from "../lib/db/schema";
-import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
 import { generateAlertsForSignal } from "../lib/domain/alerts/alerts";
 import { shouldGenerateAlert } from "../lib/domain/alerts/should-generate-alert";
 
@@ -125,9 +125,9 @@ async function main() {
       spyReturn30d: performance?.spyReturn30d ?? null,
 
       historicalPoliticianScore,
-      committeeRelevanceScore: 5,
-      clusterScore: 3,
-      userRelevanceScore: 2,
+      committeeRelevanceScore: DEFAULT_RELEVANCE_SCORES.committee,
+      clusterScore: DEFAULT_RELEVANCE_SCORES.cluster,
+      userRelevanceScore: DEFAULT_RELEVANCE_SCORES.user,
     });
 
     let confidencePenalty = 0;

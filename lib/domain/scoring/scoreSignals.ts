@@ -2,6 +2,11 @@ import { getFilingLagPenalty } from "@/lib/domain/signals/filing-freshness";
 import { SCORE_MAX, SCORE_WEIGHTS } from "@/lib/domain/scoring/weights";
 
 export type SignalStage = "fresh" | "developing" | "mature" | "historical";
+export const DEFAULT_RELEVANCE_SCORES = {
+  committee: 5,
+  cluster: 3,
+  user: 2,
+} as const;
 
 export type ScoreSignalInput = {
   tradeType: string;
@@ -130,6 +135,7 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
   const has30d = alpha30d != null;
   const has90d = alpha90d != null;
   const hasAnyPerformance = has7d || has30d || has90d;
+  const hasMissingPerformanceWindows = !has30d;
   const missingPerformancePenalty = hasAnyPerformance ? 0 : 8;
   const baseDataConfidence = clamp(input.dataConfidenceScore ?? 70);
   const dataConfidence = clamp(baseDataConfidence - missingPerformancePenalty);
@@ -143,9 +149,9 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     (scoreTradeSize(input.amountMin, input.amountMax) / 100) * SCORE_WEIGHTS.tradeSize +
     (freshness / 100) * SCORE_WEIGHTS.filingFreshness +
     (politicianEdge / 100) * SCORE_WEIGHTS.historicalPolitician +
-    (clamp(input.committeeRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.committeeRelevance +
-    (clamp(input.clusterScore ?? 50) / 100) * SCORE_WEIGHTS.cluster +
-    (clamp(input.userRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.userRelevance +
+    (clamp(input.committeeRelevanceScore ?? DEFAULT_RELEVANCE_SCORES.committee) / 100) * SCORE_WEIGHTS.committeeRelevance +
+    (clamp(input.clusterScore ?? DEFAULT_RELEVANCE_SCORES.cluster) / 100) * SCORE_WEIGHTS.cluster +
+    (clamp(input.userRelevanceScore ?? DEFAULT_RELEVANCE_SCORES.user) / 100) * SCORE_WEIGHTS.userRelevance +
     (dataConfidence / 100) * 4;
 
   const momentumComponent = ((alpha7dScore ?? 40) / 100) * SCORE_WEIGHTS.momentum;
@@ -174,23 +180,23 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     signalScore: totalScore,
     performanceScore,
     signalStage,
-    primaryReason: !hasAnyPerformance
+    primaryReason: hasMissingPerformanceWindows
       ? "Limited confidence due to missing performance history"
       : politicianEdge >= tradeStrength
         ? "Historically strong politician edge"
         : signalScore >= 70
           ? "Strong trade context and timing"
           : "Moderate trade context and timing",
-    reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}${!hasAnyPerformance ? "; conservative confidence because 7d/30d/90d performance windows are not yet available" : ""}.`,
+    reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}${hasMissingPerformanceWindows ? "; conservative confidence because 7d/30d/90d performance windows are not yet available" : ""}.`,
     breakdown: {
       tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * SCORE_WEIGHTS.tradeType),
       tradeSizeScore: round2((scoreTradeSize(input.amountMin, input.amountMax) / 100) * SCORE_WEIGHTS.tradeSize),
       filingFreshnessScore: round2((freshness / 100) * SCORE_WEIGHTS.filingFreshness),
       historicalPoliticianScore: round2((politicianEdge / 100) * SCORE_WEIGHTS.historicalPolitician),
       momentumScore: round2(((alpha7dScore ?? 40) / 100) * SCORE_WEIGHTS.momentum),
-      committeeRelevanceScore: round2((clamp(input.committeeRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.committeeRelevance),
-      clusterScore: round2((clamp(input.clusterScore ?? 50) / 100) * SCORE_WEIGHTS.cluster),
-      userRelevanceScore: round2((clamp(input.userRelevanceScore ?? 50) / 100) * SCORE_WEIGHTS.userRelevance),
+      committeeRelevanceScore: round2((clamp(input.committeeRelevanceScore ?? DEFAULT_RELEVANCE_SCORES.committee) / 100) * SCORE_WEIGHTS.committeeRelevance),
+      clusterScore: round2((clamp(input.clusterScore ?? DEFAULT_RELEVANCE_SCORES.cluster) / 100) * SCORE_WEIGHTS.cluster),
+      userRelevanceScore: round2((clamp(input.userRelevanceScore ?? DEFAULT_RELEVANCE_SCORES.user) / 100) * SCORE_WEIGHTS.userRelevance),
       dataConfidenceScore: dataConfidence,
       alpha7dScore,
       alpha30dScore,
