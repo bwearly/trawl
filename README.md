@@ -121,6 +121,24 @@ What this phase intentionally does **not** do yet:
 - No enablement of live email sending.
 - No removal of the dev-auth switcher.
 
+
+## Duplicate-user cleanup + normalized email guard
+
+Use this flow when duplicate users are discovered for the same real email:
+
+1. Audit duplicates: `npm run users:audit-duplicates`.
+2. Execute cleanup (deactivate/anonymize duplicates, keep canonical user): `npm run users:cleanup-duplicates`.
+3. Validate cleanup script invariants: `tsx scripts/cleanup-duplicate-users.validation.ts`.
+4. Validate migration guard exists: `npm run db:validate:user-email-guard`.
+
+Database protection now includes a **partial unique index** on normalized email:
+
+- Index name: `users_normalized_email_unique`
+- Expression: `lower(trim(email))`
+- Predicate: `where email is not null`
+
+This prevents future duplicate user rows for the same normalized email while allowing null emails.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
