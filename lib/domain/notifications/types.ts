@@ -27,4 +27,7 @@ export type SendEmailNotificationInput = {
   recipient: string | null;
   alertId: number | null;
   idempotencyKey: string;
+  subject?: string | null;
+  textBody?: string | null;
+  htmlBody?: string | null;
 };

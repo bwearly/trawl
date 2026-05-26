@@ -47,6 +47,9 @@ export async function processNotificationJobs(batchSize = 25) {
         recipient: job.recipient,
         alertId: job.alertId,
         idempotencyKey: job.idempotencyKey,
+        subject: job.subject,
+        textBody: job.textBody,
+        htmlBody: job.htmlBody,
       });
 
       if (sendResult.status === "sent") {

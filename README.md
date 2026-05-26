@@ -158,6 +158,102 @@ This repository now includes a **notification queue foundation** for alert email
 - Provider adapter implementation (e.g. Resend/SendGrid/Postmark/SES).
 - Delivery monitoring and failure handling policy.
 
+### Watchlist daily digest (safe first version)
+
+- Run `npm run alerts:digest` to build and queue watchlist daily digest emails.
+- Run with `DRY_RUN=true` to preview recipients/signals without sending or writing digest delivery rows.
+- Digest candidate window defaults to the last 24 hours by `research_signals.created_at`.
+
+Eligibility:
+- watched ticker/politician match
+- purchase trades only
+- score >= per-user `alert_preferences.min_score` (default fallback 60)
+- filing lag <= 45 days
+- valid user email
+- not already delivered with status `sent` for `daily_digest`
+
+Delivery rows are written only after a queued job reaches `sent` status.
+
+Environment variables for real send:
+- `ALERT_EMAIL_QUEUE_ENABLED=true`
+- `NOTIFICATION_EMAIL_PROVIDER=resend`
+- `RESEND_API_KEY`
+- `ALERT_EMAIL_FROM`
+- `ALLOW_DEV_EMAIL_SEND=true` (optional, local-only override)
+- `APP_BASE_URL` or `NEXT_PUBLIC_APP_URL` or `SITE_URL` for signal links
+
+
+### Pre-production manual verification checklist
+
+1) Local dry-run
+
+```bash
+DRY_RUN=true ALERT_EMAIL_QUEUE_ENABLED=false DIGEST_WINDOW_HOURS=24 VERBOSE=true npm run alerts:digest
+```
+
+Optional single-user dry-run filter:
+
+```bash
+DRY_RUN=true ALERT_EMAIL_QUEUE_ENABLED=false TEST_USER_EMAIL=you@example.com VERBOSE=true npm run alerts:digest
+```
+
+2) Verify no digest delivery rows were written in dry-run
+
+```sql
+select user_id, research_signal_id, status, sent_at, created_at
+from watchlist_digest_deliveries
+where created_at > now() - interval '30 minutes'
+order by created_at desc;
+```
+
+3) Single test real send (local/dev)
+
+Required env vars:
+- `ALERT_EMAIL_QUEUE_ENABLED=true`
+- `NOTIFICATION_EMAIL_PROVIDER=resend`
+- `RESEND_API_KEY`
+- `ALERT_EMAIL_FROM`
+- `ALLOW_DEV_EMAIL_SEND=true`
+- `TEST_USER_EMAIL=<your email>`
+
+Run:
+
+```bash
+ALERT_EMAIL_QUEUE_ENABLED=true NOTIFICATION_EMAIL_PROVIDER=resend ALLOW_DEV_EMAIL_SEND=true TEST_USER_EMAIL=you@example.com npm run alerts:digest
+```
+
+4) Duplicate suppression test
+
+Run the same command again, then confirm no duplicate sent delivery rows for same user/signal:
+
+```sql
+select user_id, research_signal_id, delivery_type, count(*)
+from watchlist_digest_deliveries
+where delivery_type = 'daily_digest'
+group by 1,2,3
+having count(*) > 1;
+```
+
+5) Failure safety test (no sent rows on failure/suppression)
+
+Use forced provider failure hook (safe test mode):
+
+```bash
+ALERT_EMAIL_QUEUE_ENABLED=true NOTIFICATION_EMAIL_PROVIDER=resend ALLOW_DEV_EMAIL_SEND=true FORCE_PROVIDER_FAILURE=true TEST_USER_EMAIL=you@example.com npm run alerts:digest
+```
+
+Then verify no new `status='sent'` delivery rows were written for that run window.
+
+6) Production dry-run (GitHub Actions)
+
+Run **Daily Trawl Pipeline** manually. The workflow already runs digest with `DRY_RUN=true` and `ALERT_EMAIL_QUEUE_ENABLED=false`. Review digest summary logs from the `Dry-run watchlist daily digest` step.
+
+7) Production enablement
+
+- Add production secrets/env: `NOTIFICATION_EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_QUEUE_ENABLED=true`.
+- Keep `ALLOW_DEV_EMAIL_SEND` unset in production.
+- Validate one constrained test run first (recommended: temporary single-user filter via env injection at runtime).
+
 
 ## Production Auth.js configuration checklist
 

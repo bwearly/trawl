@@ -32,3 +32,9 @@ jobs:
 
       - name: Run daily pipeline
         run: npm run pipeline:daily
+
+      - name: Dry-run watchlist daily digest
+        env:
+          DRY_RUN: "true"
+          APP_BASE_URL: "https://trawl.vercel.app"
+        run: npm run alerts:digest

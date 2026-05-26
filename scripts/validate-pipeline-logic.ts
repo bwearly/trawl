@@ -10,6 +10,8 @@ import {
 } from "../lib/domain/pipeline/performance";
 import { classifyMissingPriceTicker, type MissingPriceClassification } from "../lib/domain/pipeline/missing-price-classification";
 import { computeLeaderboardScore } from "../lib/domain/politicians/leaderboard-score";
+import { isDigestSignalActionable } from "../lib/domain/watchlists/digest-eligibility";
+import { buildDigestJobIdempotencyKey, shouldRecordDigestDelivery } from "../lib/domain/watchlists/digest-delivery";
 
 type Failure = { category: string; test: string; detail: string };
 const failures: Failure[] = [];
@@ -204,6 +206,22 @@ function runScoringValidations() {
 }
 
 
+
+function runDigestEligibilityValidations() {
+  const c = "digest-eligibility";
+  assertEqual(c, "eligible purchase passes", isDigestSignalActionable({ tradeType: "purchase", filingLagDays: 20, score: 62, minScore: 60 }).ok, true);
+  assertEqual(c, "non-purchase blocked", isDigestSignalActionable({ tradeType: "sale", filingLagDays: 20, score: 80, minScore: 60 }).reason, "trade_type");
+  assertEqual(c, "high filing lag blocked", isDigestSignalActionable({ tradeType: "purchase", filingLagDays: 46, score: 80, minScore: 60 }).reason, "filing_lag");
+  assertEqual(c, "below threshold blocked", isDigestSignalActionable({ tradeType: "purchase", filingLagDays: 20, score: 59, minScore: 60 }).reason, "score");
+}
+
+function runDigestDeliverySafetyValidations() {
+  const c = "digest-delivery-safety";
+  assertEqual(c, "idempotency key stable regardless signal order", buildDigestJobIdempotencyKey("u1", [5, 2, 9]), buildDigestJobIdempotencyKey("u1", [9, 5, 2]));
+  assertEqual(c, "sent status records delivery", shouldRecordDigestDelivery("sent"), true);
+  assertEqual(c, "failed status does not record delivery", shouldRecordDigestDelivery("failed"), false);
+  assertEqual(c, "suppressed status does not record delivery", shouldRecordDigestDelivery("suppressed"), false);
+}
 function runLeaderboardRankingValidations() {
   const c = "leaderboard-ranking";
   const proven = computeLeaderboardScore({ avgAlpha30d: 4.2, winRate30d: 58, totalDisclosures: 38, validPerformanceCount: 28, avgFilingLagDays: 28 });
@@ -418,7 +436,9 @@ function main() {
   runScoringValidations();
   runLeaderboardRankingValidations();
   runPerformanceWindowValidations();
-  runMissingPriceClassificationValidations();
+  runDigestEligibilityValidations();
+runDigestDeliverySafetyValidations();
+runMissingPriceClassificationValidations();
   printSummary();
 
   if (failures.length > 0) {
