@@ -1,7 +1,7 @@
 import { normalizeTickerForStorage, normalizeTradeType, normalizeYahooSymbol } from "../lib/domain/pipeline/normalization";
 import { resolveHouseTicker } from "./lib/house-asset-resolution";
 import { shouldGenerateAlert } from "../lib/domain/alerts/should-generate-alert";
-import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
 import {
   addCalendarDays,
   calcAlphaPercent,
@@ -191,6 +191,16 @@ function runScoringValidations() {
 
   const mature = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 10, daysSinceFiling: 60, historicalPoliticianScore: 70, historicalSampleSize: 20, return7d: 6, spyReturn7d: 1, return30d: 14, spyReturn30d: 3, return90d: 25, spyReturn90d: 8 });
   assertTrue(c, "mature includes realized performance score", (mature.performanceScore ?? 0) > 50, `performanceScore=${mature.performanceScore}`);
+
+  const defaultRelevance = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 8, daysSinceFiling: 3, historicalPoliticianScore: 60, historicalSampleSize: 10, return7d: 2, spyReturn7d: 1, return30d: 5, spyReturn30d: 2 });
+  const explicitRelevance = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 8, daysSinceFiling: 3, historicalPoliticianScore: 60, historicalSampleSize: 10, return7d: 2, spyReturn7d: 1, return30d: 5, spyReturn30d: 2, committeeRelevanceScore: DEFAULT_RELEVANCE_SCORES.committee, clusterScore: DEFAULT_RELEVANCE_SCORES.cluster, userRelevanceScore: DEFAULT_RELEVANCE_SCORES.user });
+  assertEqual(c, "default relevance equals explicit baseline relevance", defaultRelevance.totalScore, explicitRelevance.totalScore);
+
+  const maxRelevance = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 8, daysSinceFiling: 3, historicalPoliticianScore: 60, historicalSampleSize: 10, return7d: 2, spyReturn7d: 1, return30d: 5, spyReturn30d: 2, committeeRelevanceScore: 50, clusterScore: 50, userRelevanceScore: 50 });
+  assertTrue(c, "missing relevance does not default to max-ish values", defaultRelevance.totalScore < maxRelevance.totalScore, `default=${defaultRelevance.totalScore} maxish=${maxRelevance.totalScore}`);
+
+  const missing30Reason = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 8, daysSinceFiling: 3, historicalPoliticianScore: 60, historicalSampleSize: 10, return7d: 2, spyReturn7d: 1, return30d: null, spyReturn30d: null });
+  assertEqual(c, "missing 30d window uses conservative reason wording", missing30Reason.primaryReason, "Limited confidence due to missing performance history");
 }
 
 

@@ -7,7 +7,7 @@ import {
 } from "../lib/db/schema";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { getPoliticianLeaderboard } from "../lib/domain/politicians/get-politicians-leaderboard";
-import { scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
 
 function fmt(v: number | string | null | undefined, digits = 2) {
   if (v == null) return "—";
@@ -19,6 +19,13 @@ function fmt(v: number | string | null | undefined, digits = 2) {
 function fmtDate(value: Date | null | undefined) {
   if (!value) return "—";
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function weightedComponentToRaw(weightedValue: number | string | null | undefined, weight: number, fallbackRaw: number) {
+  if (weightedValue == null) return fallbackRaw;
+  const numeric = Number(weightedValue);
+  if (!Number.isFinite(numeric)) return fallbackRaw;
+  return (numeric / weight) * 100;
 }
 
 async function printTopSignals() {
@@ -90,6 +97,25 @@ async function printTopSignals() {
       spyReturn30d: row.spyReturn30d,
       return90d: row.return90d,
       spyReturn90d: row.spyReturn90d,
+      committeeRelevanceScore: DEFAULT_RELEVANCE_SCORES.committee,
+      clusterScore: DEFAULT_RELEVANCE_SCORES.cluster,
+      userRelevanceScore: DEFAULT_RELEVANCE_SCORES.user,
+    });
+    const recomputedFromStoredComponents = scoreSignal({
+      tradeType: row.tradeType,
+      amountMin: row.amountMin,
+      amountMax: row.amountMax,
+      filingLagDays: row.filingLagDays,
+      daysSinceFiling,
+      return7d: row.return7d,
+      spyReturn7d: row.spyReturn7d,
+      return30d: row.return30d,
+      spyReturn30d: row.spyReturn30d,
+      return90d: row.return90d,
+      spyReturn90d: row.spyReturn90d,
+      committeeRelevanceScore: weightedComponentToRaw(row.committeeRelevanceScore, 8, DEFAULT_RELEVANCE_SCORES.committee),
+      clusterScore: weightedComponentToRaw(row.clusterScore, 5, DEFAULT_RELEVANCE_SCORES.cluster),
+      userRelevanceScore: weightedComponentToRaw(row.userRelevanceScore, 5, DEFAULT_RELEVANCE_SCORES.user),
     });
     const storedScore = Number(row.score);
     const delta = Number.isFinite(storedScore) ? Math.round((storedScore - recomputed.totalScore) * 100) / 100 : 0;
@@ -123,6 +149,12 @@ async function printTopSignals() {
     console.log(
       `   recomputed breakdown: tradeType=${fmt(recomputed.breakdown.tradeTypeScore)}, tradeSize=${fmt(recomputed.breakdown.tradeSizeScore)}, freshness=${fmt(recomputed.breakdown.filingFreshnessScore)}, historical=${fmt(recomputed.breakdown.historicalPoliticianScore)}, momentum=${fmt(recomputed.breakdown.momentumScore)}, committee=${fmt(recomputed.breakdown.committeeRelevanceScore)}, cluster=${fmt(recomputed.breakdown.clusterScore)}, user=${fmt(recomputed.breakdown.userRelevanceScore)}`
     );
+    const defaultDriftDelta = Math.round((recomputedFromStoredComponents.totalScore - recomputed.totalScore) * 100) / 100;
+    if (Math.abs(defaultDriftDelta) > 0.1) {
+      console.log(
+        `   warning: recompute input drift detected (stored-component relevance vs default relevance delta=${fmt(defaultDriftDelta)})`
+      );
+    }
   }
 
   console.log("\n=== Stored vs recomputed staleness summary (top 20 by stored score) ===");
