@@ -166,9 +166,13 @@ function runScoringValidations() {
 
   const missingPerformance = scoreSignal({ tradeType: "purchase", amountMin: 25000, amountMax: 50000, filingLagDays: 20, daysSinceFiling: 5, historicalPoliticianScore: 60, historicalSampleSize: 5, return7d: null, spyReturn7d: null });
   assertTrue(c, "missing price/performance does not crash and is conservative", missingPerformance.signalScore <= freshStrong.signalScore, `missing=${missingPerformance.signalScore}, freshStrong=${freshStrong.signalScore}`);
+  assertEqual(c, "missing performance uses conservative primary reason", missingPerformance.primaryReason, "Limited confidence due to missing performance history");
 
   const oneTrade = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 1 });
   assertTrue(c, "single lucky trade is confidence-adjusted", oneTrade.breakdown.historicalPoliticianScore < 14, `historical=${oneTrade.breakdown.historicalPoliticianScore}`);
+  const lowSampleHistory = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 4 });
+  const highSampleHistory = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 7, daysSinceFiling: 3, historicalPoliticianScore: 95, historicalSampleSize: 60 });
+  assertTrue(c, "historical component separates low vs high sample reliability", highSampleHistory.breakdown.historicalPoliticianScore > lowSampleHistory.breakdown.historicalPoliticianScore, `lowSample=${lowSampleHistory.breakdown.historicalPoliticianScore}, highSample=${highSampleHistory.breakdown.historicalPoliticianScore}`);
 
   const mature = scoreSignal({ tradeType: "purchase", amountMin: 100000, amountMax: 200000, filingLagDays: 10, daysSinceFiling: 60, historicalPoliticianScore: 70, historicalSampleSize: 20, return7d: 6, spyReturn7d: 1, return30d: 14, spyReturn30d: 3, return90d: 25, spyReturn90d: 8 });
   assertTrue(c, "mature includes realized performance score", (mature.performanceScore ?? 0) > 50, `performanceScore=${mature.performanceScore}`);
@@ -180,10 +184,13 @@ function runLeaderboardRankingValidations() {
   const proven = computeLeaderboardScore({ avgAlpha30d: 4.2, winRate30d: 58, totalDisclosures: 38, validPerformanceCount: 28, avgFilingLagDays: 28 });
   const luckyFew = computeLeaderboardScore({ avgAlpha30d: 9.5, winRate30d: 100, totalDisclosures: 2, validPerformanceCount: 1, avgFilingLagDays: 12 });
   const staleRecent = computeLeaderboardScore({ avgAlpha30d: 3.2, winRate30d: 57, totalDisclosures: 25, validPerformanceCount: 20, avgFilingLagDays: 150 });
+  const extremeLag = computeLeaderboardScore({ avgAlpha30d: 4.8, winRate30d: 70, totalDisclosures: 50, validPerformanceCount: 30, avgFilingLagDays: 500 });
+  const sameStatsLowLag = computeLeaderboardScore({ avgAlpha30d: 4.8, winRate30d: 70, totalDisclosures: 50, validPerformanceCount: 30, avgFilingLagDays: 30 });
 
   assertTrue(c, "scores stay in 0-100 range", proven >= 0 && proven <= 100 && luckyFew >= 0 && luckyFew <= 100, `proven=${proven}, luckyFew=${luckyFew}`);
   assertTrue(c, "small sample does not outrank proven history", proven > luckyFew, `proven=${proven}, luckyFew=${luckyFew}`);
   assertTrue(c, "filing lag affects historical usefulness", proven > staleRecent, `proven=${proven}, staleRecent=${staleRecent}`);
+  assertTrue(c, "extreme filing lag has strong penalty", sameStatsLowLag > extremeLag, `sameStatsLowLag=${sameStatsLowLag}, extremeLag=${extremeLag}`);
 }
 function runPerformanceWindowValidations() {
   const c = "performance-windows";

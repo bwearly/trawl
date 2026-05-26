@@ -73,7 +73,7 @@ export function alphaToScore(alpha: number | null): number | null {
 
 export function sampleSizeConfidenceAdjustment(rawScore: number, sampleSize: number | null | undefined): number {
   const n = Math.max(0, sampleSize ?? 0);
-  const confidence = n / (n + 8);
+  const confidence = n / (n + 12);
   return round2(50 + (rawScore - 50) * confidence);
 }
 
@@ -126,7 +126,13 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
   const politicianEdge = sampleSizeConfidenceAdjustment(politicianEdgeRaw, input.historicalSampleSize);
   const tradeStrength = round2((scoreTradeType(input.tradeType) * 0.55) + (scoreTradeSize(input.amountMin, input.amountMax) * 0.45));
   const freshness = scoreFreshnessAndLag(input.filingLagDays);
-  const dataConfidence = clamp(input.dataConfidenceScore ?? 70);
+  const has7d = alpha7d != null;
+  const has30d = alpha30d != null;
+  const has90d = alpha90d != null;
+  const hasAnyPerformance = has7d || has30d || has90d;
+  const missingPerformancePenalty = hasAnyPerformance ? 0 : 8;
+  const baseDataConfidence = clamp(input.dataConfidenceScore ?? 70);
+  const dataConfidence = clamp(baseDataConfidence - missingPerformancePenalty);
 
   const alpha7dScore = alphaToScore(alpha7d);
   const alpha30dScore = alphaToScore(alpha30d);
@@ -143,7 +149,7 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     (dataConfidence / 100) * 4;
 
   const momentumComponent = ((alpha7dScore ?? 40) / 100) * SCORE_WEIGHTS.momentum;
-  const signalScore = round2(clamp(baseWeighted + momentumComponent, 0, SCORE_MAX));
+  const signalScore = round2(clamp(baseWeighted + momentumComponent - missingPerformancePenalty, 0, SCORE_MAX));
   const wins = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).filter((a) => a > 0).length;
   const samples = [alpha7d, alpha30d, alpha90d].filter((a): a is number => a != null).length;
   const winLossScore = samples === 0 ? null : round2((wins / samples) * 100);
@@ -168,8 +174,14 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
     signalScore: totalScore,
     performanceScore,
     signalStage,
-    primaryReason: politicianEdge >= tradeStrength ? "Historically strong politician edge" : "Strong trade context and timing",
-    reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}.`,
+    primaryReason: !hasAnyPerformance
+      ? "Limited confidence due to missing performance history"
+      : politicianEdge >= tradeStrength
+        ? "Historically strong politician edge"
+        : signalScore >= 70
+          ? "Strong trade context and timing"
+          : "Moderate trade context and timing",
+    reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}${!hasAnyPerformance ? "; conservative confidence because 7d/30d/90d performance windows are not yet available" : ""}.`,
     breakdown: {
       tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * SCORE_WEIGHTS.tradeType),
       tradeSizeScore: round2((scoreTradeSize(input.amountMin, input.amountMax) / 100) * SCORE_WEIGHTS.tradeSize),

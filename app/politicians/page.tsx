@@ -51,6 +51,20 @@ function getWinRateTone(value: number | null) {
   return "text-amber-600";
 }
 
+function getReliabilityLabel(validPerformanceCount: number) {
+  if (validPerformanceCount < 5) return "Limited history";
+  if (validPerformanceCount < 10) return "Emerging history";
+  return "Established history";
+}
+
+function getTimelinessLabel(avgFilingLagDays: number | null) {
+  if (avgFilingLagDays == null) return "Lag unknown";
+  if (avgFilingLagDays > 365) return "Severely delayed filer";
+  if (avgFilingLagDays > 180) return "Delayed filer";
+  if (avgFilingLagDays > 90) return "Moderately delayed filer";
+  return "Timely filer";
+}
+
 export default async function PoliticiansLeaderboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const chamberParam = Array.isArray(params.chamber) ? params.chamber[0] : params.chamber;
@@ -86,6 +100,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
             <p className="mt-2 text-xs text-gray-500">
               Trawl surfaces public disclosure activity for research. It does not recommend buying or selling securities.
             </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Rankings are based on historical performance, sample reliability, disclosure volume, and filing timeliness. Recent activity is used only as a tie-breaker.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -105,7 +122,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                   Disclosure activity table
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Sorted by active disclosure context: 30-day alpha, then win rate, then total sample size.
+                  Sorted by model leaderboard score (historical usefulness), not newest filing date.
                 </p>
               </div>
 
@@ -130,6 +147,8 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                   <th className="px-4 py-3 font-medium">Party</th>
                   <th className="px-4 py-3 font-medium">State</th>
                   <th className="px-4 py-3 font-medium">Disclosures</th>
+                  <th className="px-4 py-3 font-medium">Leaderboard score</th>
+                  <th className="px-4 py-3 font-medium">Valid perf count</th>
                   <th className="px-4 py-3 font-medium">Avg 30d alpha vs SPY</th>
                   <th className="px-4 py-3 font-medium">30d win rate</th>
                   <th className="px-4 py-3 font-medium">Avg filing lag (days)</th>
@@ -179,6 +198,17 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                       </div>
                     </td>
 
+                    <td className="px-4 py-4 font-semibold text-gray-900">
+                      {row.leaderboardScore.toFixed(2)}
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="font-semibold text-gray-900">{row.validPerformanceCount}</div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {getReliabilityLabel(row.validPerformanceCount)}
+                      </div>
+                    </td>
+
                     <td
                       className={`px-4 py-4 font-semibold ${getAlphaTone(
                         row.avgAlpha30d
@@ -197,6 +227,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
 
                     <td className="px-4 py-4 text-gray-700">
                       {formatDays(row.avgFilingLagDays)}
+                      <div className="mt-1 text-xs text-gray-500">
+                        {getTimelinessLabel(row.avgFilingLagDays)}
+                      </div>
                     </td>
 
                     <td className="px-4 py-4 text-gray-700">
@@ -208,7 +241,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={12}
                       className="px-4 py-10 text-center text-sm text-gray-500"
                     >
                       <p>
