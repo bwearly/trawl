@@ -307,6 +307,8 @@ export async function main() {
       result.status = "blocked";
       result.reason = "Watchlist conflict blocks merge.";
       result.blockingWarningsOrErrors.push(...watchlistValidation.issues);
+      result.manualNextSteps.push("Run npm run watchlists:audit-duplicates to identify duplicate default watchlists.");
+      result.manualNextSteps.push("Run npm run watchlists:consolidate-defaults with TARGET_USER_ID or TARGET_EMAIL for each blocked user.");
       return emitFinalResult(result, 1);
     }
 

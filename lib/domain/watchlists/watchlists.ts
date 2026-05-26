@@ -32,9 +32,23 @@ export async function getOrCreateDefaultWatchlist(userId: string) {
     .select()
     .from(watchlists)
     .where(and(eq(watchlists.userId, userId), eq(watchlists.isDefault, true)))
-    .limit(1);
+    .orderBy(desc(watchlists.createdAt), desc(watchlists.id));
 
   if (existing[0]) {
+    if (existing.length > 1) {
+      const canonical = [...existing].sort((a, b) => {
+        if (a.createdAt.getTime() !== b.createdAt.getTime()) {
+          return a.createdAt.getTime() - b.createdAt.getTime();
+        }
+        return a.id - b.id;
+      })[0];
+      console.warn(
+        `[watchlists] duplicate default watchlists for user ${userId}; returning canonical ${canonical.id}; duplicates=${existing
+          .map((row) => row.id)
+          .join(",")}`
+      );
+      return canonical;
+    }
     return existing[0];
   }
 
