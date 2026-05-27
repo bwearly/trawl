@@ -65,8 +65,8 @@ export default async function AlertsPage() {
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view alerts</h1>
             <p className="mt-3 text-sm text-gray-600">Sign in to review triggered updates from the politicians and tickers you watch.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-              <Link href="/signin?callbackUrl=%2Falerts" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
-              <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
+              <Link href="/signin?callbackUrl=%2Falerts" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black">Sign in</Link>
+              <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50">Browse signals</Link>
             </div>
           </div>
         </div>
@@ -98,12 +98,12 @@ export default async function AlertsPage() {
           </div>
 
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
+            <BackButton className="text-sm font-medium text-gray-600 transition soft-hover soft-focus hover:text-gray-900" fallbackHref="/signals" />
 
             <form action="/api/alerts" method="post">
               <button
                 type="submit"
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 Mark all read
               </button>
@@ -121,7 +121,7 @@ export default async function AlertsPage() {
             </div>
             <Link
               href="/account#alert-preferences"
-              className="inline-flex shrink-0 items-center justify-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
             >
               Go to account settings
             </Link>
@@ -155,19 +155,19 @@ export default async function AlertsPage() {
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
                   <Link
                     href="/signals"
-                    className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+                    className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black"
                   >
                     Browse signals
                   </Link>
                   <Link
                     href="/watchlist"
-                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-white"
                   >
                     Go to watchlist
                   </Link>
                   <Link
                     href="/account#alert-preferences"
-                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+                    className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-white"
                   >
                     Adjust alert preferences
                   </Link>
@@ -220,7 +220,7 @@ export default async function AlertsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={getAlertHref(alert)}
-                      className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+                      className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
                     >
                       Open
                     </Link>
@@ -229,7 +229,7 @@ export default async function AlertsPage() {
                       <form action={`/api/alerts/${alert.id}`} method="post">
                         <button
                           type="submit"
-                          className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+                          className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
                         >
                           Mark read
                         </button>

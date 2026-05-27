@@ -21,8 +21,8 @@ export default async function AccountPage() {
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view your account</h1>
             <p className="mt-3 text-sm text-gray-600">Sign in to view your account, watchlist, and alert settings.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-              <Link href="/signin?callbackUrl=%2Faccount" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
-              <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
+              <Link href="/signin?callbackUrl=%2Faccount" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black">Sign in</Link>
+              <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50">Browse signals</Link>
             </div>
           </div>
         </div>
@@ -71,10 +71,10 @@ export default async function AccountPage() {
         <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold text-gray-950">Quick links</h2>
           <div className="mt-4 flex flex-wrap gap-2.5">
-            <Link href="/watchlist" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Watchlist</Link>
-            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alerts</Link>
-            <Link href="#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alert preferences</Link>
-            <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Signals</Link>
+            <Link href="/watchlist" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black">Watchlist</Link>
+            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50">Alerts</Link>
+            <Link href="#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50">Alert preferences</Link>
+            <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50">Signals</Link>
           </div>
         </section>
 

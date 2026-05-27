@@ -162,7 +162,7 @@ export default function SignalCard({
           {displayTicker ? (
             <Link
               href={`/tickers/${displayTicker}`}
-              className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
+              className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-900 transition soft-hover soft-focus hover:bg-gray-200"
             >
               {displayTicker}
             </Link>
@@ -221,7 +221,7 @@ export default function SignalCard({
           <span className="mx-1.5 text-gray-300">•</span>
           <Link
             href={`/politicians/${politicianId}`}
-            className="inline-block max-w-[20rem] truncate align-bottom font-medium text-gray-900 transition hover:underline"
+            className="inline-block max-w-[20rem] truncate align-bottom font-medium text-gray-900 transition soft-hover soft-focus hover:underline"
             title={politicianName}
           >
             {politicianName}
@@ -325,7 +325,7 @@ export default function SignalCard({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Link
           href={`/signals/${signalId}`}
-          className="inline-flex items-center rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-black"
+          className="inline-flex items-center rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition soft-hover soft-focus hover:bg-black"
         >
           View details
         </Link>
@@ -335,7 +335,7 @@ export default function SignalCard({
             href={sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+            className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
           >
             View filing
           </a>

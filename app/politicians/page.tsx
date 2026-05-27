@@ -107,7 +107,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           </div>
 
           <div className="mt-3">
-            <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
+            <BackButton className="text-sm font-medium text-gray-600 transition soft-hover soft-focus hover:text-gray-900" fallbackHref="/signals" />
           </div>
         </div>
 
@@ -239,13 +239,13 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
                         <Link
                           href="/signals"
-                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
+                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900"
                         >
                           Go to Signals
                         </Link>
                         <Link
                           href="/"
-                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
+                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900"
                         >
                           Go to Home
                         </Link>

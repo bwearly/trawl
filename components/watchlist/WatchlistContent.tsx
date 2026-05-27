@@ -72,7 +72,7 @@ export default function WatchlistContent({
             </Link>
             <Link
               href="/politicians"
-              className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
             >
               Browse politicians
             </Link>
@@ -104,7 +104,7 @@ export default function WatchlistContent({
             <Link
               key={p.id}
               href={`/politicians/${p.id}`}
-              className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 transition hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
+              className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 transition soft-hover soft-focus hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
             >
               <div>
                 <div className="font-semibold text-gray-900">{p.fullName}</div>
@@ -181,7 +181,7 @@ export default function WatchlistContent({
             <Link
               key={t.ticker}
               href={`/tickers/${t.ticker}`}
-              className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 transition hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
+              className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 transition soft-hover soft-focus hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
             >
               <div>
                 <div className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800">

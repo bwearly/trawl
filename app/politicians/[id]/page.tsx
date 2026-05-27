@@ -141,9 +141,9 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
             <BackButton
               fallbackHref="/signals"
-              className="text-gray-600 transition hover:text-gray-900"
+              className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900"
              />
-            <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
+            <Link href="/politicians" className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900">
               View disclosure activity table
             </Link>
           </div>
@@ -283,13 +283,13 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                     return (
                       <tr
                         key={row.id}
-                        className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0"
+                        className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0"
                       >
                       <td className="px-4 py-4">
                         {getDisplayTicker(row.ticker) ? (
                           <Link
                             href={`/tickers/${getDisplayTicker(row.ticker)}`}
-                            className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-200"
+                            className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition soft-hover soft-focus hover:bg-gray-200"
                           >
                             {getDisplayTicker(row.ticker)}
                           </Link>
@@ -418,10 +418,10 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                       >
                         <p>No ticker-backed research signals yet.</p>
                         <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
-                          <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                          <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900">
                             Go to Signals
                           </Link>
-                          <Link href="/" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                          <Link href="/" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900">
                             Go to Home
                           </Link>
                         </div>
@@ -503,7 +503,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
               </thead>
               <tbody>
                 {noTickerDisclosures.map((row) => (
-                  <tr key={row.id} className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0">
+                  <tr key={row.id} className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4 text-gray-700">
                       <span className="block max-w-[18rem] truncate" title={row.assetName}>
                         {row.assetName}
@@ -561,12 +561,12 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 {historicalSignals.map((row) => {
                   const signalHref = getSignalHref(row.researchSignalId);
                   return (
-                  <tr key={row.id} className="group border-b border-gray-100 transition hover:bg-gray-50 last:border-b-0">
+                  <tr key={row.id} className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4">
                       {getDisplayTicker(row.ticker) ? (
                         <Link
                           href={`/tickers/${getDisplayTicker(row.ticker)}`}
-                          className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-200"
+                          className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition soft-hover soft-focus hover:bg-gray-200"
                         >
                           {getDisplayTicker(row.ticker)}
                         </Link>

@@ -35,7 +35,7 @@ body {
 }
 
 .interactive-card {
-  transition: transform 200ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  transition: transform 200ms ease, box-shadow 220ms ease, border-color 220ms ease, background-color 220ms ease;
 }
 
 .interactive-card:hover {
@@ -45,16 +45,18 @@ body {
 }
 
 .soft-hover {
-  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease;
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
 .soft-hover:hover {
   transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
 }
 
 .soft-focus:focus-visible {
   outline: 2px solid #111827;
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
