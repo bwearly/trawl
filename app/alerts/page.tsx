@@ -100,7 +100,7 @@ export default async function AlertsPage() {
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <BackButton className="text-sm font-medium text-gray-600 transition soft-hover soft-focus hover:text-gray-900" fallbackHref="/signals" />
 
-            <form action="/api/alerts" method="post">
+            <form action="/api/alerts" method="post" className="inline-flex">
               <button
                 type="submit"
                 className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
@@ -178,7 +178,7 @@ export default async function AlertsPage() {
             {rows.map((alert) => (
               <div
                 key={alert.id}
-                className={`rounded-2xl border p-4 ${
+                className={`interactive-card rounded-2xl border p-4 ${
                   alert.isRead
                     ? "border-gray-200 bg-white"
                     : "border-gray-300 bg-gray-50"
@@ -220,10 +220,10 @@ export default async function AlertsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={getAlertHref(alert)}
-                      className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
-                    >
-                      Open
-                    </Link>
+                    className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
+                  >
+                    Open
+                  </Link>
 
                     {!alert.isRead && (
                       <form action={`/api/alerts/${alert.id}`} method="post">

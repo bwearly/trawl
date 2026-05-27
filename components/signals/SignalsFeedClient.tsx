@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import SignalCard from "@/components/signals/SignalCard";
 import SignalFilters from "@/components/signals/SignalFilters";
+import SignalsPageSkeleton from "@/components/signals/SignalsPageSkeleton";
 import { buildSignalFeedItems } from "@/lib/domain/signals/buildSignalFeedItems";
 import type { Signal as ClusterSignal } from "@/lib/domain/signals/clusterSignals";
 import type {
@@ -119,7 +120,9 @@ export default function SignalsFeedClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
+      {isLoading ? <SignalsPageSkeleton /> : null}
+
+      <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2 ${isLoading ? "opacity-70 transition-opacity" : ""}`}>
         {feedItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
             <h2 className="text-lg font-semibold text-gray-900">

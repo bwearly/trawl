@@ -111,7 +111,7 @@ export default async function TickerDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <p className="text-sm font-medium text-gray-500">Ticker analytics</p>
@@ -206,7 +206,7 @@ export default async function TickerDetailPage({ params }: PageProps) {
         </section>
 
         <section className="grid gap-5 lg:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <div className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight text-gray-950">
@@ -306,7 +306,7 @@ export default async function TickerDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-semibold tracking-tight text-gray-950">
               Summary
             </h2>
