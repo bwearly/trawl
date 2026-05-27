@@ -25,7 +25,6 @@ type SearchParams = {
   politician?: string | string[];
   freshness?: string | string[];
   sort?: string | string[];
-  assetCoverage?: string | string[];
 };
 
 type SignalsPageProps = {
@@ -51,7 +50,6 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
     politician: firstParam(params.politician),
     freshness: firstParam(params.freshness),
     sort,
-    assetCoverage: firstParam(params.assetCoverage),
   });
 
   const [rows, unreadAlertsCount, watchedTickers] = await Promise.all([
