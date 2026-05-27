@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DevIdentitySwitcher from "@/components/dev/DevIdentitySwitcher";
 import AuthNavControls from "@/components/auth/AuthNavControls";
+import AlertsBellLink from "@/components/alerts/AlertsBellLink";
 
 const baseNavItems = [
   { href: "/", label: "Home" },
@@ -56,6 +57,7 @@ export default function GlobalNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <AlertsBellLink />
           <AuthNavControls />
           {process.env.NODE_ENV !== "production" ? <DevIdentitySwitcher /> : null}
         </div>
