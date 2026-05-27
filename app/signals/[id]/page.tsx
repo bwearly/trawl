@@ -13,6 +13,7 @@ import {
 import SignalPriceChart from "./SignalPriceChart";
 import BackButton from "@/components/navigation/BackButton";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
+import { getSignalDisplayLabel, getSignalDisplayScore } from "@/lib/domain/scoring/displayScore";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import WatchButton from "@/components/watchlist/WatchButton";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
@@ -266,6 +267,16 @@ export default async function SignalDetailPage({
     tradeType: signal.tradeType,
     filingLagDays: signal.filingLagDays,
   });
+  const displayScore = getSignalDisplayScore({
+    rawScore: signal.score,
+    filingLagDays: signal.filingLagDays,
+    filingDate: signal.filingDate,
+    ticker: normalizedTicker,
+    signalStatus: signal.signalStatus,
+    hasReturn7d: signal.return7d != null,
+    hasReturn30d: signal.return30d != null,
+  });
+  const displayLabel = getSignalDisplayLabel(displayScore);
   const confidence = getSignalConfidenceTier({
     hasReturn7d: signal.return7d != null,
     hasReturn30d: signal.return30d != null,
@@ -362,12 +373,12 @@ export default async function SignalDetailPage({
 
           <div className="flex flex-col items-start gap-3">
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
-              <p className="text-sm font-medium text-gray-500">Signal Score</p>
+              <p className="text-sm font-medium text-gray-500">Research Priority Score</p>
               <p className="mt-1 text-3xl font-semibold text-gray-950">
-                {signal.score}
+                {displayScore}
               </p>
               <p className="mt-1 text-xs text-gray-500">
-                Research ranking signal, not investment advice.
+                {displayLabel} · Calibrated for research triage, not investment advice.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -559,19 +570,19 @@ export default async function SignalDetailPage({
                 Score Breakdown
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                The score combines filing context and supporting evidence to
-                rank research priority.
+                Priority Score is a calibrated view of model output, filing context, and confidence for ranking research follow-up.
               </p>
 
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl border border-gray-200 p-4">
-                  <p className="text-sm text-gray-500">Current Signal Score</p>
+                  <p className="text-sm text-gray-500">Current Priority Score</p>
                   <p className="mt-1 text-2xl font-semibold text-gray-950">
-                    {signal.score}
+                    {displayScore}
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    Research priority score, not investment advice.
+                    {displayLabel} · Calibrated research-priority score, not investment advice.
                   </p>
+                  <p className="mt-1 text-xs text-gray-500">Raw model score: {signal.score}</p>
                 </div>
 
                 <details className="group rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 transition duration-200 hover:border-gray-300 hover:bg-white hover:shadow-sm">
