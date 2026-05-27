@@ -17,6 +17,14 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return normalized.length ? normalized : null;
 }
 
+function authLog(event: string, detail: Record<string, string | null | undefined>) {
+  const safeDetail = Object.entries(detail).reduce<Record<string, string | null>>((acc, [k, v]) => {
+    acc[k] = v ?? null;
+    return acc;
+  }, {});
+  console.info(`[auth] ${event}`, safeDetail);
+}
+
 if (isProduction && !process.env.AUTH_SECRET) throw new Error("Missing AUTH_SECRET in production. Set AUTH_SECRET before starting the app.");
 if (isProduction && !hasGoogleProviderConfig) throw new Error("Missing Google OAuth configuration in production. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET before starting the app.");
 const providers = [];
@@ -44,7 +52,14 @@ const { handlers, auth, signIn, signOut } = NextAuth({
       const normalizedEmail = normalizeEmail(typeof token.email === "string" ? token.email : user?.email ?? profileEmail);
 
       if (account?.provider === "google") {
-        const providerId = typeof user?.id === "string" && user.id.trim() ? user.id.trim() : typeof token.sub === "string" ? token.sub : null;
+        const providerId =
+          typeof account.providerAccountId === "string" && account.providerAccountId.trim()
+            ? account.providerAccountId.trim()
+            : typeof user?.id === "string" && user.id.trim()
+              ? user.id.trim()
+              : typeof token.sub === "string"
+                ? token.sub
+                : null;
 
         const existing = await db
           .select({ id: users.id })
@@ -59,8 +74,20 @@ const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (existing[0]?.id) {
           token.sub = existing[0].id;
+          authLog("jwt.reuse-existing-user", {
+            provider: account.provider,
+            providerUserId: providerId,
+            normalizedEmail,
+            reusedUserId: existing[0].id,
+          });
         } else if (providerId) {
           token.sub = providerId;
+          authLog("jwt.no-existing-user", {
+            provider: account.provider,
+            providerUserId: providerId,
+            normalizedEmail,
+            reusedUserId: null,
+          });
         }
       } else if (user?.id) {
         token.sub = user.id;
@@ -81,10 +108,24 @@ const { handlers, auth, signIn, signOut } = NextAuth({
         const name = typeof token.name === "string" ? token.name : session.user?.name ?? null;
         const image = typeof token.picture === "string" ? token.picture : session.user?.image ?? null;
 
+        const existingByEmail = normalizedEmail
+          ? await db
+              .select({ id: users.id })
+              .from(users)
+              .where(sql`lower(trim(${users.email})) = ${normalizedEmail}`)
+              .limit(1)
+          : [];
+
+        const userIdToPersist = existingByEmail[0]?.id ?? resolvedUserId;
+        if (existingByEmail[0]?.id && existingByEmail[0].id !== resolvedUserId) {
+          token.sub = existingByEmail[0].id;
+          session.user = { ...session.user, id: existingByEmail[0].id, name: session.user?.name ?? existingByEmail[0].id };
+        }
+
         await db
           .insert(users)
           .values({
-            id: resolvedUserId,
+            id: userIdToPersist,
             email: normalizedEmail,
             name,
             image,
@@ -95,6 +136,13 @@ const { handlers, auth, signIn, signOut } = NextAuth({
             target: users.id,
             set: { email: normalizedEmail, name, image, updatedAt: new Date(), lastSignInAt: new Date() },
           });
+
+        authLog("session.persist-user", {
+          provider: "google",
+          normalizedEmail,
+          tokenUserId: resolvedUserId,
+          persistedUserId: userIdToPersist,
+        });
       }
 
       return session;
