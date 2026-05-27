@@ -97,14 +97,14 @@ export default async function AlertsPage() {
             </p>
           </div>
 
-          <Link
-            href="/signals"
-            className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-          >
-            ← Back to signals
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              href="/signals"
+              className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
+            >
+              ← Back to signals
+            </Link>
 
-          <div className="flex items-center gap-3">
             <form action="/api/alerts" method="post">
               <button
                 type="submit"
@@ -113,7 +113,6 @@ export default async function AlertsPage() {
                 Mark all read
               </button>
             </form>
-
           </div>
         </div>
 
