@@ -111,19 +111,12 @@ export default async function AlertsPage() {
           </div>
         </div>
 
-        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-          <h2 className="text-xl font-semibold tracking-tight text-gray-950">Alert preferences</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Choose which watchlist alerts are generated in your Account settings.
-          </p>
-          <div className="mt-4">
-            <Link href="/account#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
-        <section className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition duration-200 hover:shadow-md">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold tracking-tight text-gray-950">Alert preferences</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Manage alert preferences in Account settings.
+                Manage which watchlist alerts are generated in Account settings.
               </p>
             </div>
             <Link
