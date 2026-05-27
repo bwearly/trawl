@@ -117,7 +117,13 @@ export default async function SignalDetailPage({
       chamber: politicians.chamber,
       historicalSampleSize: politicianStats.totalDisclosures,
       historicalPoliticianScore: researchSignals.historicalPoliticianScore,
+      tradeTypeScore: researchSignals.tradeTypeScore,
       tradeSizeScore: researchSignals.tradeSizeScore,
+      filingFreshnessScore: researchSignals.filingFreshnessScore,
+      momentumScore: researchSignals.momentumScore,
+      clusterScore: researchSignals.clusterScore,
+      userRelevanceScore: researchSignals.userRelevanceScore,
+      reasonSummary: researchSignals.reasonSummary,
 
       tradeDatePrice: disclosurePerformanceWindows.tradeDatePrice,
       filingDatePrice: disclosurePerformanceWindows.filingDatePrice,
@@ -460,7 +466,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {signal.return30d != null
                           ? formatPercent(signal.return30d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -468,7 +474,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {signal.spyReturn30d != null
                           ? formatPercent(signal.spyReturn30d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-gray-100 pt-2">
@@ -481,7 +487,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {alpha30d != null
                           ? formatPercent(alpha30d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                   </div>
@@ -495,7 +501,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {signal.return90d != null
                           ? formatPercent(signal.return90d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -503,7 +509,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {signal.spyReturn90d != null
                           ? formatPercent(signal.spyReturn90d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                     <div className="flex items-center justify-between border-t border-gray-100 pt-2">
@@ -516,7 +522,7 @@ export default async function SignalDetailPage({
                       <span className="font-semibold">
                         {alpha90d != null
                           ? formatPercent(alpha90d)
-                          : <span className="text-gray-400">Data not available yet</span>}
+                          : <span className="text-xs font-medium leading-tight text-gray-400">Data not available yet</span>}
                       </span>
                     </div>
                   </div>
@@ -563,13 +569,63 @@ export default async function SignalDetailPage({
                   <p className="mt-1 text-2xl font-semibold text-gray-950">
                     {signal.score}
                   </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Research priority score, not investment advice.
+                  </p>
                 </div>
 
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                  Higher scores suggest stronger research priority based on
-                  available evidence. Informational only, not investment
-                  advice.
-                </div>
+                <details className="group rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 transition duration-200 hover:border-gray-300 hover:bg-white hover:shadow-sm">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold text-gray-900">
+                    <span>Why this score?</span>
+                    <span className="text-gray-400 transition group-open:rotate-180">⌄</span>
+                  </summary>
+
+                  <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+                    <p className="text-sm text-gray-600">
+                      This score ranks research priority based on trade type, disclosure size,
+                      filing timeliness, politician history, market context, and watchlist relevance.
+                    </p>
+
+                    <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Trade type</p>
+                        <p className="mt-1">{signal.tradeTypeScore ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Trade size</p>
+                        <p className="mt-1">{signal.tradeSizeScore ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Filing timeliness</p>
+                        <p className="mt-1">{signal.filingFreshnessScore ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Politician history</p>
+                        <p className="mt-1">{signal.historicalPoliticianScore ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Momentum</p>
+                        <p className="mt-1">{signal.momentumScore ?? "—"}</p>
+                      </div>
+                      <div className="rounded-lg border border-gray-200 bg-white p-3">
+                        <p className="font-semibold text-gray-900">Cluster / watchlist context</p>
+                        <p className="mt-1">
+                          Cluster {signal.clusterScore ?? "—"} · Watchlist {signal.userRelevanceScore ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600">
+                      <p>
+                        Filing lag: {signal.filingLagDays ?? "unknown"} day{signal.filingLagDays === 1 ? "" : "s"}.
+                        Historical sample: {signal.historicalSampleSize ?? "not enough data yet"} disclosure{signal.historicalSampleSize === 1 ? "" : "s"}.
+                      </p>
+                      <p className="mt-1">
+                        Performance windows: 7d {signal.return7d != null ? "available" : "pending"}, 30d {signal.return30d != null ? "available" : "pending"}.
+                      </p>
+                    </div>
+                  </div>
+                </details>
               </div>
             </section>
 
