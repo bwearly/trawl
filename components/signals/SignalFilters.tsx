@@ -72,10 +72,6 @@ export default function SignalFilters({
   const hasMounted = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
-  function applyTextFilters() {
-    setTicker(draftTicker.trim());
-    setPolitician(draftPolitician.trim());
-  }
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -141,6 +137,18 @@ export default function SignalFilters({
     onResultsChange,
     onLoadingChange,
   ]);
+
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setTicker(draftTicker.trim());
+      setPolitician(draftPolitician.trim());
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [draftTicker, draftPolitician]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -349,11 +357,6 @@ export default function SignalFilters({
             <input
               value={draftTicker}
               onChange={(event) => setDraftTicker(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  applyTextFilters();
-                }
-              }}
               disabled={isLoading}
               placeholder="e.g. NVDA"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
@@ -367,11 +370,6 @@ export default function SignalFilters({
             <input
               value={draftPolitician}
               onChange={(event) => setDraftPolitician(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  applyTextFilters();
-                }
-              }}
               disabled={isLoading}
               placeholder="e.g. Pelosi"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
