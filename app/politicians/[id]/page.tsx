@@ -4,6 +4,7 @@ import BackButton from "@/components/navigation/BackButton";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getPoliticianDetail } from "@/lib/domain/politicians/get-politicians-detail";
 import WatchButton from "@/components/watchlist/WatchButton";
+import SignalScoreBreakdownAccordion from "@/components/signals/SignalScoreBreakdownAccordion";
 import { isPoliticianWatched } from "@/lib/domain/watchlists/watchlists";
 import {
   DetailStatCard,
@@ -138,17 +139,16 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-            <BackButton
-              fallbackHref="/signals"
-              className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900"
-             />
-            <Link href="/politicians" className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900">
-              View disclosure activity table
-            </Link>
-          </div>
-
-          <div>
+          <div className="flex flex-col gap-3 text-sm font-medium sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-4">
+              <BackButton
+                fallbackHref="/signals"
+                className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900"
+              />
+              <Link href="/politicians" className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900">
+                View disclosure activity table
+              </Link>
+            </div>
             <WatchButton
               itemType="politician"
               politicianId={data.politician.id}
@@ -270,6 +270,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 <thead className="text-left text-gray-500">
                   <tr className="border-b border-gray-200">
                     <th className="px-4 py-3 font-medium">Ticker</th>
+                    <th className="px-4 py-3 font-medium">Amount range</th>
                     <th className="px-4 py-3 font-medium">Asset</th>
                     <th className="px-4 py-3 font-medium">Trade type</th>
                   <th className="px-4 py-3 font-medium">Trade date</th>
@@ -281,8 +282,9 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                   {recentSignals.map((row) => {
                     const signalHref = getSignalHref(row.researchSignalId);
                     return (
+                      <>
                       <tr
-                        key={row.id}
+                        key={`recent-${row.id}`}
                         className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0"
                       >
                       <td className="px-4 py-4">
@@ -295,6 +297,15 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                           </Link>
                         ) : (
                           <span className="text-gray-400">No ticker</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-0 text-gray-700">
+                        {signalHref ? (
+                          <Link href={signalHref} className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400">
+                            {row.amountRangeLabel || "Not provided"}
+                          </Link>
+                        ) : (
+                          <div className="block px-0 py-4 text-gray-700">{row.amountRangeLabel || "Not provided"}</div>
                         )}
                       </td>
 
@@ -407,13 +418,31 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         )}
                       </td>
                       </tr>
+                      {row.researchSignalId && row.score !== null ? (
+                        <tr key={`recent-${row.id}-why`} className="border-b border-gray-100 bg-gray-50/40 last:border-b-0">
+                          <td colSpan={7} className="px-4 pb-4 pt-2">
+                            <SignalScoreBreakdownAccordion
+                              score={row.score}
+                              filingLagDays={row.filingLagDays}
+                              return7d={row.return7d}
+                              return30d={row.return30d}
+                              tradeTypeScore={row.tradeTypeScore}
+                              tradeSizeScore={row.tradeSizeScore}
+                              filingFreshnessScore={row.filingFreshnessScore}
+                              historicalPoliticianScore={row.historicalPoliticianScore}
+                              momentumScore={row.momentumScore}
+                            />
+                          </td>
+                        </tr>
+                      ) : null}
+                      </>
                     );
                   })}
 
                   {recentSignals.length === 0 && (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-4 py-10 text-center text-sm text-gray-500"
                       >
                         <p>No ticker-backed research signals yet.</p>
@@ -551,6 +580,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-3 font-medium">Ticker</th>
                   <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Amount range</th>
                   <th className="px-4 py-3 font-medium">Trade type</th>
                   <th className="px-4 py-3 font-medium">Trade date</th>
                   <th className="px-4 py-3 font-medium">Score</th>
@@ -561,7 +591,8 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 {historicalSignals.map((row) => {
                   const signalHref = getSignalHref(row.researchSignalId);
                   return (
-                  <tr key={row.id} className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0">
+                  <>
+                  <tr key={`historical-${row.id}`} className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4">
                       {getDisplayTicker(row.ticker) ? (
                         <Link
@@ -597,6 +628,14 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                           </span>
                         </div>
                       )}
+                    </td>
+                    <td className="px-4 py-0 text-gray-700">
+                      {signalHref ? (<Link
+                        href={signalHref}
+                        className="block px-0 py-4 text-gray-700 transition group-hover:text-gray-900 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400"
+                      >
+                        {row.amountRangeLabel || "Not provided"}
+                      </Link>) : <div className="block px-0 py-4 text-gray-700">{row.amountRangeLabel || "Not provided"}</div>}
                     </td>
                     <td className="px-4 py-0">
                       {signalHref ? (<Link
@@ -639,10 +678,28 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                       </Link>) : <div className="block px-0 py-4">{formatPercent(row.alpha30d)}</div>}
                     </td>
                   </tr>
+                  {row.researchSignalId && row.score !== null ? (
+                    <tr key={`historical-${row.id}-why`} className="border-b border-gray-100 bg-gray-50/40 last:border-b-0">
+                      <td colSpan={7} className="px-4 pb-4 pt-2">
+                        <SignalScoreBreakdownAccordion
+                          score={row.score}
+                          filingLagDays={row.filingLagDays}
+                          return7d={row.return7d}
+                          return30d={row.return30d}
+                          tradeTypeScore={row.tradeTypeScore}
+                          tradeSizeScore={row.tradeSizeScore}
+                          filingFreshnessScore={row.filingFreshnessScore}
+                          historicalPoliticianScore={row.historicalPoliticianScore}
+                          momentumScore={row.momentumScore}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                  </>
                 );})}
                 {historicalSignals.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
                       No older disclosures in this view yet.
                     </td>
                   </tr>
