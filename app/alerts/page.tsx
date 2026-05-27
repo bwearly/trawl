@@ -81,7 +81,7 @@ export default async function AlertsPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-3">
           <div>
             <p className="text-sm font-medium text-gray-500">
               Personalized notifications
@@ -97,6 +97,13 @@ export default async function AlertsPage() {
             </p>
           </div>
 
+          <Link
+            href="/signals"
+            className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
+          >
+            ← Back to signals
+          </Link>
+
           <div className="flex items-center gap-3">
             <form action="/api/alerts" method="post">
               <button
@@ -107,12 +114,6 @@ export default async function AlertsPage() {
               </button>
             </form>
 
-            <Link
-              href="/signals"
-              className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-            >
-              ← Back to signals
-            </Link>
           </div>
         </div>
 
