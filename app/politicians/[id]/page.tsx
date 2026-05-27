@@ -137,20 +137,20 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
             <BackButton
               fallbackHref="/signals"
               className="text-gray-600 transition hover:text-gray-900"
             >
-              ← Back
+              ← Back to signals
             </BackButton>
             <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
               View disclosure activity table
             </Link>
           </div>
 
-          <div className="sm:ml-auto">
+          <div>
             <WatchButton
               itemType="politician"
               politicianId={data.politician.id}

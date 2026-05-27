@@ -69,7 +69,7 @@ export default async function WatchlistPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="space-y-3">
           <div>
             <p className="text-sm font-medium text-gray-500">
               Personalized tracking

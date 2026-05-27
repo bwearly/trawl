@@ -76,7 +76,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="mb-6">
           <div>
             <p className="text-sm font-medium text-gray-500">
               Active disclosure analytics
@@ -105,7 +105,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-3">
             <Link
               href="/signals"
               className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
@@ -143,9 +143,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-3 font-medium">Rank</th>
                   <th className="px-4 py-3 font-medium">Politician</th>
-                  <th className="px-4 py-3 font-medium">Chamber</th>
-                  <th className="px-4 py-3 font-medium">Party</th>
-                  <th className="px-4 py-3 font-medium">State</th>
+                  <th className="px-4 py-3 font-medium">Profile</th>
                   <th className="px-4 py-3 font-medium">Disclosures</th>
                   <th className="px-4 py-3 font-medium">Leaderboard score</th>
                   <th className="px-4 py-3 font-medium">Valid perf count</th>
@@ -178,15 +176,8 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     </td>
 
                     <td className="px-4 py-4 text-gray-700">
-                      {toTitleCase(row.chamber)}
-                    </td>
-
-                    <td className="px-4 py-4 text-gray-700">
-                      {row.party ?? "—"}
-                    </td>
-
-                    <td className="px-4 py-4 text-gray-700">
-                      {row.state ?? "—"}
+                      <div>{toTitleCase(row.chamber)}</div>
+                      <div className="mt-1 text-xs text-gray-500">{row.party ?? "—"} · {row.state ?? "—"}</div>
                     </td>
 
                     <td className="px-4 py-4">
@@ -241,7 +232,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={10}
                       className="px-4 py-10 text-center text-sm text-gray-500"
                     >
                       <p>

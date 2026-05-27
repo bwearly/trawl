@@ -5,7 +5,7 @@ import WatchButton from "@/components/watchlist/WatchButton";
 import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
-import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
+import { getFilingFreshnessLabel, isRecentlyFiled } from "@/lib/domain/signals/filing-freshness";
 
 type SignalCardProps = {
   signalId: number;
@@ -116,10 +116,10 @@ export default function SignalCard({
   signalStage = "fresh",
   initialIsWatchingTicker = false,
 }: SignalCardProps) {
-  const freshnessLabel = getFilingFreshnessLabel(filingLagDays);
+  const filingTimelinessLabel = getFilingFreshnessLabel(filingLagDays);
+  const isFresh = isRecentlyFiled(filingDate);
   const displayTicker = getDisplayTicker(ticker);
-  const freshnessBadgeCopy =
-    freshnessLabel === "Historical" ? "Historical / Not actionable" : freshnessLabel;
+  const freshnessBadgeCopy = isFresh ? "Fresh" : filingTimelinessLabel === "Historical" ? "Historical / Not actionable" : filingTimelinessLabel;
   const alertTier = getSignalAlertTier({
     score,
     signalStatus,
@@ -182,10 +182,10 @@ export default function SignalCard({
             />
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getFreshnessStyles(
-                freshnessLabel
+                freshnessBadgeCopy
               )}`}
-              title="Filing freshness shows how quickly the trade was filed: fresh is recent, stale/historical is older."
-              aria-label={`Filing freshness: ${freshnessBadgeCopy}. Fresh means recent filing; delayed, stale, and historical are older.`}
+              title="Fresh means the filing date is within the last 30 days. Filing lag remains a separate timeliness metric."
+              aria-label={`Filing freshness: ${freshnessBadgeCopy}. Fresh means filing date is within the last 30 days.`}
             >
               {freshnessBadgeCopy}
             </span>

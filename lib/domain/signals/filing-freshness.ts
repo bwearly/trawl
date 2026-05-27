@@ -35,3 +35,14 @@ export function getFilingFreshnessRank(filingLagDays: number | null): number {
   if (label === "Historical") return 4;
   return 5;
 }
+
+export function isRecentlyFiled(filingDate: Date | string | null, now = new Date()): boolean {
+  if (!filingDate) return false;
+  const filedAt = filingDate instanceof Date ? filingDate : new Date(filingDate);
+  if (Number.isNaN(filedAt.getTime())) return false;
+
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const deltaMs = now.getTime() - filedAt.getTime();
+
+  return deltaMs >= 0 && deltaMs <= THIRTY_DAYS_MS;
+}

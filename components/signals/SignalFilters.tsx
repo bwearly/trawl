@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   SignalFilters as SignalFiltersType,
   SignalRow,
@@ -68,6 +68,56 @@ export default function SignalFilters({
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [signalsError, setSignalsError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  const defaultValues = useMemo(() => ({
+    minScore: initialFilters.minScore,
+    tradeType: initialFilters.tradeType,
+    party: initialFilters.party,
+    chamber: initialFilters.chamber,
+    ticker: initialFilters.ticker,
+    politician: initialFilters.politician,
+    freshness: initialFilters.freshness,
+    sort: initialFilters.sort,
+  }), [
+    initialFilters.minScore,
+    initialFilters.tradeType,
+    initialFilters.party,
+    initialFilters.chamber,
+    initialFilters.ticker,
+    initialFilters.politician,
+    initialFilters.freshness,
+    initialFilters.sort,
+  ]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (minScore !== defaultValues.minScore) count++;
+    if (tradeType !== defaultValues.tradeType) count++;
+    if (party !== defaultValues.party) count++;
+    if (chamber !== defaultValues.chamber) count++;
+    if (ticker !== defaultValues.ticker) count++;
+    if (politician !== defaultValues.politician) count++;
+    if (freshness !== defaultValues.freshness) count++;
+    if (sort !== defaultValues.sort) count++;
+    return count;
+  }, [minScore, tradeType, party, chamber, ticker, politician, freshness, sort, defaultValues]);
+
+  const hasActiveFilters = activeFilterCount > 0;
+
+  function clearFilters() {
+    setMinScore(defaultValues.minScore);
+    setTradeType(defaultValues.tradeType);
+    setParty(defaultValues.party);
+    setChamber(defaultValues.chamber);
+    setTicker(defaultValues.ticker);
+    setPolitician(defaultValues.politician);
+    setDraftTicker(defaultValues.ticker);
+    setDraftPolitician(defaultValues.politician);
+    setFreshness(defaultValues.freshness);
+    setSort(defaultValues.sort);
+  }
 
   const hasMounted = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -327,6 +377,26 @@ export default function SignalFilters({
           )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((current) => !current)}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
+          </button>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+
+        {showAdvancedFilters ? (
         <div className="grid gap-4 md:grid-cols-4">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
@@ -378,7 +448,7 @@ export default function SignalFilters({
 
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
-              Filing freshness
+              Filing timeliness
             </span>
             <select
               value={freshness}
@@ -391,15 +461,15 @@ export default function SignalFilters({
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="all">All</option>
-              <option value="fresh">Fresh</option>
-              <option value="normal">Normal</option>
-              <option value="delayed">Delayed</option>
-              <option value="stale">Stale</option>
-              <option value="historical">Historical</option>
+              <option value="fresh">Fast filed (≤15d lag)</option>
+              <option value="normal">Moderate lag (16-45d)</option>
+              <option value="delayed">Delayed (46-90d)</option>
+              <option value="stale">Stale lag (91-365d)</option>
+              <option value="historical">Historical lag (&gt;365d)</option>
               <option value="unknown">Unknown</option>
             </select>
             <span className="mt-1 block text-xs text-gray-500">
-              Fresh = recently filed. Historical = older context.
+              Timeliness is based on filing lag (trade date → filing date), not current recency.
             </span>
           </label>
 
@@ -485,6 +555,7 @@ export default function SignalFilters({
             </select>
           </label>
         </div>
+        ) : null}
         {signalsError && (
           <p className="text-sm text-rose-600">{signalsError}</p>
         )}
