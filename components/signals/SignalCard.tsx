@@ -6,6 +6,7 @@ import SignalConfidenceBadge from "@/components/signals/SignalConfidenceBadge";
 import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 import { getFilingFreshnessLabel, isRecentlyFiled } from "@/lib/domain/signals/filing-freshness";
+import { getSignalDisplayLabel, getSignalDisplayScore } from "@/lib/domain/scoring/displayScore";
 
 type SignalCardProps = {
   signalId: number;
@@ -59,11 +60,10 @@ function formatChamber(chamber: string | null | undefined) {
   return "Unknown chamber";
 }
 
-function getScoreStyles(score: string) {
-  const value = Number(score);
-
-  if (value >= 70) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  if (value >= 55) return "bg-amber-50 text-amber-700 ring-amber-200";
+function getScoreStyles(score: number) {
+  if (score >= 80) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (score >= 70) return "bg-sky-50 text-sky-700 ring-sky-200";
+  if (score >= 55) return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-rose-50 text-rose-700 ring-rose-200";
 }
 
@@ -127,6 +127,17 @@ export default function SignalCard({
     filingLagDays,
   });
   const missingPerformanceData = return7d == null && return30d == null;
+  const displayScore = getSignalDisplayScore({
+    rawScore: score,
+    filingLagDays,
+    filingDate,
+    ticker: displayTicker,
+    signalStatus,
+    hasReturn7d: return7d != null,
+    hasReturn30d: return30d != null,
+  });
+  const displayLabel = getSignalDisplayLabel(displayScore);
+  const isHighPriorityRecent = isFresh && displayScore >= 75;
   const cautionReasons: string[] = [];
   if (missingPerformanceData) cautionReasons.push("Limited performance history (7d/30d windows unavailable)");
   if (filingLagDays != null && filingLagDays > 90) cautionReasons.push("Stale filing lag reduces actionability");
@@ -174,6 +185,11 @@ export default function SignalCard({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="text-xs text-gray-500">Research signal</p>
             <SignalStrengthBadge tier={alertTier} />
+            {isHighPriorityRecent ? (
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                High-priority recent signal
+              </span>
+            ) : null}
             <SignalConfidenceBadge
               hasReturn7d={return7d != null}
               hasReturn30d={return30d != null}
@@ -194,17 +210,17 @@ export default function SignalCard({
 
         <div
           className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${getScoreStyles(
-            score
+            displayScore
           )}`}
-          title="Signal Score ranks forward-looking opportunity quality based on filing context and supporting data. Not investment advice."
-          aria-label={`Signal Score ${Math.round(Number(score))} out of 100.`}
+          title="Research Priority Score is a calibrated display score for prioritizing research review. Not investment advice."
+          aria-label={`Research Priority Score ${displayScore} out of 100 (${displayLabel}).`}
         >
-          Signal Score {Math.round(Number(score))}/100
+          Priority Score {displayScore}/100 · {displayLabel}
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-        <p>Signal Score ranks research priority (not investment advice).</p>
+        <p>Priority Score is a calibrated research-priority view (not investment advice).</p>
         <p>
           Performance Score:{" "}
           {performanceScore == null
@@ -283,7 +299,7 @@ export default function SignalCard({
         </summary>
         <div className="mt-2 space-y-2 text-xs text-gray-700">
           <p>
-            <span className="font-medium text-gray-500">Score</span>: {Math.round(Number(score))}/100 ·{" "}
+            <span className="font-medium text-gray-500">Priority Score</span>: {displayScore}/100 ({displayLabel}) ·{" "}
             <span className="font-medium text-gray-500">Stage</span>: {signalStage}
           </p>
           <p>
