@@ -37,6 +37,12 @@ export const politicians = pgTable("politicians", {
   chamber: text("chamber").notNull(), // house | senate
   party: text("party"),
   state: text("state"),
+  district: text("district"),
+  officialWebsite: text("official_website"),
+  imageUrl: text("image_url"),
+  dataSource: text("data_source"),
+  isActive: boolean("is_active").default(true),
+  bioguideId: text("bioguide_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
