@@ -27,15 +27,15 @@ export default function GlobalNav() {
 
   return (
     <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2.5 px-3 py-3 sm:gap-3 sm:px-6">
         <Link
           href="/"
-          className="mr-2 text-base font-semibold tracking-tight text-gray-950 hover:text-gray-700"
+          className="mr-1 text-base font-semibold tracking-tight text-gray-950 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30"
         >
           Trawl
         </Link>
 
-        <nav className="flex flex-wrap items-center gap-2" aria-label="Primary">
+        <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2" aria-label="Primary">
           {navItems.map((item) => {
             const active = isActive(item.href);
 
@@ -44,7 +44,7 @@ export default function GlobalNav() {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                className={`soft-hover soft-focus rounded-full px-3 py-1.5 text-sm font-medium ${
                   active
                     ? "bg-gray-900 text-white"
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"

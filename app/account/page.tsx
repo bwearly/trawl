@@ -6,7 +6,7 @@ import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
 
 export const metadata: Metadata = {
   title: "Account | Trawl",
-  description: "Manage your Trawl account, watchlist, and notification settings.",
+  description: "Manage your Trawl account, watchlist, and alert settings.",
 };
 
 export default async function AccountPage() {
@@ -14,12 +14,12 @@ export default async function AccountPage() {
 
   if (!identity || !session?.user?.id) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6">
+      <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-3xl">
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm font-medium text-gray-500">Account</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view your account</h1>
-            <p className="mt-3 text-sm text-gray-600">Sign in to view your account, watchlist, and notification settings.</p>
+            <p className="mt-3 text-sm text-gray-600">Sign in to view your account, watchlist, and alert settings.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link href="/signin?callbackUrl=%2Faccount" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
               <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
@@ -33,12 +33,12 @@ export default async function AccountPage() {
   const displayName = session.user.name || session.user.email || "Signed in";
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <p className="text-sm font-medium text-gray-500">Account</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">{displayName}</h1>
-          <p className="mt-2 text-sm text-gray-600">Your account powers personalized watchlists, research notifications, and preference settings in Trawl.</p>
+          <p className="mt-2 text-sm text-gray-600">Your account powers personalized watchlists, watchlist alerts, and preference settings in Trawl.</p>
 
           <div className="mt-5 flex items-start gap-4">
             {session.user.image ? (
@@ -68,7 +68,7 @@ export default async function AccountPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-lg font-semibold text-gray-950">Quick links</h2>
           <div className="mt-4 flex flex-wrap gap-2.5">
             <Link href="/watchlist" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Watchlist</Link>
