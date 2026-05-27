@@ -161,6 +161,28 @@ export default async function WatchlistPage() {
           </div>
         </section>
 
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/signals"
+              className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+            >
+              Browse signals
+            </Link>
+            <Link
+              href="/alerts"
+              className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Review watchlist notifications
+            </Link>
+          </div>
+        </section>
+
+        <WatchlistContent
+          initialPoliticians={data.politicians}
+          initialTickers={data.tickers}
+        />
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -201,28 +223,6 @@ export default async function WatchlistPage() {
             )}
           </div>
         </section>
-
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/signals"
-              className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
-            >
-              Browse signals
-            </Link>
-            <Link
-              href="/alerts"
-              className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Review watchlist notifications
-            </Link>
-          </div>
-        </section>
-
-        <WatchlistContent
-          initialPoliticians={data.politicians}
-          initialTickers={data.tickers}
-        />
       </div>
     </main>
   );
