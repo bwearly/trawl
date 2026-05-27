@@ -319,7 +319,7 @@ export default function SignalFilters({
                             key={`politician-${result.id}`}
                             href={result.href}
                             onClick={() => setShowSearchResults(false)}
-                            className="block px-4 py-3 transition hover:bg-gray-50"
+                            className="block px-4 py-3 transition soft-hover soft-focus hover:bg-gray-50"
                           >
                             <div className="font-medium text-gray-900">
                               {result.fullName}
@@ -346,7 +346,7 @@ export default function SignalFilters({
                             key={`ticker-${result.ticker}`}
                             href={result.href}
                             onClick={() => setShowSearchResults(false)}
-                            className="block px-4 py-3 transition hover:bg-gray-50"
+                            className="block px-4 py-3 transition soft-hover soft-focus hover:bg-gray-50"
                           >
                             <div className="flex items-center gap-2">
                               <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800">
@@ -382,7 +382,7 @@ export default function SignalFilters({
             <button
             type="button"
             onClick={() => setShowAdvancedFilters((current) => !current)}
-            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
           >
             Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
           </button>
@@ -390,7 +390,7 @@ export default function SignalFilters({
               <button
                 type="button"
                 onClick={clearFilters}
-                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 Clear filters
               </button>

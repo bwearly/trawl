@@ -108,7 +108,7 @@ export default async function WatchlistPage() {
             <p className="mt-2 text-xs text-gray-500">Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.</p>
           </div>
 
-          <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
+          <BackButton className="text-sm font-medium text-gray-600 transition soft-hover soft-focus hover:text-gray-900" fallbackHref="/signals" />
         </div>
 
         <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">

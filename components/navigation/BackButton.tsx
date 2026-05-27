@@ -38,7 +38,7 @@ export default function BackButton({
     <button
       type="button"
       onClick={handleBack}
-      className={className}
+      className={className ?? "soft-hover soft-focus inline-flex items-center rounded-full px-2 py-1 text-sm font-medium text-gray-600 hover:text-gray-900"}
       aria-label={ariaLabel ?? "Go back"}
     >
       {children}

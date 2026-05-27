@@ -178,7 +178,7 @@ function SectionShell({
 
         <Link
           href={href}
-          className="inline-flex w-fit items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 transition hover:bg-gray-50"
+          className="inline-flex w-fit items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 transition soft-hover soft-focus hover:bg-gray-50"
         >
           {linkLabel} →
         </Link>

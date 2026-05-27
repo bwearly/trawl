@@ -84,13 +84,13 @@ export default async function SignalDetailPage({
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link
                 href="/signals"
-                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black"
               >
                 Back to signals
               </Link>
               <Link
                 href="/"
-                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 Go home
               </Link>
@@ -155,13 +155,13 @@ export default async function SignalDetailPage({
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link
                 href="/signals"
-                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+                className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-black"
               >
                 Browse signals
               </Link>
               <Link
                 href="/"
-                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 Go home
               </Link>
@@ -306,7 +306,7 @@ export default async function SignalDetailPage({
               {normalizedTicker ? (
                 <Link
                   href={`/tickers/${normalizedTicker}`}
-                  className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition hover:bg-gray-200"
+                  className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition soft-hover soft-focus hover:bg-gray-200"
                 >
                   {normalizedTicker}
                 </Link>
@@ -581,14 +581,14 @@ export default async function SignalDetailPage({
               <div className="mt-5 flex flex-col gap-3">
                 <a
                   href="#price-chart"
-                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
                 >
                   View chart
                 </a>
 
                 <BackButton
                   fallbackHref="/signals"
-                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
                 >
                   ← Back
                 </BackButton>

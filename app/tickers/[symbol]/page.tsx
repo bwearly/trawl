@@ -95,9 +95,9 @@ export default async function TickerDetailPage({ params }: PageProps) {
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
             <BackButton
               fallbackHref="/signals"
-              className="text-gray-600 transition hover:text-gray-900"
+              className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900"
              />
-            <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
+            <Link href="/politicians" className="text-gray-600 transition soft-hover soft-focus hover:text-gray-900">
               Explore politicians
             </Link>
           </div>
@@ -291,10 +291,10 @@ export default async function TickerDetailPage({ params }: PageProps) {
                       >
                         <p>No disclosures found for this ticker yet.</p>
                         <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
-                          <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                          <Link href="/signals" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900">
                             Go to Signals
                           </Link>
-                          <Link href="/" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">
+                          <Link href="/" className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900">
                             Go to Home
                           </Link>
                         </div>

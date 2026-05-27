@@ -97,14 +97,14 @@ export default async function SignalsPage({ searchParams }: SignalsPageProps) {
             <div className="flex flex-wrap items-center gap-3 sm:justify-end">
               <Link
                 href="/watchlist"
-                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+                className="inline-flex items-center rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 Watchlist
               </Link>
 
               <Link
                 href="/alerts"
-                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition soft-hover soft-focus hover:bg-gray-50"
               >
                 <span>Watchlist Notifications</span>
                 {unreadAlertsCount > 0 && (

@@ -30,7 +30,7 @@ export default function GlobalNav() {
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2.5 px-3 py-3 sm:gap-3 sm:px-6">
         <Link
           href="/"
-          className="mr-1 text-base font-semibold tracking-tight text-gray-950 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/30"
+          className="soft-hover soft-focus mr-1 rounded-full px-2 py-1 text-base font-semibold tracking-tight text-gray-950 transition hover:text-gray-700"
         >
           Trawl
         </Link>

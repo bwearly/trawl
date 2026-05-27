@@ -181,7 +181,7 @@ export default function AlertPreferencesForm() {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition soft-hover soft-focus hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Saving..." : "Save preferences"}
             </button>
