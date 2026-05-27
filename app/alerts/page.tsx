@@ -118,6 +118,18 @@ export default async function AlertsPage() {
           </p>
           <div className="mt-4">
             <Link href="/account#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
+        <section className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition duration-200 hover:shadow-md">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight text-gray-950">Alert preferences</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Manage alert preferences in Account settings.
+              </p>
+            </div>
+            <Link
+              href="/account#alert-preferences"
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
               Go to account settings
             </Link>
           </div>
