@@ -7,7 +7,7 @@ import {
 } from "../lib/db/schema";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { getPoliticianLeaderboard } from "../lib/domain/politicians/get-politicians-leaderboard";
-import { DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { computeConfidencePenalty, DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
 
 function fmt(v: number | string | null | undefined, digits = 2) {
   if (v == null) return "—";
@@ -58,6 +58,12 @@ async function printTopSignals() {
       spyReturn7d: disclosurePerformanceWindows.spyReturn7d,
       return90d: disclosurePerformanceWindows.return90d,
       spyReturn90d: disclosurePerformanceWindows.spyReturn90d,
+      historicalSampleSize: sql<number>`(
+        select count(*)::int
+        from disclosures d2
+        where d2.politician_id = ${disclosures.politicianId}
+          and d2.id < ${disclosures.id}
+      )`,
     })
     .from(researchSignals)
     .innerJoin(disclosures, eq(researchSignals.disclosureId, disclosures.id))
@@ -117,8 +123,16 @@ async function printTopSignals() {
       clusterScore: weightedComponentToRaw(row.clusterScore, 5, DEFAULT_RELEVANCE_SCORES.cluster),
       userRelevanceScore: weightedComponentToRaw(row.userRelevanceScore, 5, DEFAULT_RELEVANCE_SCORES.user),
     });
+    const confidencePenalty = computeConfidencePenalty({
+      historicalSampleSize: Number(row.historicalSampleSize ?? 0),
+      return7d: row.return7d,
+      spyReturn7d: row.spyReturn7d,
+      return30d: row.return30d,
+      spyReturn30d: row.spyReturn30d,
+    });
+    const recomputedAdjustedScore = Math.max(0, recomputed.totalScore - confidencePenalty);
     const storedScore = Number(row.score);
-    const delta = Number.isFinite(storedScore) ? Math.round((storedScore - recomputed.totalScore) * 100) / 100 : 0;
+    const delta = Number.isFinite(storedScore) ? Math.round((storedScore - recomputedAdjustedScore) * 100) / 100 : 0;
     const scoreStale = Math.abs(delta) > 0.5;
     const reasonStale = (row.primaryReason ?? "") !== recomputed.primaryReason;
     const stale = scoreStale || reasonStale;
@@ -128,7 +142,7 @@ async function printTopSignals() {
         ticker: row.ticker,
         politicianName: row.politicianName,
         storedScore,
-        recomputedScore: recomputed.totalScore,
+        recomputedScore: recomputedAdjustedScore,
         delta,
         storedReason: row.primaryReason,
         recomputedReason: recomputed.primaryReason,
@@ -144,7 +158,7 @@ async function printTopSignals() {
     );
     console.log(`   reason: ${row.primaryReason ?? "—"} | ${row.reasonSummary ?? "—"}`);
     console.log(
-      `   recomputed: score=${fmt(recomputed.totalScore)} (delta=${fmt(delta)}), reason=${recomputed.primaryReason} | stale=${stale ? "yes" : "no"}`
+      `   recomputed: raw=${fmt(recomputed.totalScore)}, adjusted=${fmt(recomputedAdjustedScore)} (penalty=${confidencePenalty}, delta=${fmt(delta)}), reason=${recomputed.primaryReason} | stale=${stale ? "yes" : "no"}`
     );
     console.log(
       `   recomputed breakdown: tradeType=${fmt(recomputed.breakdown.tradeTypeScore)}, tradeSize=${fmt(recomputed.breakdown.tradeSizeScore)}, freshness=${fmt(recomputed.breakdown.filingFreshnessScore)}, historical=${fmt(recomputed.breakdown.historicalPoliticianScore)}, momentum=${fmt(recomputed.breakdown.momentumScore)}, committee=${fmt(recomputed.breakdown.committeeRelevanceScore)}, cluster=${fmt(recomputed.breakdown.clusterScore)}, user=${fmt(recomputed.breakdown.userRelevanceScore)}`
@@ -153,6 +167,11 @@ async function printTopSignals() {
     if (Math.abs(defaultDriftDelta) > 0.1) {
       console.log(
         `   warning: recompute input drift detected (stored-component relevance vs default relevance delta=${fmt(defaultDriftDelta)})`
+      );
+    }
+    if (Math.abs(delta) > 0.1) {
+      console.log(
+        `   guard: recalc-vs-diagnostics drift detected (|delta|=${fmt(Math.abs(delta))} > 0.10)`
       );
     }
   }

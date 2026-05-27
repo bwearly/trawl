@@ -30,6 +30,23 @@ export type ScoreSignalInput = {
   historicalSampleSize?: number | null;
 };
 
+export function computeConfidencePenalty(input: {
+  historicalSampleSize: number;
+  return7d?: number | string | null;
+  spyReturn7d?: number | string | null;
+  return30d?: number | string | null;
+  spyReturn30d?: number | string | null;
+}): number {
+  let confidencePenalty = 0;
+  if (input.historicalSampleSize === 0) confidencePenalty += 4;
+  else if (input.historicalSampleSize === 1) confidencePenalty += 3;
+  else if (input.historicalSampleSize === 2) confidencePenalty += 2;
+  else if (input.historicalSampleSize <= 4) confidencePenalty += 1;
+  if (input.return30d == null || input.spyReturn30d == null) confidencePenalty += 3;
+  if (input.return7d == null || input.spyReturn7d == null) confidencePenalty += 2;
+  return confidencePenalty;
+}
+
 export type ScoreSignalResult = {
   totalScore: number;
   signalScore: number;
