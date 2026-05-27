@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
+import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
 
 export const metadata: Metadata = {
   title: "Account | Trawl",
@@ -34,7 +35,7 @@ export default async function AccountPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md">
           <p className="text-sm font-medium text-gray-500">Account</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">{displayName}</h1>
           <p className="mt-2 text-sm text-gray-600">Your account powers personalized watchlists, research notifications, and preference settings in Trawl.</p>
@@ -67,26 +68,17 @@ export default async function AccountPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md">
           <h2 className="text-lg font-semibold text-gray-950">Quick links</h2>
           <div className="mt-4 flex flex-wrap gap-2.5">
             <Link href="/watchlist" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Watchlist</Link>
-            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Watchlist Notifications</Link>
-            <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alert preferences</Link>
+            <Link href="/alerts" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alerts</Link>
+            <Link href="#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Alert preferences</Link>
             <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Signals</Link>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-950">Alert preferences</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Alerts currently appear in-app. Email delivery foundation is being prepared,
-            but email research notifications are not live yet.
-          </p>
-          <div className="mt-4">
-            <Link href="/alerts#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Manage notification preferences</Link>
-          </div>
-        </section>
+        <AlertPreferencesForm />
       </div>
     </main>
   );

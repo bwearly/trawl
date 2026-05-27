@@ -12,7 +12,7 @@ const baseNavItems = [
   { href: "/signals", label: "Signals" },
   { href: "/politicians", label: "Politicians" },
   { href: "/watchlist", label: "Watchlist" },
-  { href: "/alerts", label: "Notifications" },
+  { href: "/alerts", label: "Alerts" },
 ] as const;
 
 export default function GlobalNav() {

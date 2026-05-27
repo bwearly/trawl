@@ -102,7 +102,7 @@ export default function AlertPreferencesForm() {
     >
       <div className="flex flex-col gap-2">
         <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-          Alert Preferences
+          Alert preferences
         </h2>
         <p className="text-sm text-gray-500">
           Choose which watchlist research notifications you get and set the minimum signal
@@ -145,7 +145,7 @@ export default function AlertPreferencesForm() {
                 setEnableWatchedTickerAlerts(event.target.checked)
               }
               disabled={isSaving}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 transition"
             />
             <div>
               <div className="text-sm font-medium text-gray-900">
@@ -165,7 +165,7 @@ export default function AlertPreferencesForm() {
                 setEnableWatchedPoliticianAlerts(event.target.checked)
               }
               disabled={isSaving}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 transition"
             />
             <div>
               <div className="text-sm font-medium text-gray-900">

@@ -2,12 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getAlerts } from "@/lib/domain/alerts/alerts";
-import AlertPreferencesForm from "@/components/alerts/AlertPreferencesForm";
+import BackButton from "@/components/navigation/BackButton";
 
 export const metadata: Metadata = {
   title: "Alerts | Trawl",
   description:
-    "Review watchlist research notifications for new matched signals and control notification preferences for tickers and politicians.",
+    "Review alert events generated from your watchlist and mark them read.",
 };
 
 function formatDate(value: Date | string | null) {
@@ -87,10 +87,10 @@ export default async function AlertsPage() {
               Personalized notifications
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
-              Watchlist notifications
+              Alerts
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Research notifications are based on your watchlist and preferences. They are not trading recommendations.
+              Review new signals generated from your watchlist and mark them read.
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.
@@ -98,12 +98,7 @@ export default async function AlertsPage() {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <Link
-              href="/signals"
-              className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-            >
-              ← Back to signals
-            </Link>
+            <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
 
             <form action="/api/alerts" method="post">
               <button
@@ -116,7 +111,17 @@ export default async function AlertsPage() {
           </div>
         </div>
 
-        <AlertPreferencesForm />
+        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition duration-200 hover:shadow-md">
+          <h2 className="text-xl font-semibold tracking-tight text-gray-950">Alert preferences</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Manage alert preferences in Account settings.
+          </p>
+          <div className="mt-4">
+            <Link href="/account#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
+              Go to account settings
+            </Link>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
@@ -155,12 +160,12 @@ export default async function AlertsPage() {
                   >
                     Go to watchlist
                   </Link>
-                  <a
-                    href="#alert-preferences"
+                  <Link
+                    href="/account#alert-preferences"
                     className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
                   >
                     Adjust notification preferences
-                  </a>
+                  </Link>
                 </div>
               </div>
             )}

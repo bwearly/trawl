@@ -6,6 +6,7 @@ import {
 } from "@/lib/domain/politicians/get-politicians-leaderboard";
 import Link from "next/link";
 import type { Metadata } from "next";
+import BackButton from "@/components/navigation/BackButton";
 type PageProps = {
   searchParams: Promise<{ chamber?: string | string[] }>;
 };
@@ -106,12 +107,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           </div>
 
           <div className="mt-3">
-            <Link
-              href="/signals"
-              className="text-sm font-medium text-gray-600 transition hover:text-gray-900"
-            >
-              ← Back to signals
-            </Link>
+            <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
           </div>
         </div>
 
@@ -137,7 +133,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
             </div>
           </div>
 
-          <div className="mt-6 overflow-x-auto">
+          <div className="mt-6 overflow-x-auto rounded-xl border border-gray-100">
             <table className="min-w-full text-sm">
               <thead className="text-left text-gray-500">
                 <tr className="border-b border-gray-200">
