@@ -111,7 +111,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           </div>
         </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
                 <h2 className="text-xl font-semibold tracking-tight text-gray-950">

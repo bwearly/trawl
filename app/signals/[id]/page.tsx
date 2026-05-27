@@ -377,7 +377,7 @@ export default async function SignalDetailPage({
           </div>
         </div>
 
-        <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="animate-fade-up interactive-card mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-950">
             Key signal takeaways
           </h2>
@@ -395,7 +395,7 @@ export default async function SignalDetailPage({
 
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-8">
-            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="mb-5">
                 <h2 className="text-xl font-semibold text-gray-950">
                   Performance After Disclosure
@@ -548,7 +548,7 @@ export default async function SignalDetailPage({
           </div>
 
           <div className="space-y-8">
-            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-gray-950">
                 Score Breakdown
               </h2>
@@ -573,7 +573,7 @@ export default async function SignalDetailPage({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-gray-950">
                 Quick Actions
               </h2>
