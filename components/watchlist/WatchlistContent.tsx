@@ -54,19 +54,19 @@ export default function WatchlistContent({
   return (
     <>
       {!hasItems && (
-        <section className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 shadow-sm">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-dashed border-gray-300 bg-white p-6 shadow-sm sm:p-8">
           <h2 className="text-xl font-semibold text-gray-950">
             Your watchlist is empty
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-gray-600">
             Save politicians and tickers to quickly revisit names you care about
-            and get research notification updates when new matching signals appear.
+            and get alert updates when new matching signals appear.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2.5">
             <Link
               href="/signals"
-              className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+              className="soft-hover soft-focus inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black"
             >
               Browse research signals
             </Link>
@@ -80,7 +80,7 @@ export default function WatchlistContent({
         </section>
       )}
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-gray-950">Watched Politicians</h2>
@@ -117,7 +117,7 @@ export default function WatchlistContent({
               </div>
 
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                <div className="flex gap-6 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm sm:flex sm:gap-6">
                   <div>
                     <div className="text-gray-500">Alpha</div>
                     <div className={getAlphaTone(p.avgAlpha30d)}>
@@ -157,7 +157,7 @@ export default function WatchlistContent({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-gray-950">Watched Tickers</h2>
@@ -191,7 +191,7 @@ export default function WatchlistContent({
               </div>
 
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                <div className="flex gap-6 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm sm:flex sm:gap-6">
                   <div>
                     <div className="text-gray-500">Disclosures</div>
                     <div>{t.disclosureCount}</div>

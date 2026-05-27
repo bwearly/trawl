@@ -51,9 +51,9 @@ export default function AlertsBellLink() {
   return (
     <Link
       href="/alerts"
-      className="relative inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-gray-700 transition hover:bg-gray-100"
-      aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
-      title="Notifications"
+      className="soft-hover soft-focus relative inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+      aria-label={`Alerts${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+      title="Alerts"
     >
       <svg
         viewBox="0 0 24 24"

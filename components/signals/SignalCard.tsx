@@ -156,7 +156,7 @@ export default function SignalCard({
   ].filter((item) => item.score != null);
 
   return (
-    <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <article className="interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           {displayTicker ? (

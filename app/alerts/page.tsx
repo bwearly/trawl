@@ -58,12 +58,12 @@ export default async function AlertsPage() {
 
   if (!identity) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6">
+      <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
         <div className="mx-auto max-w-3xl">
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm font-medium text-gray-500">Personalized notifications</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view watchlist notifications</h1>
-            <p className="mt-3 text-sm text-gray-600">Sign in to get research notifications for the politicians and tickers you watch.</p>
+            <p className="text-sm font-medium text-gray-500">Watchlist alerts</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">Sign in to view alerts</h1>
+            <p className="mt-3 text-sm text-gray-600">Sign in to review triggered updates from the politicians and tickers you watch.</p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
               <Link href="/signin?callbackUrl=%2Falerts" className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black">Sign in</Link>
               <Link href="/signals" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Browse signals</Link>
@@ -79,25 +79,25 @@ export default async function AlertsPage() {
   const readCount = rows.length - unreadCount;
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="space-y-3">
           <div>
             <p className="text-sm font-medium text-gray-500">
-              Personalized notifications
+              Watchlist alerts
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
               Alerts
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Review new signals generated from your watchlist and mark them read.
+              Review triggered watchlist updates and mark them read.
             </p>
             <p className="mt-2 text-xs text-gray-500">
               Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.
             </p>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
 
             <form action="/api/alerts" method="post">
@@ -111,6 +111,13 @@ export default async function AlertsPage() {
           </div>
         </div>
 
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <h2 className="text-xl font-semibold tracking-tight text-gray-950">Alert preferences</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Choose which watchlist alerts are generated in your Account settings.
+          </p>
+          <div className="mt-4">
+            <Link href="/account#alert-preferences" className="inline-flex items-center rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
         <section className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition duration-200 hover:shadow-md">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -128,11 +135,11 @@ export default async function AlertsPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                Recent watchlist notifications
+                Recent watchlist alerts
               </h2>
               <p className="mt-1 text-sm text-gray-500">
                 Latest matched signals for your watchlist.
@@ -147,10 +154,10 @@ export default async function AlertsPage() {
           <div className="mt-5 space-y-3">
             {rows.length === 0 && (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-                <h3 className="text-base font-semibold text-gray-900">No watchlist notifications yet</h3>
+                <h3 className="text-base font-semibold text-gray-900">No watchlist alerts yet</h3>
                 <p className="mt-2 text-sm text-gray-600">
                   Add items to your watchlist and tune your preferences to start
-                  receiving relevant research notifications.
+                  receiving relevant watchlist alerts.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
                   <Link
@@ -169,7 +176,7 @@ export default async function AlertsPage() {
                     href="/account#alert-preferences"
                     className="inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
                   >
-                    Adjust notification preferences
+                    Adjust alert preferences
                   </Link>
                 </div>
               </div>
@@ -217,7 +224,7 @@ export default async function AlertsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={getAlertHref(alert)}
                       className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50"
