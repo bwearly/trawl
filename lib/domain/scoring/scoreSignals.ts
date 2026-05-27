@@ -3,9 +3,9 @@ import { SCORE_MAX, SCORE_WEIGHTS } from "@/lib/domain/scoring/weights";
 
 export type SignalStage = "fresh" | "developing" | "mature" | "historical";
 export const DEFAULT_RELEVANCE_SCORES = {
-  committee: 5,
-  cluster: 3,
-  user: 2,
+  committee: 30,
+  cluster: 20,
+  user: 15,
 } as const;
 
 export type ScoreSignalInput = {
@@ -185,8 +185,10 @@ export function scoreSignal(input: ScoreSignalInput): ScoreSignalResult {
       : politicianEdge >= tradeStrength
         ? "Historically strong politician edge"
         : signalScore >= 70
-          ? "Strong trade context and timing"
-          : "Moderate trade context and timing",
+          ? "Strong research candidate"
+          : signalScore >= 55
+            ? "Worth reviewing with moderate support"
+            : "Lower priority signal (needs more support)",
     reasonSummary: `Signal score prioritizes politician edge, filing timeliness, trade strength, and context. Stage: ${signalStage}${freshness <= 30 ? "; low actionability due to stale filing lag" : ""}${hasMissingPerformanceWindows ? "; conservative confidence because 7d/30d/90d performance windows are not yet available" : ""}.`,
     breakdown: {
       tradeTypeScore: round2((scoreTradeType(input.tradeType) / 100) * SCORE_WEIGHTS.tradeType),

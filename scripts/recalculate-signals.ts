@@ -34,31 +34,18 @@ function calcAlpha(
 function scoreHistoricalPoliticianFromAlphas(alphas: number[]): number {
   const sampleSize = alphas.length;
 
-  if (sampleSize === 0) {
-    return 0;
-  }
+  if (sampleSize === 0) return 50;
 
   const winRate = alphas.filter((alpha) => alpha > 0).length / sampleSize;
   const avgAlpha =
     alphas.reduce((sum, alpha) => sum + alpha, 0) / sampleSize;
 
-  // Build a raw quality score from win rate + average alpha
-  const winRateAdjustment = (winRate - 0.5) * 12; // about -6 to +6
-  const alphaAdjustment = Math.max(-4, Math.min(avgAlpha, 4)); // clamp to -4..+4
-  const rawScore = 10 + winRateAdjustment + alphaAdjustment;
-
-  // Hard cap score based on sample size so tiny histories stay modest
-  let sampleCap = 0;
-  if (sampleSize <= 2) sampleCap = 4;
-  else if (sampleSize <= 4) sampleCap = 8;
-  else if (sampleSize <= 7) sampleCap = 12;
-  else if (sampleSize <= 10) sampleCap = 16;
-  else sampleCap = 20;
-
-  // Convert raw score to a bounded historical score
-  const boundedScore = Math.max(0, Math.min(rawScore, sampleCap));
-
-  return round2(boundedScore);
+  const winRateScore = Math.max(0, Math.min(100, 50 + ((winRate - 0.5) * 100)));
+  const alphaScore = Math.max(0, Math.min(100, 50 + (Math.max(-10, Math.min(avgAlpha, 10)) * 4)));
+  const quality = (winRateScore * 0.6) + (alphaScore * 0.4);
+  const confidence = sampleSize / (sampleSize + 12);
+  const blended = 50 + ((quality - 50) * confidence);
+  return round2(Math.max(0, Math.min(100, blended)));
 }
 
 async function main() {

@@ -62,8 +62,8 @@ function formatChamber(chamber: string | null | undefined) {
 function getScoreStyles(score: string) {
   const value = Number(score);
 
-  if (value >= 75) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  if (value >= 50) return "bg-amber-50 text-amber-700 ring-amber-200";
+  if (value >= 70) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (value >= 55) return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-rose-50 text-rose-700 ring-rose-200";
 }
 
