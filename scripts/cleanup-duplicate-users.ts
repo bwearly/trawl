@@ -9,7 +9,7 @@ import {
   watchlistItems,
   watchlists,
 } from "@/lib/db/schema";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
 type CleanupStatus = "dry-run" | "deactivated" | "deleted" | "blocked" | "error" | "no-op";
 
