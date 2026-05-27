@@ -47,6 +47,14 @@ function getDurationDays(cluster: SignalCluster): number {
   return Math.max(0, Math.round(ms / (24 * 60 * 60 * 1000)));
 }
 
+function formatClusterDuration(cluster: SignalCluster): string {
+  const durationDays = getDurationDays(cluster);
+
+  if (durationDays === 0) return "Same day";
+  if (durationDays === 1) return "Over 1 day";
+  return `Over ${durationDays} days`;
+}
+
 function toRoundedScore(score: number): number {
   return Math.round(score);
 }
@@ -64,13 +72,13 @@ function buildHeadline(cluster: SignalCluster): string {
 }
 
 function buildSubheadline(cluster: SignalCluster): string {
-  const durationDays = getDurationDays(cluster);
+  const durationLabel = formatClusterDuration(cluster);
 
   if (cluster.count >= 3) {
-    return `Over ${durationDays} days • Avg score ${toRoundedScore(cluster.avgScore)} • Latest score ${toRoundedScore(cluster.latestScore)}`;
+    return `${durationLabel} • Avg score ${toRoundedScore(cluster.avgScore)} • Latest score ${toRoundedScore(cluster.latestScore)}`;
   }
 
-  return `Over ${durationDays} days • Max score ${toRoundedScore(cluster.maxScore)}`;
+  return `${durationLabel} • Max score ${toRoundedScore(cluster.maxScore)}`;
 }
 
 export function buildSignalFeedItems<TSignal extends Signal>(

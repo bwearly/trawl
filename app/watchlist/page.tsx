@@ -1,12 +1,15 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import WatchlistContent from "@/components/watchlist/WatchlistContent";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import {
   getWatchlistActivity,
   type WatchlistActivityItem,
 } from "@/lib/domain/watchlists/get-watchlist-activity";
 import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = {
   title: "Watchlist | Trawl",
@@ -21,6 +24,18 @@ function formatRelativeDate(value: Date) {
   if (days === 0) return "Today";
   if (days === 1) return "1 day ago";
   return `${days} days ago`;
+}
+
+
+const MAX_WHAT_CHANGED_ITEMS = 8;
+const MAX_HISTORY_ITEMS = 12;
+
+function formatAbsoluteDate(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(value);
 }
 
 function getActivityHref(item: WatchlistActivityItem) {
@@ -60,11 +75,19 @@ export default async function WatchlistPage() {
     );
   }
 
-  const [data, activity] = await Promise.all([
+  const [data, activity, userRecord] = await Promise.all([
     getWatchlist(identity.userId),
     getWatchlistActivity(identity.userId),
+    db.select({ lastSignInAt: users.lastSignInAt }).from(users).where(eq(users.id, identity.userId)).limit(1),
   ]);
   const totalWatched = data.politicians.length + data.tickers.length;
+  const lastSignInAt = userRecord[0]?.lastSignInAt ?? null;
+  const newSinceLastSignIn =
+    lastSignInAt == null
+      ? []
+      : activity.filter((item) => item.createdAt.getTime() > lastSignInAt.getTime());
+  const whatChangedItems = (lastSignInAt == null ? activity : newSinceLastSignIn).slice(0, MAX_WHAT_CHANGED_ITEMS);
+  const historyItems = activity.slice(0, MAX_HISTORY_ITEMS);
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -98,23 +121,68 @@ export default async function WatchlistPage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-950">What changed</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Recent watched-name activity worth checking next.
+                {lastSignInAt
+                  ? `New watched activity since your last sign-in (${formatAbsoluteDate(lastSignInAt)}).`
+                  : "Recent watched-name activity from the last 21 days."}
               </p>
             </div>
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">
-              {activity.length} updates
+              {whatChangedItems.length} updates
             </span>
           </div>
 
           <div className="mt-4 space-y-2">
-            {activity.length === 0 ? (
+            {whatChangedItems.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                No recent watchlist changes yet. New disclosures and high-ranked signals will show up here.
+                {lastSignInAt
+                  ? "No new watchlist activity since your last sign-in. You’re all caught up."
+                  : "No recent watchlist changes yet. New disclosures and high-ranked signals will show up here."}
               </div>
             ) : (
-              activity.map((item) => (
+              whatChangedItems.map((item) => (
                 <Link
                   key={`${item.type}-${item.entityType}-${item.entityId}-${item.signalId ?? "none"}`}
+                  href={getActivityHref(item)}
+                  className="block rounded-xl border border-gray-200 px-4 py-3 transition hover:bg-gray-50"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-700 ring-1 ring-inset ring-gray-200">
+                      {item.entityType === "ticker" ? "Ticker" : "Politician"}
+                    </span>
+                    <span className="text-xs font-medium text-gray-500">
+                      {formatRelativeDate(item.createdAt)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{item.headline}</p>
+                  <p className="mt-1 text-sm text-gray-600">{item.subheadline}</p>
+                </Link>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-950">History</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Earlier watchlist activity from the last 21 days.
+              </p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">
+              {historyItems.length} items
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {historyItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                No watchlist history yet.
+              </div>
+            ) : (
+              historyItems.map((item) => (
+                <Link
+                  key={`history-${item.type}-${item.entityType}-${item.entityId}-${item.signalId ?? "none"}`}
                   href={getActivityHref(item)}
                   className="block rounded-xl border border-gray-200 px-4 py-3 transition hover:bg-gray-50"
                 >

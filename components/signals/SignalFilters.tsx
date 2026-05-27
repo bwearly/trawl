@@ -273,12 +273,13 @@ export default function SignalFilters({
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="space-y-3.5">
-        <div ref={searchContainerRef} className="relative">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-gray-700">
-              Search politicians or tickers
-            </span>
-            <input
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div ref={searchContainerRef} className="relative flex-1">
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-gray-700">
+                Search politicians or tickers
+              </span>
+              <input
               type="text"
               value={searchQuery}
               onChange={(event) => {
@@ -372,28 +373,29 @@ export default function SignalFilters({
               )}
             </div>
           )}
-          {searchError && (
-            <p className="mt-2 text-sm text-rose-600">{searchError}</p>
-          )}
-        </div>
+            {searchError && (
+              <p className="mt-2 text-sm text-rose-600">{searchError}</p>
+            )}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
+          <div className="flex flex-wrap items-center gap-2 sm:pb-0.5">
+            <button
             type="button"
             onClick={() => setShowAdvancedFilters((current) => !current)}
             className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
           </button>
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Clear filters
-            </button>
-          ) : null}
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {showAdvancedFilters ? (
