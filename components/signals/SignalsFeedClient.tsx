@@ -119,7 +119,7 @@ export default function SignalsFeedClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {feedItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
             <h2 className="text-lg font-semibold text-gray-900">

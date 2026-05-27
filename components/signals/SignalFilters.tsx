@@ -57,7 +57,6 @@ export default function SignalFilters({
   const [draftPolitician, setDraftPolitician] = useState(initialFilters.politician);
   const [freshness, setFreshness] = useState(initialFilters.freshness);
   const [sort, setSort] = useState(initialFilters.sort);
-  const [assetCoverage, setAssetCoverage] = useState(initialFilters.assetCoverage);
   const [isLoading, setIsLoading] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,7 +100,6 @@ export default function SignalFilters({
           politician,
           freshness,
           sort,
-          assetCoverage,
         });
 
         const response = await fetch(`/api/signals?${params.toString()}`, {
@@ -140,7 +138,6 @@ export default function SignalFilters({
     politician,
     freshness,
     sort,
-    assetCoverage,
     onResultsChange,
     onLoadingChange,
   ]);
@@ -410,28 +407,6 @@ export default function SignalFilters({
 
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
-              Asset coverage
-            </span>
-            <select
-              value={assetCoverage}
-              onChange={(event) =>
-                setAssetCoverage(
-                  event.target.value as SignalFiltersType["assetCoverage"]
-                )
-              }
-              disabled={isLoading}
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              <option value="tickerOnly">Ticker-backed only (default)</option>
-              <option value="allDisclosures">All disclosures</option>
-            </select>
-            <span className="mt-1 block text-xs text-gray-500">
-              Ticker-backed disclosures are prioritized in research feeds. Some disclosures, such as bonds, may not have public ticker symbols.
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-gray-700">
               Trade type
             </span>
             <select
@@ -478,7 +453,7 @@ export default function SignalFilters({
               onChange={(event) =>
                 setParty(event.target.value as SignalFiltersType["party"])
               }
-              disabled
+              disabled={isLoading}
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
             >
               <option value="all">All</option>
@@ -486,9 +461,6 @@ export default function SignalFilters({
               <option value="Republican">Republican</option>
               <option value="Independent">Independent</option>
             </select>
-            <span className="mt-1 block text-xs text-gray-500">
-              Party filter is temporarily disabled while disclosure-linked party data is backfilled.
-            </span>
           </label>
 
           <label className="block">
@@ -514,16 +486,6 @@ export default function SignalFilters({
               <option value="tradeType">Trade type (A → Z)</option>
             </select>
           </label>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={applyTextFilters}
-            disabled={isLoading}
-            className="inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Apply filters
-          </button>
         </div>
         {signalsError && (
           <p className="text-sm text-rose-600">{signalsError}</p>
