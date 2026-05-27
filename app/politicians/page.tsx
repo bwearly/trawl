@@ -8,7 +8,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import BackButton from "@/components/navigation/BackButton";
 type PageProps = {
-  searchParams: Promise<{ chamber?: string | string[] }>;
+  searchParams: Promise<{ chamber?: string | string[]; coverage?: string | string[] }>;
 };
 
 export const metadata: Metadata = {
@@ -71,7 +71,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
   const chamberParam = Array.isArray(params.chamber) ? params.chamber[0] : params.chamber;
   const selectedChamber =
     chamberParam === "house" || chamberParam === "senate" ? chamberParam : "all";
-  const rows = await getPoliticianLeaderboard(selectedChamber);
+  const coverageParam = Array.isArray(params.coverage) ? params.coverage[0] : params.coverage;
+  const selectedCoverage = coverageParam === "all-members" ? "all-members" : "active";
+  const rows = await getPoliticianLeaderboard(selectedChamber, selectedCoverage);
   const chamberDisclosureCount = await getPoliticianDisclosureCountForChamber(selectedChamber);
 
   return (
@@ -130,6 +132,11 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 <Link href="/politicians?chamber=senate" className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Senate</Link>
               </div>
               {rows.length} politician{rows.length === 1 ? "" : "s"}
+              <div className="mt-2">
+                <span className="mr-2">Coverage:</span>
+                <Link href={`/politicians${selectedChamber === "all" ? "" : `?chamber=${selectedChamber}`}`} className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Members with disclosures</Link>
+                <Link href={`/politicians?${selectedChamber === "all" ? "" : `chamber=${selectedChamber}&`}coverage=all-members`} className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">All members</Link>
+              </div>
             </div>
           </div>
 
@@ -179,6 +186,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     <td className="px-4 py-4">
                       <div className="font-semibold text-gray-900">
                         {row.totalDisclosures}
+                      {row.totalDisclosures === 0 && (
+                        <div className="mt-1 text-xs text-gray-500">No parsed trading disclosures yet.</div>
+                      )}
                       </div>
                       <div className="mt-1 text-xs text-gray-500">
                         Purchases: {row.purchaseCount} · Sales: {row.saleCount}

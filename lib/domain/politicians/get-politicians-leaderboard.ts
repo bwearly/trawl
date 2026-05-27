@@ -35,15 +35,76 @@ export type PoliticianLeaderboardRow = {
 };
 
 type ChamberFilter = "all" | "house" | "senate";
+type CoverageFilter = "active" | "all-members";
 
 function buildChamberFilter(chamber: ChamberFilter) {
   return chamber === "all" ? undefined : eq(politicians.chamber, chamber);
 }
 
-export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): Promise<
+export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all", coverage: CoverageFilter = "active"): Promise<
   PoliticianLeaderboardRow[]
 > {
   const chamberFilter = buildChamberFilter(chamber);
+  const normalize = (row: Omit<PoliticianLeaderboardRow, "avgAlpha30d" | "winRate30d" | "avgFilingLagDays" | "leaderboardScore"> & { avgAlpha30d: number | null; winRate30d: number | null; avgFilingLagDays: number | null; }) => ({
+    ...row,
+    leaderboardScore: computeLeaderboardScore({
+      avgAlpha30d: row.avgAlpha30d,
+      winRate30d: row.winRate30d,
+      totalDisclosures: row.totalDisclosures,
+      validPerformanceCount: row.validPerformanceCount,
+      avgFilingLagDays: row.avgFilingLagDays,
+    }),
+  });
+
+  if (coverage === "all-members") {
+    const allWhere = chamberFilter ?? sql`true`;
+    const rows = await db
+      .select({
+        id: politicians.id,
+        fullName: politicians.fullName,
+        chamber: politicians.chamber,
+        party: politicians.party,
+        state: politicians.state,
+        totalDisclosures: sql<number>`coalesce(${politicianStats.totalDisclosures}, 0)`,
+        purchaseCount: sql<number>`coalesce(${politicianStats.purchaseCount}, 0)`,
+        saleCount: sql<number>`coalesce(${politicianStats.saleCount}, 0)`,
+        avgAlpha30d: politicianStats.avgAlpha30d,
+        winRate30d: politicianStats.winRate30d,
+        avgFilingLagDays: politicianStats.avgFilingLagDays,
+        lastTradeDate: politicianStats.lastTradeDate,
+        validPerformanceCount: sql<number>`(
+          select count(*)::int
+          from ${disclosures} d
+          inner join ${disclosurePerformanceWindows} p on p.disclosure_id = d.id
+          where d.politician_id = ${politicians.id}
+            and p.return_30d is not null
+            and p.spy_return_30d is not null
+        )`,
+      })
+      .from(politicians)
+      .leftJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
+      .where(allWhere)
+      .orderBy(politicians.fullName);
+
+    return rows
+      .map((row) => normalize({
+        id: row.id,
+        fullName: row.fullName,
+        chamber: row.chamber,
+        party: row.party,
+        state: row.state,
+        totalDisclosures: Number(row.totalDisclosures ?? 0),
+        purchaseCount: Number(row.purchaseCount ?? 0),
+        saleCount: Number(row.saleCount ?? 0),
+        avgAlpha30d: toNumber(row.avgAlpha30d),
+        winRate30d: toNumber(row.winRate30d),
+        avgFilingLagDays: toNumber(row.avgFilingLagDays),
+        lastTradeDate: row.lastTradeDate,
+        validPerformanceCount: Number(row.validPerformanceCount ?? 0),
+      }))
+      .sort((a, b) => (Number(b.totalDisclosures > 0) - Number(a.totalDisclosures > 0)) || b.leaderboardScore - a.leaderboardScore || b.totalDisclosures - a.totalDisclosures || a.fullName.localeCompare(b.fullName));
+  }
+
   const activeFilter = sql`(
     select count(*)
     from ${disclosures} as d_recent
@@ -81,17 +142,6 @@ export async function getPoliticianLeaderboard(chamber: ChamberFilter = "all"): 
     .innerJoin(politicianStats, eq(politicianStats.politicianId, politicians.id))
     .where(baseWhere)
     .orderBy(desc(politicianStats.totalDisclosures), politicians.fullName);
-
-  const normalize = (row: Omit<PoliticianLeaderboardRow, "avgAlpha30d" | "winRate30d" | "avgFilingLagDays" | "leaderboardScore"> & { avgAlpha30d: number | null; winRate30d: number | null; avgFilingLagDays: number | null; }) => ({
-    ...row,
-    leaderboardScore: computeLeaderboardScore({
-      avgAlpha30d: row.avgAlpha30d,
-      winRate30d: row.winRate30d,
-      totalDisclosures: row.totalDisclosures,
-      validPerformanceCount: row.validPerformanceCount,
-      avgFilingLagDays: row.avgFilingLagDays,
-    }),
-  });
 
   if (rows.length === 0) {
     const includeAllDisclosuresForChamber = chamber !== "all";

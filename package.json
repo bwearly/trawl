@@ -40,7 +40,8 @@
     "watchlists:consolidate-defaults": "tsx scripts/consolidate-default-watchlists.ts",
     "watchlists:validate-default-consolidation": "tsx scripts/validate-watchlist-default-consolidation.ts",
     "users:cleanup-duplicates": "tsx scripts/cleanup-duplicate-users.ts",
-    "db:validate:user-email-guard": "tsx scripts/validate-user-email-unique-index.ts"
+    "db:validate:user-email-guard": "tsx scripts/validate-user-email-unique-index.ts",
+    "politicians:import-roster": "tsx scripts/import-current-congress-roster.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

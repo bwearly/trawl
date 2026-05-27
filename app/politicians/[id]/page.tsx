@@ -278,6 +278,11 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                 </tr>
               </thead>
                 <tbody>
+                  {recentSignals.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No parsed trading disclosures yet.</td>
+                    </tr>
+                  )}
                   {recentSignals.map((row) => {
                     const signalHref = getSignalHref(row.researchSignalId);
                     return (
