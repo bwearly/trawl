@@ -11,16 +11,27 @@ type BackButtonProps = {
 };
 
 export default function BackButton({
-  fallbackHref = "/",
+  fallbackHref = "/signals",
   children = "← Back",
   className,
   ariaLabel,
 }: BackButtonProps) {
   const router = useRouter();
-  void fallbackHref;
 
   function handleBack() {
+    if (window.history.length <= 1) {
+      router.push(fallbackHref);
+      return;
+    }
+
     router.back();
+
+    window.setTimeout(() => {
+      if (window.location.pathname === fallbackHref) return;
+      if (window.history.length <= 1) {
+        router.push(fallbackHref);
+      }
+    }, 250);
   }
 
   return (

@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/watchlists/get-watchlist-activity";
 import { getWatchlist } from "@/lib/domain/watchlists/watchlists";
 import { eq } from "drizzle-orm";
+import BackButton from "@/components/navigation/BackButton";
 
 export const metadata: Metadata = {
   title: "Watchlist | Trawl",
@@ -101,19 +102,13 @@ export default async function WatchlistPage() {
               My Watchlist
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              {totalWatched > 0
-                ? `${totalWatched} saved item${totalWatched === 1 ? "" : "s"} across tickers and politicians.`
-                : "Track politicians and tickers in one place, then use research notifications to stay on top of new activity."}
+              Choose the politicians and tickers Trawl should monitor for you.
             </p>
+            <p className="mt-2 text-sm text-gray-600">{totalWatched > 0 ? `${totalWatched} saved item${totalWatched === 1 ? "" : "s"} across watched politicians and watched tickers.` : "Add politicians and tickers below to start building your watchlist."}</p>
             <p className="mt-2 text-xs text-gray-500">Trawl surfaces disclosure activity for research. It does not recommend buying or selling securities.</p>
           </div>
 
-          <Link
-            href="/signals"
-            className="text-sm font-medium text-gray-600 hover:text-gray-900"
-          >
-            ← Back to signals
-          </Link>
+          <BackButton className="text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
         </div>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -123,7 +118,7 @@ export default async function WatchlistPage() {
               <p className="mt-1 text-sm text-gray-500">
                 {lastSignInAt
                   ? `New watched activity since your last sign-in (${formatAbsoluteDate(lastSignInAt)}).`
-                  : "Recent watched-name activity from the last 21 days."}
+                  : "Recent watchlist activity from the last 21 days."}
               </p>
             </div>
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">

@@ -142,9 +142,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             <BackButton
               fallbackHref="/signals"
               className="text-gray-600 transition hover:text-gray-900"
-            >
-              ← Back to signals
-            </BackButton>
+             />
             <Link href="/politicians" className="text-gray-600 transition hover:text-gray-900">
               View disclosure activity table
             </Link>
