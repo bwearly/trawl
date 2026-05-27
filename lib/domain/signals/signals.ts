@@ -8,6 +8,7 @@ import {
   researchSignals,
 } from "@/lib/db/schema";
 import { getFilingFreshnessLabel } from "@/lib/domain/signals/filing-freshness";
+import { getSignalDisplayScore } from "@/lib/domain/scoring/displayScore";
 import { scoreSignal } from "@/lib/domain/scoring/scoreSignals";
 
 export type SignalFilters = {
@@ -170,12 +171,21 @@ export function parseSignalFilters(raw: Partial<Record<keyof SignalFilters, stri
   };
 }
 
+
+function getMinRawCandidateScore(minDisplayScore: number) {
+  if (minDisplayScore >= 80) return 65;
+  if (minDisplayScore >= 70) return 55;
+  if (minDisplayScore >= 50) return 30;
+  return 0;
+}
+
 export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
   const whereFilters = [];
 
   const minScoreNumber = Number(filters.minScore);
-  if (minScoreNumber > 0) {
-    whereFilters.push(gte(researchSignals.score, String(minScoreNumber)));
+  const minRawCandidateScore = getMinRawCandidateScore(minScoreNumber);
+  if (minRawCandidateScore > 0) {
+    whereFilters.push(gte(researchSignals.score, String(minRawCandidateScore)));
   }
 
   if (filters.tradeType !== "all") {
@@ -287,7 +297,8 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
     .where(whereFilters.length ? and(...whereFilters) : undefined)
     .orderBy(...orderBy)
     .then((rows) =>
-      rows.map((row) => {
+      rows
+        .map((row) => {
         const daysSinceFiling = row.filingDate
           ? Math.floor((Date.now() - row.filingDate.getTime()) / (1000 * 60 * 60 * 24))
           : null;
@@ -309,5 +320,19 @@ export async function getSignals(filters: SignalFilters): Promise<SignalRow[]> {
           signalStage: scored.signalStage,
         };
       })
+        .filter((row) => {
+          if (minScoreNumber <= 0) return true;
+          const displayScore = getSignalDisplayScore({
+            rawScore: row.score,
+            filingLagDays: row.filingLagDays,
+            filingDate: row.filingDate,
+            ticker: row.ticker,
+            signalStatus: row.signalStatus,
+            hasReturn7d: row.return7d != null,
+            hasReturn30d: row.return30d != null,
+          });
+
+          return displayScore >= minScoreNumber;
+        })
     );
 }

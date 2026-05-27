@@ -402,7 +402,7 @@ export default function SignalFilters({
         <div className="grid gap-4 md:grid-cols-4">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-700">
-              Minimum score
+              Minimum Priority Score
             </span>
             <select
               value={minScore}
@@ -418,7 +418,7 @@ export default function SignalFilters({
               <option value="80">80+</option>
             </select>
             <span className="mt-1 block text-xs text-gray-500">
-              Score is a research ranking signal, not investment advice.
+              Priority Score uses calibrated display scoring for research ranking (not investment advice).
             </span>
           </label>
 
