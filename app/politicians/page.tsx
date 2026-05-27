@@ -75,7 +75,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
   const chamberDisclosureCount = await getPoliticianDisclosureCountForChamber(selectedChamber);
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <div>
@@ -107,7 +107,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           </div>
 
           <div className="mt-3">
-            <BackButton className="text-sm font-medium text-gray-600 transition soft-hover soft-focus hover:text-gray-900" fallbackHref="/signals" />
+            <BackButton className="soft-hover soft-focus rounded-full px-2 py-1 text-sm font-medium text-gray-600 transition hover:text-gray-900" fallbackHref="/signals" />
           </div>
         </div>
 
@@ -125,17 +125,17 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
             <div className="text-sm text-gray-500">
               <div className="mb-2">
                 <span className="mr-2">Chamber:</span>
-                <Link href="/politicians" className="mr-2 underline">All Congress</Link>
-                <Link href="/politicians?chamber=house" className="mr-2 underline">House</Link>
-                <Link href="/politicians?chamber=senate" className="underline">Senate</Link>
+                <Link href="/politicians" className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">All Congress</Link>
+                <Link href="/politicians?chamber=house" className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">House</Link>
+                <Link href="/politicians?chamber=senate" className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Senate</Link>
               </div>
               {rows.length} politician{rows.length === 1 ? "" : "s"}
             </div>
           </div>
 
-          <div className="mt-6 overflow-x-auto rounded-xl border border-gray-100">
+          <div className="mt-6 overflow-x-auto rounded-xl border border-gray-100 shadow-sm transition duration-300 hover:shadow-md">
             <table className="min-w-full text-sm">
-              <thead className="text-left text-gray-500">
+              <thead className="bg-gray-50/80 text-left text-gray-500">
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-3 font-medium">Rank</th>
                   <th className="px-4 py-3 font-medium">Politician</th>
@@ -154,10 +154,10 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 {rows.map((row, index) => (
                   <tr
                     key={row.id}
-                    className="border-b border-gray-100 last:border-b-0"
+                    className="group border-b border-gray-100 transition duration-200 hover:bg-gray-50/80 last:border-b-0"
                   >
                     <td className="px-4 py-4">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 transition duration-200 group-hover:-translate-y-0.5 group-hover:bg-gray-200 group-hover:shadow-sm">
                         {index + 1}
                       </span>
                     </td>
@@ -165,7 +165,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     <td className="px-4 py-4">
                       <Link
                         href={`/politicians/${row.id}`}
-                        className="font-semibold text-gray-950 transition hover:text-gray-700 hover:underline"
+                        className="soft-focus inline-flex rounded-md font-semibold text-gray-950 transition duration-200 group-hover:translate-x-0.5 hover:text-gray-700 hover:underline"
                       >
                         {row.fullName}
                       </Link>
@@ -239,13 +239,13 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
                         <Link
                           href="/signals"
-                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900"
+                          className="soft-hover soft-focus inline-flex rounded-full px-3 py-1.5 text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
                         >
                           Go to Signals
                         </Link>
                         <Link
                           href="/"
-                          className="text-gray-700 underline decoration-gray-300 underline-offset-4 transition soft-hover soft-focus hover:text-gray-900"
+                          className="soft-hover soft-focus inline-flex rounded-full px-3 py-1.5 text-gray-700 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900"
                         >
                           Go to Home
                         </Link>
