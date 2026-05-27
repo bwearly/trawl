@@ -6,7 +6,7 @@ import {
   disclosures,
   researchSignals,
 } from "../lib/db/schema";
-import { DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
+import { computeConfidencePenalty, DEFAULT_RELEVANCE_SCORES, scoreSignal } from "../lib/domain/scoring/scoreSignals";
 import { generateAlertsForSignal } from "../lib/domain/alerts/alerts";
 import { shouldGenerateAlert } from "../lib/domain/alerts/should-generate-alert";
 
@@ -117,14 +117,13 @@ async function main() {
       userRelevanceScore: DEFAULT_RELEVANCE_SCORES.user,
     });
 
-    let confidencePenalty = 0;
-
-    if (historicalAlphas.length === 0) confidencePenalty += 4;
-      else if (historicalAlphas.length === 1) confidencePenalty += 3;
-      else if (historicalAlphas.length === 2) confidencePenalty += 2;
-      else if (historicalAlphas.length <= 4) confidencePenalty += 1;
-    if (performance?.return30d == null || performance?.spyReturn30d == null) confidencePenalty += 3;
-    if (performance?.return7d == null || performance?.spyReturn7d == null) confidencePenalty += 2;
+    const confidencePenalty = computeConfidencePenalty({
+      historicalSampleSize: historicalAlphas.length,
+      return7d: performance?.return7d ?? null,
+      spyReturn7d: performance?.spyReturn7d ?? null,
+      return30d: performance?.return30d ?? null,
+      spyReturn30d: performance?.spyReturn30d ?? null,
+    });
 
     const adjustedTotalScore = Math.max(0, scored.totalScore - confidencePenalty);
     const alertEligibility = shouldGenerateAlert({
