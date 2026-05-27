@@ -117,7 +117,7 @@ async function validateWatchlistMove(canonicalUserId: string, duplicateIds: stri
     .from(watchlists)
     .where(and(buildDuplicateUserCondition(watchlists.userId, duplicateIds), eq(watchlists.isDefault, true)));
 
-  const grouped = new Map<string, string[]>();
+  const grouped = new Map<string, number[]>();
   for (const row of duplicateDefaultRows) {
     grouped.set(row.userId, [...(grouped.get(row.userId) ?? []), row.id]);
   }
@@ -327,7 +327,7 @@ export async function main() {
       return emitFinalResult(result, 1);
     }
 
-    const movedCounts = await db.transaction(async (tx) => moveUserRows(tx as typeof db, canonical.id, duplicateIds));
+    const movedCounts = await db.transaction(async (tx) => moveUserRows(tx as unknown as typeof db, canonical.id, duplicateIds));
     result.movedRowsByTable = movedCounts;
     result.transactionCommitted = true;
     result.status = "committed";
