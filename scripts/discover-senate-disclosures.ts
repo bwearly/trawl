@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
@@ -11,6 +11,8 @@ type SenatorRow = {
   state: string | null;
   party: string | null;
   bioguideId: string | null;
+  dataSource: string | null;
+  createdAt: Date;
 };
 
 type ReportMetadata = {
@@ -49,15 +51,18 @@ type UnmatchedReport = ReportMetadata & {
   closeMatchCandidates: CloseMatchCandidate[];
 };
 
+type RosterDiagnosticSenatorRow = Pick<SenatorRow, "id" | "fullName" | "state" | "party" | "bioguideId" | "dataSource" | "createdAt">;
+
 type RosterDiagnostics = {
   countByParty: Record<string, number>;
   countByState: Record<string, number>;
   duplicateBioguideIds: Array<{ bioguideId: string; count: number; senators: Array<Pick<SenatorRow, "id" | "fullName" | "state" | "party">> }>;
   duplicateNormalizedNameStateRows: Array<{ normalizedName: string; state: string | null; count: number; senators: Array<Pick<SenatorRow, "id" | "fullName" | "state" | "party" | "bioguideId">> }>;
+  statesWithMoreThanTwoActiveSenators: Array<{ state: string; count: number; senators: RosterDiagnosticSenatorRow[] }>;
 };
 
 type DiscoveryDiagnostics = {
-  mode: "roster-only" | "blocked" | "discovered";
+  mode: "roster-only" | "blocked" | "discovered" | "cache-replay";
   dryRun: true;
   source: string;
   generatedAt: string;
@@ -79,6 +84,8 @@ type DiscoveryDiagnostics = {
     directory: string;
     usedCachedResponses: boolean;
     wroteResponses: number;
+    noNetworkRequests: boolean;
+    replayedReportDataFiles: string[];
   };
   rateLimit: {
     delayMs: number;
@@ -97,6 +104,7 @@ type Options = {
   cacheDir: string;
   json: boolean;
   rosterOnly: boolean;
+  replayCache: boolean;
   useCache: boolean;
   delayMs: number;
   pageSize: number;
@@ -120,12 +128,14 @@ function parseOptions(argv: string[]): Options {
   let json = false;
   let rosterOnly = false;
   let useCache = true;
+  let replayCache = false;
   let delayMs = DEFAULT_DELAY_MS;
   let pageSize = MAX_PAGE_SIZE;
 
   for (const arg of argv) {
     if (arg === "--json") json = true;
     else if (arg === "--roster-only") rosterOnly = true;
+    else if (arg === "--replay-cache") replayCache = true;
     else if (arg === "--no-cache") useCache = false;
     else if (arg.startsWith("--limit=")) {
       limit = parsePositiveInt(arg, "--limit", 1, 500);
@@ -144,7 +154,7 @@ function parseOptions(argv: string[]): Options {
     }
   }
 
-  return { limit, days, cacheDir, json, rosterOnly, useCache, delayMs, pageSize };
+  return { limit, days, cacheDir, json, rosterOnly, replayCache, useCache, delayMs, pageSize };
 }
 
 function parsePositiveInt(arg: string, name: string, min: number, max: number) {
@@ -387,6 +397,17 @@ function reportFromRow(row: unknown): ReportMetadata | null {
   };
 }
 
+
+class SenateEfdHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly statusText: string,
+    readonly url: string
+  ) {
+    super(`Senate eFD request failed: ${status} ${statusText} for ${url}`);
+  }
+}
+
 class CookieJar {
   private readonly cookies = new Map<string, string>();
 
@@ -423,6 +444,74 @@ async function cachedRead(cacheDir: string, key: string) {
   }
 }
 
+
+type CachedReportDataFile = {
+  fileName: string;
+  path: string;
+  mtimeMs: number;
+  start: number;
+};
+
+async function listCachedReportDataFiles(cacheDir: string): Promise<CachedReportDataFile[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(cacheDir);
+  } catch {
+    return [];
+  }
+
+  const files: CachedReportDataFile[] = [];
+  for (const fileName of entries) {
+    const match = fileName.match(/-report-data-start-(\d+)-[a-f0-9]+\.txt$/i);
+    if (!match) continue;
+    const path = join(cacheDir, fileName);
+    const metadata = await stat(path);
+    files.push({ fileName, path, mtimeMs: metadata.mtimeMs, start: Number.parseInt(match[1], 10) });
+  }
+
+  return files.sort((left, right) => right.mtimeMs - left.mtimeMs || left.start - right.start || left.fileName.localeCompare(right.fileName));
+}
+
+function latestCachedReportDataRun(files: CachedReportDataFile[]) {
+  if (files.length === 0) return [];
+  const newest = files[0].mtimeMs;
+  return files
+    .filter((file) => newest - file.mtimeMs <= 10 * 60 * 1000)
+    .sort((left, right) => left.start - right.start || left.mtimeMs - right.mtimeMs || left.fileName.localeCompare(right.fileName));
+}
+
+async function discoverFromReplayCache(options: Options) {
+  const cachedFiles = latestCachedReportDataRun(await listCachedReportDataFiles(options.cacheDir));
+  if (cachedFiles.length === 0) {
+    throw new Error(
+      `No cached Senate report-data files found in ${options.cacheDir}. Run a successful acknowledged live discovery later, or point --cache-dir at a directory containing files named like *-report-data-start-0-*.txt.`
+    );
+  }
+
+  const reports: ReportMetadata[] = [];
+  for (const file of cachedFiles) {
+    const responseText = await readFile(file.path, "utf8");
+    const parsed = JSON.parse(responseText) as { data?: unknown[] };
+    const rows = parsed.data ?? [];
+    for (const row of rows) {
+      const report = reportFromRow(row);
+      if (report) reports.push(report);
+      if (reports.length >= options.limit) break;
+    }
+    if (reports.length >= options.limit) break;
+  }
+
+  return {
+    reports,
+    cacheStats: {
+      usedCachedResponses: true,
+      wroteResponses: 0,
+      noNetworkRequests: true,
+      replayedReportDataFiles: cachedFiles.map((file) => file.fileName),
+    },
+  };
+}
+
 function getSetCookie(response: Response) {
   const headers = response.headers as Headers & { getSetCookie?: () => string[] };
   const multiple = headers.getSetCookie?.();
@@ -439,7 +528,7 @@ async function fetchText(url: string, init: RequestInit, jar: CookieJar) {
   jar.store(getSetCookie(response));
   const body = await response.text();
   if (!response.ok) {
-    throw new Error(`Senate eFD request failed: ${response.status} ${response.statusText} for ${url}. Body: ${body.slice(0, 240)}`);
+    throw new SenateEfdHttpError(response.status, response.statusText, url);
   }
   return body;
 }
@@ -483,6 +572,8 @@ async function loadCurrentSenators() {
       state: politicians.state,
       party: politicians.party,
       bioguideId: politicians.bioguideId,
+      dataSource: politicians.dataSource,
+      createdAt: politicians.createdAt,
     })
     .from(politicians)
     .where(and(eq(politicians.chamber, "senate"), eq(politicians.isActive, true)))
@@ -568,12 +659,14 @@ function summarizeRoster(senators: SenatorRow[]): RosterDiagnostics {
   const countByState: Record<string, number> = {};
   const bioguideGroups = new Map<string, SenatorRow[]>();
   const nameStateGroups = new Map<string, { normalizedName: string; state: string | null; senators: SenatorRow[] }>();
+  const stateGroups = new Map<string, SenatorRow[]>();
 
   for (const senator of senators) {
     const party = senator.party ?? "unknown";
     const state = senator.state ?? "unknown";
     countByParty[party] = (countByParty[party] ?? 0) + 1;
     countByState[state] = (countByState[state] ?? 0) + 1;
+    stateGroups.set(state, [...(stateGroups.get(state) ?? []), senator]);
 
     if (senator.bioguideId) bioguideGroups.set(senator.bioguideId, [...(bioguideGroups.get(senator.bioguideId) ?? []), senator]);
 
@@ -604,6 +697,14 @@ function summarizeRoster(senators: SenatorRow[]): RosterDiagnostics {
         count: group.senators.length,
         senators: group.senators.map(({ id, fullName, state, party, bioguideId }) => ({ id, fullName, state, party, bioguideId })),
       })),
+    statesWithMoreThanTwoActiveSenators: [...stateGroups.entries()]
+      .filter(([, rows]) => rows.length > 2)
+      .sort(([leftState], [rightState]) => leftState.localeCompare(rightState))
+      .map(([state, rows]) => ({
+        state,
+        count: rows.length,
+        senators: rows.map(({ id, fullName, state, party, bioguideId, dataSource, createdAt }) => ({ id, fullName, state, party, bioguideId, dataSource, createdAt })),
+      })),
   };
 }
 
@@ -615,7 +716,7 @@ function summarizeDiagnostics(
   unmatched: UnmatchedReport[],
   options: Options,
   failureReasons: string[],
-  cacheStats: { usedCachedResponses: boolean; wroteResponses: number }
+  cacheStats: { usedCachedResponses: boolean; wroteResponses: number; noNetworkRequests?: boolean; replayedReportDataFiles?: string[] }
 ): DiscoveryDiagnostics {
   const reportTypesFound: Record<string, number> = {};
   const dates = reports.map((report) => report.filingDate).filter((date): date is string => Boolean(date)).sort();
@@ -648,6 +749,8 @@ function summarizeDiagnostics(
       directory: options.cacheDir,
       usedCachedResponses: cacheStats.usedCachedResponses,
       wroteResponses: cacheStats.wroteResponses,
+      noNetworkRequests: cacheStats.noNetworkRequests ?? false,
+      replayedReportDataFiles: cacheStats.replayedReportDataFiles ?? [],
     },
     rateLimit: { delayMs: options.delayMs, pageSize: options.pageSize, maxReports: options.limit },
     sampleMatchedReports: matched.slice(0, 5),
@@ -657,6 +760,7 @@ function summarizeDiagnostics(
       "Review unmatched reports and name normalization before any import writes.",
       "Phase 1 should fetch a small approved sample of matched PTR view URLs, parse transaction tables to JSON fixtures, and keep disclosure writes disabled by default.",
       "Do not reuse House importer assumptions; keep Senate source labels, idempotency, and diagnostics separate.",
+      "Recommended stale-roster cleanup: later update the roster importer to mark previously roster-imported members inactive when absent from the current source, preserve disclosure-derived historical politicians, and avoid deleting rows.",
     ],
   };
 }
@@ -677,13 +781,15 @@ function printDiagnostics(diagnostics: DiscoveryDiagnostics, json: boolean) {
   console.log(`Roster count by state: ${JSON.stringify(diagnostics.rosterDiagnostics.countByState)}`);
   console.log(`Duplicate bioguide IDs: ${JSON.stringify(diagnostics.rosterDiagnostics.duplicateBioguideIds)}`);
   console.log(`Duplicate normalized name/state rows: ${JSON.stringify(diagnostics.rosterDiagnostics.duplicateNormalizedNameStateRows)}`);
+  console.log(`States with >2 active senators: ${JSON.stringify(diagnostics.rosterDiagnostics.statesWithMoreThanTwoActiveSenators)}`);
   console.log(`Metadata reports discovered: ${diagnostics.metadataReportsDiscovered}`);
   console.log(`Matched to roster: ${diagnostics.matchedToRoster}`);
   console.log(`Unmatched: ${diagnostics.unmatched}`);
   console.log(`Report types found: ${JSON.stringify(diagnostics.reportTypesFound)}`);
   console.log(`Date range discovered: ${diagnostics.dateRangeDiscovered.start ?? "n/a"}..${diagnostics.dateRangeDiscovered.end ?? "n/a"}`);
   console.log(`Transaction extraction possible from discovered URLs: ${diagnostics.transactionExtractionPossible.possibleFromDiscoveredReportUrls}`);
-  console.log(`Cache: ${diagnostics.cache.directory} (wrote ${diagnostics.cache.wroteResponses}, used cached=${diagnostics.cache.usedCachedResponses})`);
+  console.log(`Cache: ${diagnostics.cache.directory} (wrote ${diagnostics.cache.wroteResponses}, used cached=${diagnostics.cache.usedCachedResponses}, no network=${diagnostics.cache.noNetworkRequests})`);
+  if (diagnostics.cache.replayedReportDataFiles.length > 0) console.log(`Replayed report-data files: ${diagnostics.cache.replayedReportDataFiles.join(", ")}`);
   console.log(`Rate limit: ${diagnostics.rateLimit.delayMs}ms delay, page size ${diagnostics.rateLimit.pageSize}, max reports ${diagnostics.rateLimit.maxReports}`);
 
   if (diagnostics.skippedOrFailureReasons.length > 0) {
@@ -780,7 +886,7 @@ async function discoverFromSenateEfd(options: Options) {
     await sleep(options.delayMs);
   }
 
-  return { reports, cacheStats: { usedCachedResponses, wroteResponses } };
+  return { reports, cacheStats: { usedCachedResponses, wroteResponses, noNetworkRequests: false, replayedReportDataFiles: [] } };
 }
 
 async function main() {
@@ -792,7 +898,18 @@ async function main() {
     const diagnostics = summarizeDiagnostics("roster-only", senators, [], [], [], options, ["--roster-only set; no Senate eFD requests attempted."], {
       usedCachedResponses: false,
       wroteResponses: 0,
+      noNetworkRequests: true,
+      replayedReportDataFiles: [],
     });
+    printDiagnostics(diagnostics, options.json);
+    return;
+  }
+
+  if (options.replayCache) {
+    failureReasons.push("--replay-cache set; loaded cached report-data responses only and made no Senate eFD network requests.");
+    const { reports, cacheStats } = await discoverFromReplayCache(options);
+    const { matched, unmatched } = matchReports(reports, senators);
+    const diagnostics = summarizeDiagnostics("cache-replay", senators, reports, matched, unmatched, options, failureReasons, cacheStats);
     printDiagnostics(diagnostics, options.json);
     return;
   }
@@ -804,16 +921,36 @@ async function main() {
     const diagnostics = summarizeDiagnostics("blocked", senators, [], [], [], options, failureReasons, {
       usedCachedResponses: false,
       wroteResponses: 0,
+      noNetworkRequests: true,
+      replayedReportDataFiles: [],
     });
     printDiagnostics(diagnostics, options.json);
     process.exitCode = 2;
     return;
   }
 
-  const { reports, cacheStats } = await discoverFromSenateEfd(options);
-  const { matched, unmatched } = matchReports(reports, senators);
-  const diagnostics = summarizeDiagnostics("discovered", senators, reports, matched, unmatched, options, failureReasons, cacheStats);
-  printDiagnostics(diagnostics, options.json);
+  try {
+    const { reports, cacheStats } = await discoverFromSenateEfd(options);
+    const { matched, unmatched } = matchReports(reports, senators);
+    const diagnostics = summarizeDiagnostics("discovered", senators, reports, matched, unmatched, options, failureReasons, cacheStats);
+    printDiagnostics(diagnostics, options.json);
+  } catch (error) {
+    if (error instanceof SenateEfdHttpError && error.status === 403) {
+      failureReasons.push(
+        `Senate eFD returned 403 Forbidden for ${error.url}. The public site blocked this request; no bypass was attempted, and the response body was intentionally not printed. Use --replay-cache for parser/matching diagnostics, or try again manually later after reviewing the official Senate eFD site.`
+      );
+      const diagnostics = summarizeDiagnostics("blocked", senators, [], [], [], options, failureReasons, {
+        usedCachedResponses: false,
+        wroteResponses: 0,
+        noNetworkRequests: false,
+        replayedReportDataFiles: [],
+      });
+      printDiagnostics(diagnostics, options.json);
+      process.exitCode = 2;
+      return;
+    }
+    throw error;
+  }
 }
 
 main().catch((error: unknown) => {
