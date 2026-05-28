@@ -13,6 +13,7 @@ export async function getRecentlyFiled(limit = 6) {
     .select({
       signalId: researchSignals.id,
       ticker: researchSignals.ticker,
+      assetName: disclosures.assetName,
       score: researchSignals.score,
       signalStatus: researchSignals.signalStatus,
       primaryReason: researchSignals.primaryReason,

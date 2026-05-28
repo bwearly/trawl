@@ -5,6 +5,7 @@ export type DominantTradeType = "purchase" | "sale" | "mixed";
 
 export type Signal = {
   ticker: string;
+  assetName?: string | null;
   politician: string;
   tradeDate: Date;
   score: number;

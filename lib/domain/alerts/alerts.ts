@@ -17,6 +17,7 @@ export type AlertRow = {
   userId: string;
   type: string;
   ticker: string | null;
+  assetName?: string | null;
   politicianId: number | null;
   disclosureId: number | null;
   researchSignalId: number | null;
@@ -30,8 +31,22 @@ const DEMO_USER_ID = "demo-user";
 
 export async function getAlerts(userId: string) {
   return db
-    .select()
+    .select({
+      id: alerts.id,
+      userId: alerts.userId,
+      type: alerts.type,
+      ticker: alerts.ticker,
+      assetName: disclosures.assetName,
+      politicianId: alerts.politicianId,
+      disclosureId: alerts.disclosureId,
+      researchSignalId: alerts.researchSignalId,
+      title: alerts.title,
+      message: alerts.message,
+      isRead: alerts.isRead,
+      createdAt: alerts.createdAt,
+    })
     .from(alerts)
+    .leftJoin(disclosures, eq(disclosures.id, alerts.disclosureId))
     .where(eq(alerts.userId, userId))
     .orderBy(desc(alerts.createdAt), desc(alerts.id));
 }

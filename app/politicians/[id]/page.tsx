@@ -14,6 +14,7 @@ import {
   getWinRateTone,
   toneToClass,
 } from "@/components/analytics/detail-ui";
+import { normalizeDisplayTicker } from "@/lib/domain/tickers/displayTicker";
 
 type PageProps = {
   params: Promise<{
@@ -85,14 +86,6 @@ function toTimestamp(value: Date | null | undefined) {
   return new Date(value).getTime();
 }
 
-function getDisplayTicker(rawTicker: string | null | undefined) {
-  const normalized = (rawTicker ?? "").trim();
-  if (!normalized) return null;
-  const upper = normalized.toUpperCase();
-  if (upper === "--" || upper === "—" || upper === "N/A" || upper === "NONE" || upper === "NULL") return null;
-  return upper;
-}
-
 function getSignalHref(signalId: number | null) {
   if (!signalId) return null;
   return `/signals/${signalId}`;
@@ -126,10 +119,10 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
     return b.id - a.id;
   });
   const tickerBackedDisclosures = sortedDisclosures.filter(
-    (row) => getDisplayTicker(row.ticker) !== null
+    (row) => normalizeDisplayTicker(row.ticker) !== null
   );
   const noTickerDisclosures = sortedDisclosures.filter(
-    (row) => getDisplayTicker(row.ticker) === null
+    (row) => normalizeDisplayTicker(row.ticker) === null
   );
   const recentSignals = tickerBackedDisclosures.slice(0, 6);
   const historicalSignals = tickerBackedDisclosures.slice(6);
@@ -291,12 +284,12 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                         className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0"
                       >
                       <td className="px-4 py-4">
-                        {getDisplayTicker(row.ticker) ? (
+                        {normalizeDisplayTicker(row.ticker) ? (
                           <Link
-                            href={`/tickers/${getDisplayTicker(row.ticker)}`}
+                            href={`/tickers/${normalizeDisplayTicker(row.ticker)}`}
                             className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition soft-hover soft-focus hover:bg-gray-200"
                           >
-                            {getDisplayTicker(row.ticker)}
+                            {normalizeDisplayTicker(row.ticker)}
                           </Link>
                         ) : (
                           <span className="text-gray-400">No ticker</span>
@@ -568,12 +561,12 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
                   return (
                   <tr key={row.id} className="group border-b border-gray-100 transition soft-hover soft-focus hover:bg-gray-50 last:border-b-0">
                     <td className="px-4 py-4">
-                      {getDisplayTicker(row.ticker) ? (
+                      {normalizeDisplayTicker(row.ticker) ? (
                         <Link
-                          href={`/tickers/${getDisplayTicker(row.ticker)}`}
+                          href={`/tickers/${normalizeDisplayTicker(row.ticker)}`}
                           className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tracking-wide text-gray-800 ring-1 ring-inset ring-gray-200 transition soft-hover soft-focus hover:bg-gray-200"
                         >
-                          {getDisplayTicker(row.ticker)}
+                          {normalizeDisplayTicker(row.ticker)}
                         </Link>
                       ) : (
                         <span className="text-gray-400">No ticker</span>

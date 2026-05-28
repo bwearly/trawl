@@ -28,6 +28,47 @@ function normalizeTicker(symbol: string) {
   return symbol.trim().toUpperCase();
 }
 
+function chooseTickerAssetName(rows: Array<{ assetName: string | null; tradeDate: Date | null; id: number }>, ticker: string) {
+  const counts = new Map<string, { count: number; latestTradeDate: Date | null; latestId: number }>();
+
+  for (const row of rows) {
+    const assetName = row.assetName?.trim();
+    if (!assetName || assetName.toUpperCase() === ticker) continue;
+
+    const existing = counts.get(assetName);
+    if (!existing) {
+      counts.set(assetName, {
+        count: 1,
+        latestTradeDate: row.tradeDate,
+        latestId: row.id,
+      });
+      continue;
+    }
+
+    existing.count += 1;
+    const existingTime = existing.latestTradeDate?.getTime() ?? Number.NEGATIVE_INFINITY;
+    const rowTime = row.tradeDate?.getTime() ?? Number.NEGATIVE_INFINITY;
+    if (rowTime > existingTime || (rowTime === existingTime && row.id > existing.latestId)) {
+      existing.latestTradeDate = row.tradeDate;
+      existing.latestId = row.id;
+    }
+  }
+
+  const [bestName] = [...counts.entries()].sort((left, right) => {
+    const countDiff = right[1].count - left[1].count;
+    if (countDiff !== 0) return countDiff;
+
+    const dateDiff =
+      (right[1].latestTradeDate?.getTime() ?? Number.NEGATIVE_INFINITY) -
+      (left[1].latestTradeDate?.getTime() ?? Number.NEGATIVE_INFINITY);
+    if (dateDiff !== 0) return dateDiff;
+
+    return right[1].latestId - left[1].latestId;
+  })[0] ?? [ticker];
+
+  return bestName;
+}
+
 export async function getTickerDetail(symbol: string) {
   const ticker = normalizeTicker(symbol);
 
@@ -76,7 +117,7 @@ export async function getTickerDetail(symbol: string) {
     return null;
   }
 
-  const firstNamedAsset = disclosureRows.find((row) => row.assetName)?.assetName ?? ticker;
+  const assetName = chooseTickerAssetName(disclosureRows, ticker);
 
   const return7dValues: number[] = [];
   const return30dValues: number[] = [];
@@ -174,7 +215,7 @@ export async function getTickerDetail(symbol: string) {
 
   return {
     ticker,
-    assetName: firstNamedAsset,
+    assetName,
     stats: {
       totalDisclosures: disclosureRows.length,
       uniquePoliticians,

@@ -3,6 +3,7 @@ import {
   type Signal,
   type SignalCluster,
 } from "@/lib/domain/signals/clusterSignals";
+import { formatTickerWithName } from "@/lib/domain/tickers/displayTicker";
 
 export type SignalFeedItem<TSignal extends Signal = Signal> =
   | {
@@ -59,16 +60,26 @@ function toRoundedScore(score: number): number {
   return Math.round(score);
 }
 
+function getClusterAssetLabel(cluster: SignalCluster): string {
+  const latestSignal = cluster.signals[cluster.signals.length - 1];
+  return formatTickerWithName({
+    ticker: cluster.ticker,
+    assetName: latestSignal.assetName,
+  });
+}
+
 function buildHeadline(cluster: SignalCluster): string {
+  const assetLabel = getClusterAssetLabel(cluster);
+
   if (cluster.dominantTradeType === "purchase") {
-    return `${cluster.politician} made ${cluster.count} purchases in ${cluster.ticker}`;
+    return `${cluster.politician} made ${cluster.count} purchases in ${assetLabel}`;
   }
 
   if (cluster.dominantTradeType === "sale") {
-    return `${cluster.politician} made ${cluster.count} sales in ${cluster.ticker}`;
+    return `${cluster.politician} made ${cluster.count} sales in ${assetLabel}`;
   }
 
-  return `${cluster.politician} made ${cluster.count} mixed trades in ${cluster.ticker}`;
+  return `${cluster.politician} made ${cluster.count} mixed trades in ${assetLabel}`;
 }
 
 function buildSubheadline(cluster: SignalCluster): string {

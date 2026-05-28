@@ -4,6 +4,7 @@ import { clusterSignals, type Signal } from "@/lib/domain/signals/clusterSignals
 import { db } from "@/lib/db";
 import { disclosures, politicians, researchSignals } from "@/lib/db/schema";
 import { getWatchedPoliticianIds, getWatchedTickers } from "@/lib/domain/watchlists/watchlists";
+import { formatTickerWithName } from "@/lib/domain/tickers/displayTicker";
 
 const RECENT_ACTIVITY_DAYS = 21;
 const MAX_ACTIVITY_ITEMS = 16;
@@ -23,6 +24,7 @@ export type WatchlistActivityItem = {
   entityLabel: string;
   signalId?: number;
   ticker?: string;
+  assetName?: string | null;
   politicianId?: number;
   politicianName?: string;
   score?: number;
@@ -35,6 +37,7 @@ export type WatchlistActivityItem = {
 type ActivitySignalRow = {
   signalId: number;
   ticker: string;
+  assetName: string | null;
   politicianId: number;
   politicianName: string;
   signalDate: Date;
@@ -50,6 +53,7 @@ type ClusterActivitySignal = Signal & {
   signalId: number;
   politicianId: number;
   politicianName: string;
+  assetName: string | null;
 };
 
 function pluralizeTrades(count: number) {
@@ -79,6 +83,7 @@ function toClusterSignal(row: ActivitySignalRow): ClusterActivitySignal {
   return {
     signalId: row.signalId,
     ticker: row.ticker,
+    assetName: row.assetName,
     politician: row.politicianName,
     politicianId: row.politicianId,
     politicianName: row.politicianName,
@@ -96,6 +101,7 @@ function buildSignalActivities(
   const activities: WatchlistActivityItem[] = [];
   const score = getSignalScore(row.score);
   const createdAt = row.signalDate;
+  const assetLabel = formatTickerWithName({ ticker: row.ticker, assetName: row.assetName });
   const alertTier = getSignalAlertTier({
     score,
     signalStatus: row.signalStatus,
@@ -108,15 +114,16 @@ function buildSignalActivities(
       type: "ticker_new_signal",
       entityType: "ticker",
       entityId: row.ticker,
-      entityLabel: row.ticker,
+      entityLabel: assetLabel,
       signalId: row.signalId,
       ticker: row.ticker,
+      assetName: row.assetName,
       politicianId: row.politicianId,
       politicianName: row.politicianName,
       score,
       alertTier,
       createdAt,
-      headline: `New signal for watched ticker ${row.ticker}`,
+      headline: `New signal for watched ticker ${assetLabel}`,
       subheadline: `${row.politicianName} · Score ${Math.round(score)}${alertTier ? ` · ${alertTier.replace("_", " ")}` : ""}`,
     });
   }
@@ -129,13 +136,14 @@ function buildSignalActivities(
       entityLabel: row.politicianName,
       signalId: row.signalId,
       ticker: row.ticker,
+      assetName: row.assetName,
       politicianId: row.politicianId,
       politicianName: row.politicianName,
       score,
       alertTier,
       createdAt,
-      headline: `${row.politicianName} filed again in ${row.ticker}`,
-      subheadline: `Score ${Math.round(score)}${alertTier ? ` · Alert ${alertTier.replace("_", " ")}` : ""}`,
+      headline: `${row.politicianName} filed again in ${assetLabel}`,
+      subheadline: `Signal ticker ${assetLabel} · Score ${Math.round(score)}${alertTier ? ` · Alert ${alertTier.replace("_", " ")}` : ""}`,
     });
   }
 
@@ -144,15 +152,16 @@ function buildSignalActivities(
       type: "alert_eligible",
       entityType: "ticker",
       entityId: row.ticker,
-      entityLabel: row.ticker,
+      entityLabel: assetLabel,
       signalId: row.signalId,
       ticker: row.ticker,
+      assetName: row.assetName,
       politicianId: row.politicianId,
       politicianName: row.politicianName,
       score,
       alertTier,
       createdAt,
-      headline: `Watched ticker ${row.ticker} has an alert-eligible signal`,
+      headline: `Watched ticker ${assetLabel} has an alert-eligible signal`,
       subheadline: `${row.politicianName} · Tier ${alertTier.replace("_", " ")} · Score ${Math.round(score)}`,
     });
   }
@@ -162,15 +171,16 @@ function buildSignalActivities(
       type: "high_conviction",
       entityType: "ticker",
       entityId: row.ticker,
-      entityLabel: row.ticker,
+      entityLabel: assetLabel,
       signalId: row.signalId,
       ticker: row.ticker,
+      assetName: row.assetName,
       politicianId: row.politicianId,
       politicianName: row.politicianName,
       score,
       alertTier,
       createdAt,
-      headline: `Watched ticker ${row.ticker} now has a high-conviction signal`,
+      headline: `Watched ticker ${assetLabel} now has a high-conviction signal`,
       subheadline: `${row.politicianName} · Score ${Math.round(score)} · Tier high conviction`,
     });
   }
@@ -192,6 +202,10 @@ function buildClusterActivities(
     }
 
     const latestSignal = cluster.signals[cluster.signals.length - 1];
+    const assetLabel = formatTickerWithName({
+      ticker: cluster.ticker,
+      assetName: latestSignal.assetName,
+    });
     const roundedLatestScore = Math.round(cluster.latestScore);
     const sharedSubheadline = `${pluralizeTrades(cluster.count)} over ${Math.max(
       0,
@@ -203,14 +217,15 @@ function buildClusterActivities(
         type: "ticker_cluster_activity",
         entityType: "ticker",
         entityId: cluster.ticker,
-        entityLabel: cluster.ticker,
+        entityLabel: assetLabel,
         signalId: latestSignal.signalId,
         ticker: cluster.ticker,
+        assetName: latestSignal.assetName,
         politicianId: latestSignal.politicianId,
         politicianName: latestSignal.politicianName,
         score: cluster.latestScore,
         createdAt: cluster.lastTradeDate,
-        headline: `Clustered activity detected for watched ticker ${cluster.ticker}`,
+        headline: `Clustered activity detected for watched ticker ${assetLabel}`,
         subheadline: `${cluster.politician} · ${sharedSubheadline}`,
       });
     }
@@ -223,12 +238,13 @@ function buildClusterActivities(
         entityLabel: cluster.politician,
         signalId: latestSignal.signalId,
         ticker: cluster.ticker,
+        assetName: latestSignal.assetName,
         politicianId: latestSignal.politicianId,
         politicianName: cluster.politician,
         score: cluster.latestScore,
         createdAt: cluster.lastTradeDate,
         headline: `Clustered activity detected for watched politician ${cluster.politician}`,
-        subheadline: `${cluster.ticker} · ${sharedSubheadline}`,
+        subheadline: `${assetLabel} · ${sharedSubheadline}`,
       });
     }
   }
@@ -269,6 +285,7 @@ export async function getWatchlistActivity(userId: string): Promise<WatchlistAct
     .select({
       signalId: researchSignals.id,
       ticker: researchSignals.ticker,
+      assetName: disclosures.assetName,
       politicianId: researchSignals.politicianId,
       politicianName: politicians.fullName,
       signalDate: researchSignals.signalDate,
