@@ -280,3 +280,50 @@ The diagnostics include current senators loaded, metadata reports discovered, ma
 ### Phase 1 recommendation
 
 After Phase 0 metadata matching is reviewed, Phase 1 should fetch a small approved sample of matched PTR view URLs, parse transaction tables into JSON fixtures, and compare parsed owner/ticker/asset/type/amount/date fields against original report pages. Phase 1 should remain dry-run by default and should not insert disclosures until idempotency, amendment handling, source URL coverage, and parser failure diagnostics are approved.
+
+## Phase 1 POC implementation notes (May 28, 2026)
+
+Phase 1 is implemented as a dry-run transaction extraction command:
+
+```bash
+npm run senate:import:poc
+npm run senate:import:poc -- --limit=3
+npm run senate:import:poc -- --limit=5
+npm run senate:import:poc -- --limit=3 --json
+npm run senate:import:poc -- --limit=3 --cache-only
+```
+
+The command is intentionally fixture-only. It never inserts rows into `disclosures`, does not create or update politicians, does not invoke the House importer, and does not run scoring, alert, watchlist, digest, or auth code. The package script points at `scripts/import-senate-disclosures-poc.ts`.
+
+### Phase 1 data flow
+
+1. Load active Senate politicians from the local database for matching context.
+2. Replay the latest `*-report-data-start-*.txt` files in `tmp/senate-disclosures-cache/`, using the same cached Senate eFD metadata shape as `senate:discover -- --replay-cache`.
+3. Select a tiny sample of matched PTR view URLs; the default is three reports and the maximum supported POC limit is five.
+4. Read cached PTR report HTML from `tmp/senate-disclosures-cache/` when available. The stable cache filename is `ptr-report-{uuid}.html` for `/search/view/ptr/{uuid}/` URLs.
+5. Only if no cached page exists and `SENATE_EFD_ACKNOWLEDGED=true` is set, perform a conservative live GET for the public PTR page and cache the raw HTML under `tmp/senate-disclosures-cache/`.
+6. Parse transaction tables from HTML into raw row fixtures and candidate normalized rows.
+7. Write fixtures to `tmp/senate-disclosures-poc/`, or print the full JSON fixture to stdout when `--json` is passed.
+
+### Phase 1 output shape
+
+The top-level fixture contains:
+
+- `mode`, `dryRun`, `disclosureWritesEnabled`, `sourceLabel`, and `generatedAt` metadata.
+- `currentSenatorsLoaded` and `matchedReportsAvailable` discovery/matching context.
+- `diagnostics` with reports attempted, live/cache page counts, parsed report count, extracted row count, normalized row count, skipped report count, parser failure count, missing ticker/amount/trade-date counts, and sample normalized rows.
+- `cache` with the metadata cache directory, replayed report-data files, and fixture output directory.
+- `attempts`, one object per report, including cache/live/skipped source, raw rows, normalized rows, and failures.
+- `rawRows`, a flattened list of extracted table rows with original columns, raw row text, parser confidence, and warnings.
+- `normalizedRows`, a flattened list of candidate-only rows using `sourceLabel = "senate-efd-ptr"`.
+- `parserFailures` and `nextSteps`.
+
+Each normalized candidate row includes filer name, matched `politicianId`, report URL/UUID, filing date, transaction date, filing lag, owner/owner type, ticker, asset name/type, trade type, amount range/min/max, comments, raw row text, parser confidence, warnings, and `sourceLabel`. These rows are deliberately not written to the database.
+
+### Phase 1 limitations
+
+- The parser is HTML-table first. Scanned, image-only, or non-table reports are reported as parser failures and remain future backlog.
+- `--json` prints the fixture instead of writing the output files, which is useful for CI diagnostics and local parser inspection.
+- Live eFD fetches are blocked unless `SENATE_EFD_ACKNOWLEDGED=true` is explicitly set by an operator after reviewing the official acknowledgement page. If eFD returns `403`, the script reports that failure clearly, does not attempt a bypass, and points operators back to cached pages or a later manual retry from an allowed network.
+- The POC accepts only `--limit=1` through `--limit=5` to keep sampling low-volume.
+- Candidate normalization is intentionally conservative: trade type, owner, amount range, ticker casing, parsed trade date, and filing lag are prepared for review only. Idempotency, amendment handling, and any eventual disclosure insertion belong to later approved phases.
