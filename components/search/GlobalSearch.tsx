@@ -272,7 +272,7 @@ export default function GlobalSearch({
 
       {open ? (
         <div
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-gray-950/15 px-4 pt-20 sm:pt-24"
+          className="fixed inset-0 z-[70] flex items-start justify-center bg-transparent px-4 pt-20 sm:pt-24"
           role="presentation"
         >
           <div
@@ -280,7 +280,7 @@ export default function GlobalSearch({
             role="dialog"
             aria-modal="true"
             aria-label="Global search"
-            className="animate-fade-up w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg shadow-gray-950/10"
+            className="animate-fade-up w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl shadow-gray-950/10"
           >
             <div className="border-b border-gray-100 p-3">
               <label className="sr-only" htmlFor="global-search-input">
@@ -294,7 +294,7 @@ export default function GlobalSearch({
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search politicians, tickers, or signals..."
-                className="soft-focus w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-base text-gray-950 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-base text-gray-950 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus-visible:ring-2 focus-visible:ring-gray-200"
               />
             </div>
 

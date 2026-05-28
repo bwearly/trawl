@@ -137,7 +137,7 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-5">
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
             <BackButton
               fallbackHref="/signals"
@@ -148,13 +148,11 @@ export default async function PoliticianDetailPage({ params }: PageProps) {
             </Link>
           </div>
 
-          <div>
-            <WatchButton
-              itemType="politician"
-              politicianId={data.politician.id}
-              initialIsWatching={initialIsWatching}
-            />
-          </div>
+          <WatchButton
+            itemType="politician"
+            politicianId={data.politician.id}
+            initialIsWatching={initialIsWatching}
+          />
         </div>
 
         <section className="animate-fade-up interactive-card rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">

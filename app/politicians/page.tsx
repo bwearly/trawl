@@ -84,6 +84,12 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
   const selectedState = (Array.isArray(params.state) ? params.state[0] : params.state ?? "all").toUpperCase();
   const selectedPartyValue = selectedParty === "ALL" ? "all" : selectedParty;
   const selectedStateValue = selectedState === "ALL" ? "all" : selectedState;
+  const hasActiveFilters =
+    selectedChamber !== "all" ||
+    selectedCoverage !== "active" ||
+    selectedParty !== "ALL" ||
+    selectedState !== "ALL" ||
+    searchQuery.length > 0;
   const rows = await getPoliticianLeaderboard(selectedChamber, selectedCoverage);
   const filteredRows = rows.filter((row) => {
     const searchMatch = searchQuery.length === 0 || row.fullName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -159,7 +165,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
               </div>
             </div>
           </div>
-          <form action="/politicians" className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto] lg:items-end">
+          <form id="politician-filters-form" action="/politicians" className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
             <div>
               <label htmlFor="chamber" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Chamber</label>
               <select id="chamber" name="chamber" defaultValue={selectedChamber} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
@@ -184,11 +190,35 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 <option value="active">Members with disclosures</option><option value="all-members">All members</option>
               </select>
             </div>
-            <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-end lg:col-span-1 lg:justify-end">
-              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">Apply filters</button>
-              <Link href="/politicians" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50">Reset</Link>
-            </div>
+            {hasActiveFilters ? (
+              <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-end lg:col-span-4 lg:justify-end">
+                <Link href="/politicians" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50">Reset filters</Link>
+              </div>
+            ) : null}
           </form>
+
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (() => {
+                  const form = document.getElementById("politician-filters-form");
+                  if (!form) return;
+
+                  const submitFilters = () => {
+                    if (typeof form.requestSubmit === "function") {
+                      form.requestSubmit();
+                      return;
+                    }
+                    form.submit();
+                  };
+
+                  form.querySelectorAll("select").forEach((select) => {
+                    select.addEventListener("change", submitFilters);
+                  });
+                })();
+              `,
+            }}
+          />
 
           <div className="mt-6 overflow-x-auto rounded-xl border border-gray-100 shadow-sm transition duration-300 hover:shadow-md">
             <table className="min-w-full text-sm">
@@ -234,15 +264,20 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     </td>
 
                     <td className="px-4 py-4">
-                      <div className="font-semibold text-gray-900">
-                        {row.totalDisclosures}
-                      </div>
-                      <div className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.totalDisclosures > 0 ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-700"}`}>
-                        {row.totalDisclosures > 0 ? "Has parsed disclosures" : "No parsed stock-trading disclosures yet"}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        Purchases: {row.purchaseCount} · Sales: {row.saleCount}
-                      </div>
+                      {row.totalDisclosures === 0 ? (
+                        <div className="inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
+                          No parsed stock-trading disclosures yet
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-semibold text-gray-900">
+                            {row.totalDisclosures}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            Purchases: {row.purchaseCount} · Sales: {row.saleCount}
+                          </div>
+                        </>
+                      )}
                     </td>
 
                     <td className="px-4 py-4 font-semibold text-gray-900">
