@@ -15,7 +15,9 @@ type SenatorRow = {
 
 type ReportMetadata = {
   filerName: string | null;
+  parsedFullName: string | null;
   filerNameNormalized: string | null;
+  nameParsingStrategy: string;
   bioguideId: string | null;
   state: string | null;
   filingDate: string | null;
@@ -29,10 +31,29 @@ type MatchedReport = ReportMetadata & {
   politicianId: number;
   politicianName: string;
   matchMethod: "bioguideId" | "normalizedNameState" | "normalizedName";
+  matchingStrategy: string;
+};
+
+type CloseMatchCandidate = {
+  politicianId: number;
+  politicianName: string;
+  state: string | null;
+  party: string | null;
+  normalizedName: string | null;
+  score: number;
 };
 
 type UnmatchedReport = ReportMetadata & {
   reason: string;
+  matchingStrategy: string;
+  closeMatchCandidates: CloseMatchCandidate[];
+};
+
+type RosterDiagnostics = {
+  countByParty: Record<string, number>;
+  countByState: Record<string, number>;
+  duplicateBioguideIds: Array<{ bioguideId: string; count: number; senators: Array<Pick<SenatorRow, "id" | "fullName" | "state" | "party">> }>;
+  duplicateNormalizedNameStateRows: Array<{ normalizedName: string; state: string | null; count: number; senators: Array<Pick<SenatorRow, "id" | "fullName" | "state" | "party" | "bioguideId">> }>;
 };
 
 type DiscoveryDiagnostics = {
@@ -41,6 +62,7 @@ type DiscoveryDiagnostics = {
   source: string;
   generatedAt: string;
   currentSenatorsLoaded: number;
+  rosterDiagnostics: RosterDiagnostics;
   metadataReportsDiscovered: number;
   matchedToRoster: number;
   unmatched: number;
@@ -137,17 +159,40 @@ function sleep(ms: number) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 }
 
-function normalizePersonName(value: string | null) {
-  if (!value) return null;
-  const withoutHonorifics = decodeHtmlEntities(value)
-    .replace(/^\s*(the\s+honorable|hon\.?|senator|sen\.?|mr\.?|mrs\.?|ms\.?|dr\.?)\s+/i, "")
-    .replace(/\s+\([^)]*\)\s*$/g, " ")
+function splitNameTokens(value: string | null) {
+  if (!value) return [];
+  return decodeHtmlEntities(value)
+    .replace(/\([^)]*\)/g, " ")
     .replace(/[,.'’\-]/g, " ")
     .replace(/\b(jr|sr|ii|iii|iv)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .toUpperCase();
-  return withoutHonorifics || null;
+    .toUpperCase()
+    .split(" ")
+    .filter(Boolean);
+}
+
+function reorderLastFirstName(value: string) {
+  const [last, ...rest] = value.split(",");
+  if (!last || rest.length === 0) return value;
+  const first = rest.join(",").replace(/\([^)]*\)/g, " ").trim();
+  const cleanLast = last.trim();
+  return first && cleanLast ? `${first} ${cleanLast}` : value;
+}
+
+function removeMiddleInitialTokens(tokens: string[]) {
+  if (tokens.length <= 2) return tokens;
+  return tokens.filter((token, index) => index === 0 || index === tokens.length - 1 || token.length !== 1);
+}
+
+function normalizePersonName(value: string | null) {
+  if (!value) return null;
+  const honorificStripped = decodeHtmlEntities(value)
+    .replace(/^\s*(the\s+honorable|hon\.?|senator|sen\.?|mr\.?|mrs\.?|ms\.?|dr\.?)\s+/i, "")
+    .trim();
+  const reordered = reorderLastFirstName(honorificStripped);
+  const tokens = removeMiddleInitialTokens(splitNameTokens(reordered));
+  return tokens.length > 0 ? tokens.join(" ") : null;
 }
 
 function decodeHtmlEntities(value: string) {
@@ -203,18 +248,110 @@ function extractReportType(cells: string[], rowText: string) {
   return reportTypeCell ? stripTags(reportTypeCell) : rowText.slice(0, 80);
 }
 
-function extractFilerName(cells: string[], rowText: string) {
-  for (const cell of cells) {
-    const text = stripTags(cell);
-    if (!text || /Report|Filed|\d{1,2}\/\d{1,2}\/\d{4}/i.test(text)) continue;
-    const parenName = text.match(/\(([^,()]+),\s*([^()]+)\)/);
-    if (parenName?.[1] && parenName?.[2]) {
-      return `${parenName[2].trim()} ${parenName[1].trim()}`.replace(/\s+/g, " ");
-    }
-    if (/[A-Za-z]/.test(text) && text.length <= 120) return text;
+type ParsedFilerName = {
+  name: string | null;
+  strategy: string;
+};
+
+function normalizeDisplayName(value: string) {
+  return decodeHtmlEntities(value)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b(Senator|Report|Periodic Transaction Report|Filed)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function fullNameFromLastFirst(lastFirst: string) {
+  const commaIndex = lastFirst.lastIndexOf(",");
+  if (commaIndex < 1) return null;
+  const last = normalizeDisplayName(lastFirst.slice(0, commaIndex));
+  const first = normalizeDisplayName(lastFirst.slice(commaIndex + 1));
+  if (!first || !last) return null;
+  return `${first} ${last}`.replace(/\s+/g, " ").trim();
+}
+
+function collapseRepeatedNameTokens<T extends string>(tokens: T[]) {
+  if (tokens.length > 0 && tokens.length % 2 === 0) {
+    const midpoint = tokens.length / 2;
+    const left = tokens.slice(0, midpoint).map((token) => normalizePersonName(token)).join(" ");
+    const right = tokens.slice(midpoint).map((token) => normalizePersonName(token)).join(" ");
+    if (left === right) return tokens.slice(0, midpoint);
   }
+  return tokens;
+}
+
+function splitDisplayNameTokens(value: string) {
+  return normalizeDisplayName(value)
+    .replace(/[,.'’]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+function fullNameFromRepeatedSenatorPattern(prefixBeforeSenator: string) {
+  const commaIndex = prefixBeforeSenator.lastIndexOf(",");
+  if (commaIndex < 1) return null;
+
+  const beforeComma = prefixBeforeSenator.slice(0, commaIndex);
+  const firstPart = prefixBeforeSenator.slice(commaIndex + 1);
+  const firstTokens = splitNameTokens(firstPart);
+  const beforeTokens = splitNameTokens(beforeComma);
+  const firstDisplayTokens = splitDisplayNameTokens(firstPart);
+  let beforeDisplayTokens = splitDisplayNameTokens(beforeComma);
+  if (firstTokens.length === 0 || beforeTokens.length === 0) return null;
+
+  if (firstTokens.every((token, index) => beforeTokens[index] === token)) {
+    beforeDisplayTokens = beforeDisplayTokens.slice(firstTokens.length);
+  }
+
+  const lastDisplayTokens = collapseRepeatedNameTokens(beforeDisplayTokens);
+  if (lastDisplayTokens.length === 0) return null;
+
+  return [...firstDisplayTokens, ...lastDisplayTokens].join(" ");
+}
+
+function extractStructuredFilerName(row: unknown, cells: string[]): ParsedFilerName {
+  if (row && !Array.isArray(row) && typeof row === "object") {
+    const entries = Object.entries(row as Record<string, unknown>);
+    const preferred = entries.find(([key, value]) => /filer|senator|name/i.test(key) && !/report|date|url|link/i.test(key) && /[A-Za-z]/.test(stripTags(String(value ?? ""))));
+    if (preferred) {
+      const text = normalizeDisplayName(stripTags(String(preferred[1] ?? "")));
+      const lastFirst = text.includes(",") ? fullNameFromLastFirst(text) : null;
+      return { name: lastFirst ?? text, strategy: `structuredField:${preferred[0]}` };
+    }
+  }
+
+  for (const [index, cell] of cells.entries()) {
+    const text = normalizeDisplayName(stripTags(cell));
+    if (!text || /Report|Filed|\d{1,2}\/\d{1,2}\/\d{4}/i.test(text)) continue;
+    const lastFirst = text.includes(",") ? fullNameFromLastFirst(text) : null;
+    if (lastFirst) return { name: lastFirst, strategy: `cellLastFirst:${index}` };
+    if (/[A-Za-z]/.test(text) && text.length <= 120 && text.split(/\s+/).length > 1) {
+      return { name: text, strategy: `cellFullName:${index}` };
+    }
+  }
+
+  return { name: null, strategy: "notParsed" };
+}
+
+function extractFilerName(row: unknown, cells: string[], rowText: string): ParsedFilerName {
+  const structured = extractStructuredFilerName(row, cells);
+  if (structured.name) return structured;
+
+  const beforeSenator = rowText.match(/^(.+?)\s*\(\s*Senator\s*\)/i)?.[1]?.trim();
+  if (beforeSenator) {
+    const repeatedPatternName = fullNameFromRepeatedSenatorPattern(beforeSenator);
+    if (repeatedPatternName) return { name: repeatedPatternName, strategy: "rowTextRepeatedLastFirstBeforeSenator" };
+
+    const lastFirst = fullNameFromLastFirst(beforeSenator);
+    if (lastFirst) return { name: lastFirst, strategy: "rowTextLastFirstBeforeSenator" };
+  }
+
   const hon = rowText.match(/The Honorable\s+(.+?)(?:\s+\(|\s+Filed|$)/i);
-  return hon?.[1]?.trim() ?? null;
+  if (hon?.[1]) return { name: normalizeDisplayName(hon[1]), strategy: "rowTextHonorable" };
+
+  return { name: null, strategy: "notParsed" };
 }
 
 function extractState(rowText: string) {
@@ -227,7 +364,8 @@ function reportFromRow(row: unknown): ReportMetadata | null {
   const rowText = stripTags(cells.join(" "));
   const sourceUrl = cells.map(extractHref).find((url): url is string => Boolean(url)) ?? null;
   const reportType = extractReportType(cells, rowText);
-  const filerName = extractFilerName(cells, rowText);
+  const parsedFiler = extractFilerName(row, cells, rowText);
+  const filerName = parsedFiler.name;
   const filingDate = isoDateFromAnyText(rowText);
   const bioguideId = rowText.match(/\b[A-Z]\d{6}\b/)?.[0] ?? null;
   const state = extractState(rowText);
@@ -236,7 +374,9 @@ function reportFromRow(row: unknown): ReportMetadata | null {
 
   return {
     filerName,
+    parsedFullName: filerName,
     filerNameNormalized: normalizePersonName(filerName),
+    nameParsingStrategy: parsedFiler.strategy,
     bioguideId,
     state,
     filingDate,
@@ -349,6 +489,34 @@ async function loadCurrentSenators() {
     .orderBy(politicians.state, politicians.fullName);
 }
 
+function tokenSimilarity(left: string | null, right: string | null) {
+  const leftTokens = new Set(splitNameTokens(left));
+  const rightTokens = new Set(splitNameTokens(right));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return intersection / union;
+}
+
+function closeMatchCandidates(report: ReportMetadata, senators: SenatorRow[]): CloseMatchCandidate[] {
+  return senators
+    .map((senator) => {
+      const normalizedName = normalizePersonName(senator.fullName);
+      const score = tokenSimilarity(report.filerNameNormalized, normalizedName) + (report.state && senator.state === report.state ? 0.1 : 0);
+      return {
+        politicianId: senator.id,
+        politicianName: senator.fullName,
+        state: senator.state,
+        party: senator.party,
+        normalizedName,
+        score: Number(score.toFixed(3)),
+      };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score || a.politicianName.localeCompare(b.politicianName))
+    .slice(0, 5);
+}
+
 function matchReports(reports: ReportMetadata[], senators: SenatorRow[]) {
   const byBioguide = new Map(senators.filter((s) => s.bioguideId).map((s) => [s.bioguideId, s]));
   const byName = new Map<string, SenatorRow[]>();
@@ -365,21 +533,21 @@ function matchReports(reports: ReportMetadata[], senators: SenatorRow[]) {
     if (report.bioguideId) {
       const senator = byBioguide.get(report.bioguideId);
       if (senator) {
-        matched.push({ ...report, politicianId: senator.id, politicianName: senator.fullName, matchMethod: "bioguideId" });
+        matched.push({ ...report, politicianId: senator.id, politicianName: senator.fullName, matchMethod: "bioguideId", matchingStrategy: "bioguideId" });
         continue;
       }
     }
 
     const candidates = report.filerNameNormalized ? byName.get(report.filerNameNormalized) ?? [] : [];
     if (candidates.length === 1) {
-      matched.push({ ...report, politicianId: candidates[0].id, politicianName: candidates[0].fullName, matchMethod: "normalizedName" });
+      matched.push({ ...report, politicianId: candidates[0].id, politicianName: candidates[0].fullName, matchMethod: "normalizedName", matchingStrategy: "exactNormalizedName" });
       continue;
     }
 
     if (candidates.length > 1 && report.state) {
       const stateMatched = candidates.filter((candidate) => candidate.state === report.state);
       if (stateMatched.length === 1) {
-        matched.push({ ...report, politicianId: stateMatched[0].id, politicianName: stateMatched[0].fullName, matchMethod: "normalizedNameState" });
+        matched.push({ ...report, politicianId: stateMatched[0].id, politicianName: stateMatched[0].fullName, matchMethod: "normalizedNameState", matchingStrategy: "exactNormalizedNameAndState" });
         continue;
       }
     }
@@ -387,10 +555,56 @@ function matchReports(reports: ReportMetadata[], senators: SenatorRow[]) {
     unmatched.push({
       ...report,
       reason: candidates.length > 1 ? "ambiguous_normalized_name" : "no_current_senator_match",
+      matchingStrategy: candidates.length > 1 ? "exactNormalizedNameAmbiguous" : "noExactNormalizedNameCandidate",
+      closeMatchCandidates: closeMatchCandidates(report, senators),
     });
   }
 
   return { matched, unmatched };
+}
+
+function summarizeRoster(senators: SenatorRow[]): RosterDiagnostics {
+  const countByParty: Record<string, number> = {};
+  const countByState: Record<string, number> = {};
+  const bioguideGroups = new Map<string, SenatorRow[]>();
+  const nameStateGroups = new Map<string, { normalizedName: string; state: string | null; senators: SenatorRow[] }>();
+
+  for (const senator of senators) {
+    const party = senator.party ?? "unknown";
+    const state = senator.state ?? "unknown";
+    countByParty[party] = (countByParty[party] ?? 0) + 1;
+    countByState[state] = (countByState[state] ?? 0) + 1;
+
+    if (senator.bioguideId) bioguideGroups.set(senator.bioguideId, [...(bioguideGroups.get(senator.bioguideId) ?? []), senator]);
+
+    const normalizedName = normalizePersonName(senator.fullName);
+    if (normalizedName) {
+      const key = `${normalizedName}|${senator.state ?? ""}`;
+      const existing = nameStateGroups.get(key) ?? { normalizedName, state: senator.state, senators: [] };
+      existing.senators.push(senator);
+      nameStateGroups.set(key, existing);
+    }
+  }
+
+  return {
+    countByParty: Object.fromEntries(Object.entries(countByParty).sort(([a], [b]) => a.localeCompare(b))),
+    countByState: Object.fromEntries(Object.entries(countByState).sort(([a], [b]) => a.localeCompare(b))),
+    duplicateBioguideIds: [...bioguideGroups.entries()]
+      .filter(([, rows]) => rows.length > 1)
+      .map(([bioguideId, rows]) => ({
+        bioguideId,
+        count: rows.length,
+        senators: rows.map(({ id, fullName, state, party }) => ({ id, fullName, state, party })),
+      })),
+    duplicateNormalizedNameStateRows: [...nameStateGroups.values()]
+      .filter((group) => group.senators.length > 1)
+      .map((group) => ({
+        normalizedName: group.normalizedName,
+        state: group.state,
+        count: group.senators.length,
+        senators: group.senators.map(({ id, fullName, state, party, bioguideId }) => ({ id, fullName, state, party, bioguideId })),
+      })),
+  };
 }
 
 function summarizeDiagnostics(
@@ -417,6 +631,7 @@ function summarizeDiagnostics(
     source: SOURCE_LABEL,
     generatedAt: new Date().toISOString(),
     currentSenatorsLoaded: senators.length,
+    rosterDiagnostics: summarizeRoster(senators),
     metadataReportsDiscovered: reports.length,
     matchedToRoster: matched.length,
     unmatched: unmatched.length,
@@ -458,6 +673,10 @@ function printDiagnostics(diagnostics: DiscoveryDiagnostics, json: boolean) {
   console.log(`Dry run: ${diagnostics.dryRun}`);
   console.log(`Source: ${diagnostics.source}`);
   console.log(`Current active senators loaded: ${diagnostics.currentSenatorsLoaded}`);
+  console.log(`Roster count by party: ${JSON.stringify(diagnostics.rosterDiagnostics.countByParty)}`);
+  console.log(`Roster count by state: ${JSON.stringify(diagnostics.rosterDiagnostics.countByState)}`);
+  console.log(`Duplicate bioguide IDs: ${JSON.stringify(diagnostics.rosterDiagnostics.duplicateBioguideIds)}`);
+  console.log(`Duplicate normalized name/state rows: ${JSON.stringify(diagnostics.rosterDiagnostics.duplicateNormalizedNameStateRows)}`);
   console.log(`Metadata reports discovered: ${diagnostics.metadataReportsDiscovered}`);
   console.log(`Matched to roster: ${diagnostics.matchedToRoster}`);
   console.log(`Unmatched: ${diagnostics.unmatched}`);
