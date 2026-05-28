@@ -195,6 +195,12 @@ function removeMiddleInitialTokens(tokens: string[]) {
   return tokens.filter((token, index) => index === 0 || index === tokens.length - 1 || token.length !== 1);
 }
 
+const EXPLICIT_NORMALIZED_NAME_ALIASES = new Map<string, string>([
+  ["BERNARDO MORENO", "BERNIE MORENO"],
+  ["MICHAEL ROUNDS", "MIKE ROUNDS"],
+  ["M MICHAEL ROUNDS", "MIKE ROUNDS"],
+]);
+
 function normalizePersonName(value: string | null) {
   if (!value) return null;
   const honorificStripped = decodeHtmlEntities(value)
@@ -202,7 +208,9 @@ function normalizePersonName(value: string | null) {
     .trim();
   const reordered = reorderLastFirstName(honorificStripped);
   const tokens = removeMiddleInitialTokens(splitNameTokens(reordered));
-  return tokens.length > 0 ? tokens.join(" ") : null;
+  if (tokens.length === 0) return null;
+  const normalized = tokens.join(" ");
+  return EXPLICIT_NORMALIZED_NAME_ALIASES.get(normalized) ?? normalized;
 }
 
 function decodeHtmlEntities(value: string) {
@@ -299,6 +307,15 @@ function splitDisplayNameTokens(value: string) {
     .filter(Boolean);
 }
 
+function trailingRepeatedNameTokens<T extends string>(tokens: T[]) {
+  for (let length = Math.floor(tokens.length / 2); length >= 1; length -= 1) {
+    const left = tokens.slice(tokens.length - length * 2, tokens.length - length).map((token) => normalizePersonName(token)).join(" ");
+    const right = tokens.slice(tokens.length - length).map((token) => normalizePersonName(token)).join(" ");
+    if (left && left === right) return tokens.slice(tokens.length - length);
+  }
+  return null;
+}
+
 function fullNameFromRepeatedSenatorPattern(prefixBeforeSenator: string) {
   const commaIndex = prefixBeforeSenator.lastIndexOf(",");
   if (commaIndex < 1) return null;
@@ -315,7 +332,12 @@ function fullNameFromRepeatedSenatorPattern(prefixBeforeSenator: string) {
     beforeDisplayTokens = beforeDisplayTokens.slice(firstTokens.length);
   }
 
-  const lastDisplayTokens = collapseRepeatedNameTokens(beforeDisplayTokens);
+  while (beforeDisplayTokens.length > 1 && normalizePersonName(beforeDisplayTokens[0])?.length === 1) {
+    beforeDisplayTokens = beforeDisplayTokens.slice(1);
+  }
+
+  const repeatedSuffixTokens = trailingRepeatedNameTokens(beforeDisplayTokens);
+  const lastDisplayTokens = repeatedSuffixTokens ?? collapseRepeatedNameTokens(beforeDisplayTokens);
   if (lastDisplayTokens.length === 0) return null;
 
   return [...firstDisplayTokens, ...lastDisplayTokens].join(" ");
@@ -337,6 +359,11 @@ function extractStructuredFilerName(row: unknown, cells: string[]): ParsedFilerN
     if (!text || /Report|Filed|\d{1,2}\/\d{1,2}\/\d{4}/i.test(text)) continue;
     const lastFirst = text.includes(",") ? fullNameFromLastFirst(text) : null;
     if (lastFirst) return { name: lastFirst, strategy: `cellLastFirst:${index}` };
+  }
+
+  for (const [index, cell] of cells.entries()) {
+    const text = normalizeDisplayName(stripTags(cell));
+    if (!text || /Report|Filed|\d{1,2}\/\d{1,2}\/\d{4}/i.test(text)) continue;
     if (/[A-Za-z]/.test(text) && text.length <= 120 && text.split(/\s+/).length > 1) {
       return { name: text, strategy: `cellFullName:${index}` };
     }
@@ -346,9 +373,6 @@ function extractStructuredFilerName(row: unknown, cells: string[]): ParsedFilerN
 }
 
 function extractFilerName(row: unknown, cells: string[], rowText: string): ParsedFilerName {
-  const structured = extractStructuredFilerName(row, cells);
-  if (structured.name) return structured;
-
   const beforeSenator = rowText.match(/^(.+?)\s*\(\s*Senator\s*\)/i)?.[1]?.trim();
   if (beforeSenator) {
     const repeatedPatternName = fullNameFromRepeatedSenatorPattern(beforeSenator);
@@ -357,6 +381,9 @@ function extractFilerName(row: unknown, cells: string[], rowText: string): Parse
     const lastFirst = fullNameFromLastFirst(beforeSenator);
     if (lastFirst) return { name: lastFirst, strategy: "rowTextLastFirstBeforeSenator" };
   }
+
+  const structured = extractStructuredFilerName(row, cells);
+  if (structured.name) return structured;
 
   const hon = rowText.match(/The Honorable\s+(.+?)(?:\s+\(|\s+Filed|$)/i);
   if (hon?.[1]) return { name: normalizeDisplayName(hon[1]), strategy: "rowTextHonorable" };
@@ -760,7 +787,7 @@ function summarizeDiagnostics(
       "Review unmatched reports and name normalization before any import writes.",
       "Phase 1 should fetch a small approved sample of matched PTR view URLs, parse transaction tables to JSON fixtures, and keep disclosure writes disabled by default.",
       "Do not reuse House importer assumptions; keep Senate source labels, idempotency, and diagnostics separate.",
-      "Recommended stale-roster cleanup: later update the roster importer to mark previously roster-imported members inactive when absent from the current source, preserve disclosure-derived historical politicians, and avoid deleting rows.",
+      "Recommended stale-roster cleanup: identify active same-state senators that clearly duplicate canonical current roster rows (for example no-bioguide/no-dataSource rows next to a bioguide-backed row), move any disclosure politicianId references from the stale duplicate to the canonical politician inside a reviewed migration, then deactivate rather than delete the stale row.",
     ],
   };
 }
