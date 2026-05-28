@@ -29,6 +29,34 @@ function formatCurrency(value: string | null) {
   return `$${Number(value).toFixed(2)}`;
 }
 
+function formatDisclosureAmount({
+  amountRangeLabel,
+  amountMin,
+  amountMax,
+}: {
+  amountRangeLabel: string | null;
+  amountMin: number | null;
+  amountMax: number | null;
+}) {
+  const trimmedLabel = amountRangeLabel?.trim();
+  if (trimmedLabel) return trimmedLabel;
+
+  const formatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+
+  if (amountMin != null && amountMax != null) {
+    return `${formatter.format(amountMin)} - ${formatter.format(amountMax)}`;
+  }
+
+  if (amountMin != null) return `${formatter.format(amountMin)}+`;
+  if (amountMax != null) return `Up to ${formatter.format(amountMax)}`;
+
+  return null;
+}
+
 function formatPercent(value: string | null) {
   if (value == null) return "—";
 
@@ -115,6 +143,8 @@ export default async function SignalDetailPage({
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       amountRangeLabel: disclosures.amountRangeLabel,
+      amountMin: disclosures.amountMin,
+      amountMax: disclosures.amountMax,
       sourceUrl: disclosures.sourceUrl,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
@@ -187,6 +217,11 @@ export default async function SignalDetailPage({
     assetName: signal.assetName,
   });
   const normalizedTicker = tickerDisplay.ticker;
+  const disclosureAmount = formatDisclosureAmount({
+    amountRangeLabel: signal.amountRangeLabel,
+    amountMin: signal.amountMin,
+    amountMax: signal.amountMax,
+  });
 
   const anchorDate = signal.tradeDate || signal.filingDate || new Date();
   const chartStartDate = addDays(anchorDate, -30);
@@ -372,6 +407,15 @@ export default async function SignalDetailPage({
               </span>
             </Link>
             </p>
+
+            {disclosureAmount ? (
+              <p className="mt-2 text-sm text-gray-600">
+                Disclosure amount:{" "}
+                <span className="font-semibold text-gray-900">
+                  {disclosureAmount}
+                </span>
+              </p>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
               <span>
