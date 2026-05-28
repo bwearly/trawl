@@ -1,9 +1,6 @@
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { and, eq } from "drizzle-orm";
-import { db } from "../lib/db";
-import { politicians } from "../lib/db/schema";
 
 type SenatorRow = {
   id: number;
@@ -105,6 +102,7 @@ type Options = {
   json: boolean;
   rosterOnly: boolean;
   replayCache: boolean;
+  allowLiveFetch: boolean;
   useCache: boolean;
   delayMs: number;
   pageSize: number;
@@ -120,6 +118,18 @@ const DEFAULT_DELAY_MS = 1_500;
 const MAX_PAGE_SIZE = 25;
 const PTR_REPORT_TYPE_ID = "11";
 const SENATOR_FILER_TYPE_ID = "1";
+const LOCAL_DIAGNOSTICS_NOTICE =
+  "Local parser diagnostics only. Not production ingestion.";
+const LIVE_FETCH_PAUSED_MESSAGE =
+  "Live Senate eFD fetching is paused pending legal/compliance approval.";
+
+function hasSenateEfdLegalApproval() {
+  return process.env.SENATE_EFD_LEGAL_APPROVED === "true";
+}
+
+function hasSenateEfdAcknowledgement() {
+  return process.env.SENATE_EFD_ACKNOWLEDGED === "true";
+}
 
 function parseOptions(argv: string[]): Options {
   let limit = DEFAULT_LIMIT;
@@ -129,6 +139,7 @@ function parseOptions(argv: string[]): Options {
   let rosterOnly = false;
   let useCache = true;
   let replayCache = false;
+  let allowLiveFetch = false;
   let delayMs = DEFAULT_DELAY_MS;
   let pageSize = MAX_PAGE_SIZE;
 
@@ -136,6 +147,7 @@ function parseOptions(argv: string[]): Options {
     if (arg === "--json") json = true;
     else if (arg === "--roster-only") rosterOnly = true;
     else if (arg === "--replay-cache") replayCache = true;
+    else if (arg === "--allow-live-fetch") allowLiveFetch = true;
     else if (arg === "--no-cache") useCache = false;
     else if (arg.startsWith("--limit=")) {
       limit = parsePositiveInt(arg, "--limit", 1, 500);
@@ -154,7 +166,7 @@ function parseOptions(argv: string[]): Options {
     }
   }
 
-  return { limit, days, cacheDir, json, rosterOnly, replayCache, useCache, delayMs, pageSize };
+  return { limit, days, cacheDir, json, rosterOnly, replayCache, allowLiveFetch, useCache, delayMs, pageSize };
 }
 
 function parsePositiveInt(arg: string, name: string, min: number, max: number) {
@@ -521,9 +533,15 @@ function latestCachedReportDataRun(files: CachedReportDataFile[]) {
 async function discoverFromReplayCache(options: Options) {
   const cachedFiles = latestCachedReportDataRun(await listCachedReportDataFiles(options.cacheDir));
   if (cachedFiles.length === 0) {
-    throw new Error(
-      `No cached Senate report-data files found in ${options.cacheDir}. Run a successful acknowledged live discovery later, or point --cache-dir at a directory containing files named like *-report-data-start-0-*.txt.`
-    );
+    return {
+      reports: [],
+      cacheStats: {
+        usedCachedResponses: false,
+        wroteResponses: 0,
+        noNetworkRequests: true,
+        replayedReportDataFiles: [],
+      },
+    };
   }
 
   const reports: ReportMetadata[] = [];
@@ -603,19 +621,32 @@ function buildDataTablesBody(start: number, length: number, days: number) {
 }
 
 async function loadCurrentSenators() {
-  return db
-    .select({
-      id: politicians.id,
-      fullName: politicians.fullName,
-      state: politicians.state,
-      party: politicians.party,
-      bioguideId: politicians.bioguideId,
-      dataSource: politicians.dataSource,
-      createdAt: politicians.createdAt,
-    })
-    .from(politicians)
-    .where(and(eq(politicians.chamber, "senate"), eq(politicians.isActive, true)))
-    .orderBy(politicians.state, politicians.fullName);
+  try {
+    const [{ and, eq }, { db }, { politicians }] = await Promise.all([
+      import("drizzle-orm"),
+      import("../lib/db"),
+      import("../lib/db/schema"),
+    ]);
+
+    return await db
+      .select({
+        id: politicians.id,
+        fullName: politicians.fullName,
+        state: politicians.state,
+        party: politicians.party,
+        bioguideId: politicians.bioguideId,
+        dataSource: politicians.dataSource,
+        createdAt: politicians.createdAt,
+      })
+      .from(politicians)
+      .where(and(eq(politicians.chamber, "senate"), eq(politicians.isActive, true)))
+      .orderBy(politicians.state, politicians.fullName);
+  } catch (error) {
+    console.error(
+      `Could not load active Senate roster from the database: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return [];
+  }
 }
 
 function tokenSimilarity(left: string | null, right: string | null) {
@@ -795,6 +826,9 @@ function summarizeDiagnostics(
     sampleUnmatchedReports: unmatched.slice(0, 5),
     skippedOrFailureReasons: failureReasons,
     nextSteps: [
+      ...(mode === "cache-replay"
+        ? [LOCAL_DIAGNOSTICS_NOTICE]
+        : []),
       "Review unmatched reports and name normalization before any import writes.",
       "Phase 1 should fetch a small approved sample of matched PTR view URLs, parse transaction tables to JSON fixtures, and keep disclosure writes disabled by default.",
       "Do not reuse House importer assumptions; keep Senate source labels, idempotency, and diagnostics separate.",
@@ -945,17 +979,24 @@ async function main() {
 
   if (options.replayCache) {
     failureReasons.push("--replay-cache set; loaded cached report-data responses only and made no Senate eFD network requests.");
+    failureReasons.push(LOCAL_DIAGNOSTICS_NOTICE);
     const { reports, cacheStats } = await discoverFromReplayCache(options);
+    if (cacheStats.replayedReportDataFiles.length === 0)
+      failureReasons.push(
+        `No cached Senate report-data files found in ${options.cacheDir}; replay mode made no network requests.`,
+      );
     const { matched, unmatched } = matchReports(reports, senators);
     const diagnostics = summarizeDiagnostics("cache-replay", senators, reports, matched, unmatched, options, failureReasons, cacheStats);
     printDiagnostics(diagnostics, options.json);
     return;
   }
 
-  if (process.env.SENATE_EFD_ACKNOWLEDGED !== "true") {
-    failureReasons.push(
-      "Senate eFD requires acknowledgement of statutory use prohibitions before searching. Set SENATE_EFD_ACKNOWLEDGED=true only after reviewing and accepting the official acknowledgement at https://efdsearch.senate.gov/search/home/. No eFD requests were made."
-    );
+  if (
+    !options.allowLiveFetch ||
+    !hasSenateEfdLegalApproval() ||
+    !hasSenateEfdAcknowledgement()
+  ) {
+    failureReasons.push(LIVE_FETCH_PAUSED_MESSAGE);
     const diagnostics = summarizeDiagnostics("blocked", senators, [], [], [], options, failureReasons, {
       usedCachedResponses: false,
       wroteResponses: 0,

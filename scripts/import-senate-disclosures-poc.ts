@@ -96,7 +96,8 @@ type Options = {
   cacheDir: string;
   outputDir: string;
   json: boolean;
-  cacheOnly: boolean;
+  replayCache: boolean;
+  allowLiveFetch: boolean;
   delayMs: number;
 };
 
@@ -107,6 +108,18 @@ const DEFAULT_LIMIT = 3;
 const MAX_LIMIT = 5;
 const DEFAULT_DELAY_MS = 1_500;
 const SOURCE_LABEL = "senate-efd-ptr" as const;
+const LOCAL_DIAGNOSTICS_NOTICE =
+  "Local parser diagnostics only. Not production ingestion.";
+const LIVE_FETCH_PAUSED_MESSAGE =
+  "Live Senate eFD fetching is paused pending legal/compliance approval.";
+
+function hasSenateEfdLegalApproval() {
+  return process.env.SENATE_EFD_LEGAL_APPROVED === "true";
+}
+
+function hasSenateEfdAcknowledgement() {
+  return process.env.SENATE_EFD_ACKNOWLEDGED === "true";
+}
 const PLACEHOLDER_TICKERS = new Set([
   "",
   "--",
@@ -122,13 +135,15 @@ function parseOptions(argv: string[]): Options {
   let cacheDir = DEFAULT_CACHE_DIR;
   let outputDir = DEFAULT_OUTPUT_DIR;
   let json = false;
-  let cacheOnly = false;
+  let replayCache = false;
+  let allowLiveFetch = false;
   let delayMs = DEFAULT_DELAY_MS;
 
   for (const arg of argv) {
     if (arg === "--json") json = true;
     else if (arg === "--cache-only" || arg === "--replay-cache")
-      cacheOnly = true;
+      replayCache = true;
+    else if (arg === "--allow-live-fetch") allowLiveFetch = true;
     else if (arg.startsWith("--limit="))
       limit = parsePositiveInt(arg, "--limit", 1, MAX_LIMIT);
     else if (arg.startsWith("--cache-dir="))
@@ -140,7 +155,7 @@ function parseOptions(argv: string[]): Options {
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
-  return { limit, cacheDir, outputDir, json, cacheOnly, delayMs };
+  return { limit, cacheDir, outputDir, json, replayCache, allowLiveFetch, delayMs };
 }
 
 function parsePositiveInt(arg: string, name: string, min: number, max: number) {
@@ -441,10 +456,9 @@ function latestCachedReportDataRun(files: CachedReportDataFile[]) {
     );
 }
 
-async function loadReportsFromDiscoveryCache(cacheDir: string, limit: number) {
-  const cachedFiles = latestCachedReportDataRun(
-    await listCachedReportDataFiles(cacheDir),
-  );
+async function loadReportsFromDiscoveryCache(cacheDir: string) {
+  const allCachedFiles = await listCachedReportDataFiles(cacheDir);
+  const cachedFiles = latestCachedReportDataRun(allCachedFiles);
   const reports: ReportMetadata[] = [];
   for (const file of cachedFiles) {
     const responseText = await readFile(file.path, "utf8");
@@ -452,12 +466,11 @@ async function loadReportsFromDiscoveryCache(cacheDir: string, limit: number) {
     for (const row of parsed.data ?? []) {
       const report = reportFromRow(row);
       if (report) reports.push(report);
-      if (reports.length >= limit * 5) break;
     }
-    if (reports.length >= limit * 5) break;
   }
   return {
     reports,
+    discoveryCacheFilesFound: allCachedFiles.length,
     replayedReportDataFiles: cachedFiles.map((file) => file.fileName),
   };
 }
@@ -501,7 +514,11 @@ function matchReports(reports: ReportMetadata[], senators: SenatorRow[]) {
       );
   }
   return matched.filter(
-    (report) => report.transactionExtractionPossible && report.sourceUrl,
+    (report) =>
+      report.transactionExtractionPossible &&
+      Boolean(report.sourceUrl) &&
+      /\/search\/view\/ptr\//i.test(report.sourceUrl ?? "") &&
+      !/\/search\/view\/paper\//i.test(report.sourceUrl ?? ""),
   );
 }
 
@@ -569,6 +586,15 @@ async function readCachedReportPage(cacheDir: string, url: string) {
   return { html: await readFile(path, "utf8"), path };
 }
 
+
+function looksLikeSenateAcknowledgementOrSessionPage(html: string) {
+  const text = textFromHtml(html).toLowerCase();
+  return (
+    text.includes("prohibition") &&
+    text.includes("financial disclosure reports") &&
+    (text.includes("acknowledge") || text.includes("agreement"))
+  ) || text.includes("csrfmiddlewaretoken");
+}
 class SenateEfdHttpError extends Error {
   constructor(
     readonly status: number,
@@ -594,6 +620,10 @@ async function fetchReportPage(url: string) {
   const body = await response.text();
   if (!response.ok)
     throw new SenateEfdHttpError(response.status, response.statusText, url);
+  if (looksLikeSenateAcknowledgementOrSessionPage(body))
+    throw new Error(
+      "Senate eFD returned an acknowledgement/session page instead of a PTR report. The official site requires interactive/session access; no bypass was attempted and the HTML body was intentionally not printed.",
+    );
   return body;
 }
 
@@ -606,8 +636,11 @@ async function loadReportPage(options: Options, url: string) {
       cachePath: cached.path,
     };
 
-  if (options.cacheOnly || process.env.SENATE_EFD_ACKNOWLEDGED !== "true")
-    return null;
+  const liveFetchAllowed =
+    options.allowLiveFetch &&
+    hasSenateEfdAcknowledgement() &&
+    hasSenateEfdLegalApproval();
+  if (!liveFetchAllowed) return null;
 
   await sleep(options.delayMs);
   const html = await fetchReportPage(url);
@@ -909,11 +942,14 @@ async function attemptReport(
           reportUrl,
           reportUuid,
           reason:
-            process.env.SENATE_EFD_ACKNOWLEDGED === "true"
-              ? "report_page_not_cached_cache_only"
-              : "senate_efd_acknowledgement_required",
+            options.replayCache
+              ? "report_page_html_missing_from_cache"
+              : "live_fetch_not_enabled",
           detail:
-            "No cached report page is available. Set SENATE_EFD_ACKNOWLEDGED=true only after accepting the official eFD acknowledgement, or place cached report HTML in tmp/senate-disclosures-cache/.",
+            options.allowLiveFetch &&
+              (!hasSenateEfdLegalApproval() || !hasSenateEfdAcknowledgement())
+              ? LIVE_FETCH_PAUSED_MESSAGE
+              : "Matched PTR report metadata found, but report page HTML is not cached yet. Re-run with SENATE_EFD_LEGAL_APPROVED=true, SENATE_EFD_ACKNOWLEDGED=true, and --allow-live-fetch to fetch selected PTR report pages only after legal/compliance approval, or manually cache the report HTML. No network requests were made.",
         },
       ],
       warnings: [],
@@ -935,36 +971,91 @@ async function attemptReport(
 function summarize(
   attempts: ReportAttempt[],
   parserFailures: ParserFailure[],
+  discoveryCacheFilesFound: number,
   replayedReportDataFiles: string[],
   currentSenatorsLoaded: number,
-  matchedReportsAvailable: number,
+  matchedPtrReportsAvailable: number,
+  selectedReports: MatchedReport[],
   options: Options,
   rosterWarning: string | null,
+  liveFetchAttempted: boolean,
 ) {
   const rawRows = attempts.flatMap((attempt) => attempt.rawRows);
   const normalizedRows = attempts.flatMap((attempt) => attempt.normalizedRows);
+  const reportPagesMissingCache = attempts
+    .filter((attempt) =>
+      attempt.failures.some((failure) =>
+        ["report_page_html_missing_from_cache", "live_fetch_not_enabled"].includes(
+          failure.reason,
+        ),
+      ),
+    )
+    .map((attempt) => ({
+      reportUrl: attempt.reportUrl,
+      reportUuid: attempt.reportUuid,
+    }));
+  const reportPagesCached = attempts.filter(
+    (attempt) => attempt.source === "cache",
+  ).length;
+  const reportsParsed = attempts.filter(
+    (attempt) => attempt.normalizedRows.length > 0,
+  ).length;
+  const rowsExtracted = rawRows.length;
+  const rowsNormalized = normalizedRows.length;
+  const liveFetchAllowed =
+    options.allowLiveFetch &&
+    hasSenateEfdAcknowledgement() &&
+    hasSenateEfdLegalApproval();
+  const selectedReportUrls = selectedReports
+    .map((report) => report.sourceUrl)
+    .filter((url): url is string => Boolean(url));
+  const selectedReportUuids = selectedReportUrls.map(reportUuidFromUrl);
+
   return {
     mode: "phase-1-poc",
     dryRun: true,
     disclosureWritesEnabled: false,
     sourceLabel: SOURCE_LABEL,
     generatedAt: new Date().toISOString(),
+    complianceNotice: LOCAL_DIAGNOSTICS_NOTICE,
     currentSenatorsLoaded,
-    matchedReportsAvailable,
+    matchedReportsAvailable: matchedPtrReportsAvailable,
+    matchedPtrReportsAvailable,
     rosterWarning,
+    discoveryCacheFilesFound,
+    discoveryCacheFilesReplayed: replayedReportDataFiles.length,
+    selectedReports,
+    selectedReportUrls,
+    selectedReportUuids,
+    reportPagesCached,
+    reportPagesMissingCache,
+    liveFetchAttempted,
+    liveFetchAllowed,
+    reportsAttempted: attempts.length,
+    reportsParsed,
+    rowsExtracted,
+    rowsNormalized,
+    parserFailureCount: parserFailures.length,
     diagnostics: {
+      discoveryCacheFilesFound,
+      discoveryCacheFilesReplayed: replayedReportDataFiles.length,
+      matchedPtrReportsAvailable,
+      selectedReports: selectedReports.length,
+      selectedReportUrls,
+      selectedReportUuids,
+      reportPagesCached,
+      reportPagesMissingCache,
+      liveFetchAttempted,
+      liveFetchAllowed,
       reportsAttempted: attempts.length,
       reportPagesFetchedFromLive: attempts.filter(
         (attempt) => attempt.source === "live",
       ).length,
-      reportPagesReadFromCache: attempts.filter(
-        (attempt) => attempt.source === "cache",
-      ).length,
-      reportsParsed: attempts.filter(
-        (attempt) => attempt.normalizedRows.length > 0,
-      ).length,
-      transactionRowsExtracted: rawRows.length,
-      rowsNormalized: normalizedRows.length,
+      reportPagesReadFromCache: reportPagesCached,
+      reportsParsed,
+      transactionRowsExtracted: rowsExtracted,
+      rowsExtracted,
+      rowsNormalized,
       skippedReportCount: attempts.filter(
         (attempt) => attempt.source === "skipped",
       ).length,
@@ -986,32 +1077,53 @@ function summarize(
     normalizedRows,
     parserFailures,
     nextSteps:
-      attempts.length === 0 ||
-      attempts.every((attempt) => attempt.source === "skipped")
+      reportPagesMissingCache.length > 0
         ? [
-            "Run npm run senate:discover -- --replay-cache --json to confirm metadata cache availability.",
-            "Cache a tiny acknowledged sample of PTR report pages or rerun with SENATE_EFD_ACKNOWLEDGED=true after reviewing the official eFD acknowledgement.",
+            options.allowLiveFetch &&
+              (!hasSenateEfdLegalApproval() || !hasSenateEfdAcknowledgement())
+              ? LIVE_FETCH_PAUSED_MESSAGE
+              : "Matched PTR report metadata found, but report page HTML is not cached yet. Re-run with SENATE_EFD_LEGAL_APPROVED=true, SENATE_EFD_ACKNOWLEDGED=true, and --allow-live-fetch to fetch selected PTR report pages only after legal/compliance approval, or manually cache the report HTML. No network requests were made.",
             "Do not bypass Senate eFD access controls; if live eFD returns 403, use already cached pages or retry manually later from an allowed network.",
+            "Keep Phase 1 dry-run only; no disclosure writes are enabled.",
           ]
-        : [
-            "Review rawRows and normalizedRows fixtures before any future normalization/import phase.",
-            "Keep Phase 1 dry-run only; disclosure insertion belongs to a later approved phase.",
-          ],
+        : attempts.length === 0 ||
+            attempts.every((attempt) => attempt.source === "skipped")
+          ? [
+              "Run npm run senate:discover -- --replay-cache --json to confirm metadata cache availability.",
+              "Cache a tiny legally approved acknowledged sample of PTR report pages or rerun with SENATE_EFD_LEGAL_APPROVED=true, SENATE_EFD_ACKNOWLEDGED=true, and --allow-live-fetch after legal/compliance approval and review of the official eFD acknowledgement.",
+              "Do not bypass Senate eFD access controls; if live eFD returns 403, use already cached pages or retry manually later from an allowed network.",
+            ]
+          : [
+              "Review rawRows and normalizedRows fixtures before any future normalization/import phase.",
+              "Keep Phase 1 dry-run only; disclosure insertion belongs to a later approved phase.",
+            ],
   };
 }
 
 async function main() {
   const options = parseOptions(process.argv.slice(2));
   const { senators, warning: rosterWarning } = await loadCurrentSenators();
-  const { reports, replayedReportDataFiles } =
-    await loadReportsFromDiscoveryCache(options.cacheDir, options.limit);
+  const { reports, discoveryCacheFilesFound, replayedReportDataFiles } =
+    await loadReportsFromDiscoveryCache(options.cacheDir);
   const matchedReports = matchReports(reports, senators);
   const sample = matchedReports.slice(0, options.limit);
   const attempts: ReportAttempt[] = [];
   const parserFailures: ParserFailure[] = [];
+  let liveFetchAttempted = false;
 
   for (const report of sample) {
     try {
+      const cached = await readCachedReportPage(
+        options.cacheDir,
+        report.sourceUrl ?? "unknown",
+      );
+      if (
+        !cached &&
+        options.allowLiveFetch &&
+        hasSenateEfdAcknowledgement() &&
+        hasSenateEfdLegalApproval()
+      )
+        liveFetchAttempted = true;
       const attempt = await attemptReport(options, report);
       attempts.push(attempt);
       parserFailures.push(...attempt.failures);
@@ -1026,7 +1138,7 @@ async function main() {
       };
       if (error instanceof SenateEfdHttpError && error.status === 403) {
         failure.reason = "senate_efd_403";
-        failure.detail = `Senate eFD returned 403 Forbidden for ${error.url}. No bypass was attempted. Use cached report pages if available, or retry manually later from an allowed network after reviewing the official eFD acknowledgement.`;
+        failure.detail = `Senate eFD returned 403 Forbidden for ${error.url}. The official site requires interactive/session access or acknowledgement; no bypass was attempted and the response body was intentionally not printed. Use cached report pages if available, or retry manually later from an allowed network after reviewing the official eFD acknowledgement.`;
         process.exitCode = 2;
       }
       parserFailures.push(failure);
@@ -1050,18 +1162,21 @@ async function main() {
       reportUrl: "cache-replay",
       reportUuid: null,
       reason: "no_matched_ptr_reports_from_discovery_cache",
-      detail: `No matched PTR report URLs were found in ${options.cacheDir}.`,
+      detail: `No matched PTR report URLs were found in the latest Phase 0 cached metadata run in ${options.cacheDir}. Phase 1 does not scrape ${HOME_URL} for report links.`,
     });
   }
 
   const fixture = summarize(
     attempts,
     parserFailures,
+    discoveryCacheFilesFound,
     replayedReportDataFiles,
     senators.length,
     matchedReports.length,
+    sample,
     options,
     rosterWarning,
+    liveFetchAttempted,
   );
 
   if (options.json) {
