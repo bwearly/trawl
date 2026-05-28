@@ -254,21 +254,25 @@ export default function GlobalSearch({
         type="button"
         onClick={() => setOpen(true)}
         className={`soft-hover soft-focus inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-600 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-950 ${
-          variant === "mobile" ? "w-full justify-between px-4 py-3" : "px-3 py-2"
+          variant === "mobile"
+            ? "w-full justify-between px-4 py-3"
+            : "h-8 w-48 justify-between px-3 py-0 lg:w-56"
         }`}
       >
         <span className="inline-flex items-center gap-2">
           <span aria-hidden="true">⌕</span>
           <span>{variant === "mobile" ? "Search Trawl" : "Search"}</span>
         </span>
-        <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 sm:inline">
-          ⌘K
-        </span>
+        {variant === "desktop" ? (
+          <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 sm:inline">
+            ⌘K
+          </span>
+        ) : null}
       </button>
 
       {open ? (
         <div
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-gray-950/35 px-4 pt-20 backdrop-blur-[2px] sm:pt-24"
+          className="fixed inset-0 z-[70] flex items-start justify-center bg-gray-950/15 px-4 pt-20 sm:pt-24"
           role="presentation"
         >
           <div
@@ -276,7 +280,7 @@ export default function GlobalSearch({
             role="dialog"
             aria-modal="true"
             aria-label="Global search"
-            className="animate-fade-up w-full max-w-2xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl"
+            className="animate-fade-up w-full max-w-xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg shadow-gray-950/10"
           >
             <div className="border-b border-gray-100 p-3">
               <label className="sr-only" htmlFor="global-search-input">
@@ -290,7 +294,7 @@ export default function GlobalSearch({
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search politicians, tickers, or signals..."
-                className="soft-focus w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-base text-gray-950 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white"
+                className="soft-focus w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-base text-gray-950 outline-none transition placeholder:text-gray-400 focus:border-gray-300 focus:bg-white"
               />
             </div>
 

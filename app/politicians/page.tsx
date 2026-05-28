@@ -152,26 +152,14 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 </p>
               </div>
 
-            <div className="text-sm text-gray-500">
-              <div className="mb-2">
-                <span className="mr-2">Chamber:</span>
-                <Link href="/politicians" className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">All Congress</Link>
-                <Link href="/politicians?chamber=house" className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">House</Link>
-                <Link href="/politicians?chamber=senate" className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Senate</Link>
-              </div>
+            <div className="text-sm text-gray-500 md:text-right">
               {filteredRows.length} politician{filteredRows.length === 1 ? "" : "s"}
-              <div className="mt-2">
-                <span className="mr-2">Coverage:</span>
-                <Link href={`/politicians${selectedChamber === "all" ? "" : `?chamber=${selectedChamber}`}`} className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Members with disclosures</Link>
-                <Link href={`/politicians?${selectedChamber === "all" ? "" : `chamber=${selectedChamber}&`}coverage=all-members`} className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">All members</Link>
+              <div className="mt-1 text-xs">
+                Use the filters below to refine chamber, party, state, and coverage.
               </div>
             </div>
           </div>
-          <form action="/politicians" className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="lg:col-span-2">
-              <label htmlFor="q" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Search name</label>
-              <input id="q" name="q" defaultValue={searchQuery} placeholder="e.g. Nancy Pelosi" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
-            </div>
+          <form action="/politicians" className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto] lg:items-end">
             <div>
               <label htmlFor="chamber" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Chamber</label>
               <select id="chamber" name="chamber" defaultValue={selectedChamber} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
@@ -196,9 +184,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 <option value="active">Members with disclosures</option><option value="all-members">All members</option>
               </select>
             </div>
-            <div className="flex items-end gap-2">
-              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white">Apply filters</button>
-              <Link href="/politicians" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700">Reset</Link>
+            <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-end lg:col-span-1 lg:justify-end">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">Apply filters</button>
+              <Link href="/politicians" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50">Reset</Link>
             </div>
           </form>
 
@@ -305,7 +293,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     >
                       <p>
                         {rows.length > 0
-                          ? "No members match the current filters. Try broadening the name, chamber, party, state, or coverage filters."
+                          ? "No members match the current filters. Try broadening the chamber, party, state, or coverage filters."
                           : chamberDisclosureCount > 0
                             ? `Disclosure activity exists${selectedChamber === "all" ? "" : ` for ${selectedChamber === "house" ? "House" : "Senate"}`}, but no rows currently satisfy the active leaderboard threshold.`
                             : `No parsed stock-trading disclosure stats are available yet${selectedChamber === "all" ? "." : ` for ${selectedChamber === "house" ? "House" : "Senate"}.`}`}
