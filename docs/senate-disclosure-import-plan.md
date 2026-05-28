@@ -4,7 +4,9 @@ _Last investigated: May 28, 2026._
 
 ## Executive summary
 
-Trawl should treat Senate disclosures as a separate importer family first (`senate:*`) and only feed normalized, idempotent PTR rows into the existing disclosure/scoring pipeline after a proof-of-concept validates the source behavior. The recommended source is the official Senate eFD public search system because it is the authoritative public source for Senator, former Senator, and Senate candidate reports from 2012-present, but it is not a simple bulk structured export and it includes explicit use restrictions that must be respected.
+Trawl should treat Senate disclosures as a separate importer family first (`senate:*`) and only feed normalized, idempotent PTR rows into the existing disclosure/scoring pipeline after a proof-of-concept validates the source behavior and legal/compliance approval confirms the intended use is allowed. The official Senate eFD public search system is authoritative for Senator, former Senator, and Senate candidate reports from 2012-present, but it is not a simple bulk structured export and it includes explicit Ethics in Government Act use restrictions that must be respected.
+
+**Current status:** live Senate eFD fetching and any production ingestion are paused pending legal/compliance approval. Until approval is explicit, Senate commands are limited to local roster diagnostics and replaying already-cached Phase 0 metadata/report fixtures for parser diagnostics only; these commands are local parser diagnostics only. Not production ingestion.
 
 ## Sources investigated
 
@@ -220,23 +222,24 @@ Do not build the full Senate importer in this pass. Build a separate Senate pipe
 Phase 0 is implemented as a dry-run metadata discovery command:
 
 ```bash
-npm run senate:discover -- --roster-only
-SENATE_EFD_ACKNOWLEDGED=true npm run senate:discover -- --limit=50 --days=90
-SENATE_EFD_ACKNOWLEDGED=true npm run senate:discover -- --json --limit=50 --days=90
+npm run senate:discover -- --roster-only --json
+npm run senate:discover -- --replay-cache --json
 ```
 
-The command intentionally performs no disclosure inserts and does not call the existing House PTR importer. It loads active Senate roster rows from `politicians` where `chamber = 'senate'` and `is_active = true`, then only attempts Senate eFD requests when the operator explicitly sets `SENATE_EFD_ACKNOWLEDGED=true` after reviewing and accepting the public eFD acknowledgement at <https://efdsearch.senate.gov/search/home/>.
+The command intentionally performs no disclosure inserts and does not call the existing House PTR importer. It loads active Senate roster rows from `politicians` where `chamber = 'senate'` and `is_active = true`. Live Senate eFD discovery is currently disabled in production. Any live fetch path requires `SENATE_EFD_LEGAL_APPROVED=true`, `SENATE_EFD_ACKNOWLEDGED=true`, and the explicit `--allow-live-fetch` CLI flag; do not run live discovery until legal/compliance approval confirms the intended use is allowed.
 
 ### Access and legal posture
 
 - The official public eFD site requires acknowledgement of Ethics in Government Act use restrictions before search access.
-- The script does not silently bypass that acknowledgement. Without `SENATE_EFD_ACKNOWLEDGED=true`, it emits diagnostics and exits with a blocked status before making eFD requests.
-- The script only targets the public eFD acknowledgement page and report metadata search endpoint; it does not attempt CAPTCHA bypass, credentialed access, hidden administrative paths, or transaction-row scraping.
-- Operators must not use reports for prohibited purposes, including credit decisions, fundraising/solicitation, unlawful use, or personalized investment advice.
+- The acknowledgement warns that obtaining or using financial disclosure reports is unlawful for prohibited purposes, including commercial purposes other than news and communications media dissemination to the general public. Trawl may eventually be commercial, so live Senate eFD fetching is paused pending legal/compliance approval.
+- The scripts do not silently bypass that acknowledgement. If any live-fetch control is missing, the scripts emit: “Live Senate eFD fetching is paused pending legal/compliance approval.”
+- Even after legal/compliance approval, live fetching also requires `SENATE_EFD_ACKNOWLEDGED=true` after reviewing and accepting the official public eFD acknowledgement.
+- The script only targets the public eFD acknowledgement page and report metadata search endpoint when live discovery is explicitly approved; it does not attempt CAPTCHA bypass, credentialed access, hidden administrative paths, or transaction-row scraping.
+- Operators must not use reports for prohibited purposes, including credit decisions, fundraising/solicitation, unlawful use, impermissible commercial use, or personalized investment advice.
 
 ### Metadata discovery behavior
 
-When acknowledged, the script uses a conservative DataTables metadata query for Senator PTR reports (`report_types=[11]`, `filer_types=[1]`) over a recent submitted-date window. It caches raw home/acknowledgement/search responses under `tmp/senate-disclosures-cache/`, which is ignored by git, and rate-limits requests with a default 1.5 second delay and maximum page size of 25.
+When legally approved and acknowledged, the script can use a conservative DataTables metadata query for Senator PTR reports (`report_types=[11]`, `filer_types=[1]`) over a recent submitted-date window. Live use is currently disallowed pending legal/compliance approval. Replay-cache mode remains allowed because it reads existing local cache files only and makes no network requests. It is local parser diagnostics only. Not production ingestion.
 
 Report matching is diagnostics-only:
 
@@ -286,14 +289,20 @@ After Phase 0 metadata matching is reviewed, Phase 1 should fetch a small approv
 Phase 1 is implemented as a dry-run transaction extraction command:
 
 ```bash
-npm run senate:import:poc
-npm run senate:import:poc -- --limit=3
-npm run senate:import:poc -- --limit=5
-npm run senate:import:poc -- --limit=3 --json
-npm run senate:import:poc -- --limit=3 --cache-only
+npm run senate:import:poc -- --limit=3 --replay-cache --json
+```
+
+Disallowed while paused pending legal/compliance approval:
+
+```bash
+SENATE_EFD_ACKNOWLEDGED=true npm run senate:discover -- --limit=50 --days=90 --allow-live-fetch
+SENATE_EFD_ACKNOWLEDGED=true npm run senate:import:poc -- --limit=3 --allow-live-fetch --json
+npm run senate:import:poc -- --limit=3 --allow-live-fetch --json
 ```
 
 The command is intentionally fixture-only. It never inserts rows into `disclosures`, does not create or update politicians, does not invoke the House importer, and does not run scoring, alert, watchlist, digest, or auth code. The package script points at `scripts/import-senate-disclosures-poc.ts`.
+
+Phase 1 starts from cached Phase 0 report metadata files (`*-report-data-start-<n>-*.txt`) in `tmp/senate-disclosures-cache/`. It must not scrape `/search/home/` as the report-link source. The Senate eFD acknowledgement page and statutory use restrictions must be respected; live report-page fetching is currently paused and, if later approved, is guarded by `SENATE_EFD_LEGAL_APPROVED=true`, `SENATE_EFD_ACKNOWLEDGED=true`, and `--allow-live-fetch`.
 
 ### Phase 1 data flow
 
@@ -301,7 +310,7 @@ The command is intentionally fixture-only. It never inserts rows into `disclosur
 2. Replay the latest `*-report-data-start-*.txt` files in `tmp/senate-disclosures-cache/`, using the same cached Senate eFD metadata shape as `senate:discover -- --replay-cache`.
 3. Select a tiny sample of matched PTR view URLs; the default is three reports and the maximum supported POC limit is five.
 4. Read cached PTR report HTML from `tmp/senate-disclosures-cache/` when available. The stable cache filename is `ptr-report-{uuid}.html` for `/search/view/ptr/{uuid}/` URLs.
-5. Only if no cached page exists and `SENATE_EFD_ACKNOWLEDGED=true` is set, perform a conservative live GET for the public PTR page and cache the raw HTML under `tmp/senate-disclosures-cache/`.
+5. Live PTR page fetching is paused. If later approved, only if no cached page exists and `SENATE_EFD_LEGAL_APPROVED=true`, `SENATE_EFD_ACKNOWLEDGED=true`, and `--allow-live-fetch` are all set, perform a conservative live GET for the public PTR page and cache the raw HTML under `tmp/senate-disclosures-cache/`.
 6. Parse transaction tables from HTML into raw row fixtures and candidate normalized rows.
 7. Write fixtures to `tmp/senate-disclosures-poc/`, or print the full JSON fixture to stdout when `--json` is passed.
 
@@ -324,6 +333,6 @@ Each normalized candidate row includes filer name, matched `politicianId`, repor
 
 - The parser is HTML-table first. Scanned, image-only, or non-table reports are reported as parser failures and remain future backlog.
 - `--json` prints the fixture instead of writing the output files, which is useful for CI diagnostics and local parser inspection.
-- Live eFD fetches are blocked unless `SENATE_EFD_ACKNOWLEDGED=true` is explicitly set by an operator after reviewing the official acknowledgement page. If eFD returns `403`, the script reports that failure clearly, does not attempt a bypass, and points operators back to cached pages or a later manual retry from an allowed network.
+- Live eFD fetches are blocked unless `SENATE_EFD_LEGAL_APPROVED=true` is explicitly set after legal/compliance approval, `SENATE_EFD_ACKNOWLEDGED=true` is explicitly set by an operator after reviewing the official acknowledgement page, and `--allow-live-fetch` is explicitly passed. If any control is missing, the scripts fail with: “Live Senate eFD fetching is paused pending legal/compliance approval.” If eFD returns `403` or an acknowledgement/session response after future approval, the script reports that failure clearly, does not attempt a bypass, and points operators back to cached pages or a later manual retry from an allowed network.
 - The POC accepts only `--limit=1` through `--limit=5` to keep sampling low-volume.
 - Candidate normalization is intentionally conservative: trade type, owner, amount range, ticker casing, parsed trade date, and filing lag are prepared for review only. Idempotency, amendment handling, and any eventual disclosure insertion belong to later approved phases.

@@ -343,46 +343,25 @@ The workflow also sets:
 Alert backfill behavior can still be scoped depending on how `alerts:backfill` is configured at runtime (for example, if `ALERT_BACKFILL_USER_ID` is provided).
 
 
-## Senate PTR importer POC (read-only by default, experimental manual DB write mode)
+## Senate eFD research scripts (paused; local diagnostics only)
 
-A Senate importer proof of concept is available for bounded, read-only normalization experiments:
+Senate eFD live fetching and production ingestion are paused pending legal/compliance approval. The Senate scripts are research-only and are not wired into the app runtime, daily pipeline, cron jobs, deployment workflows, House import pipeline, scoring, alerts, watchlist, or digest logic.
 
-```bash
-npm run senate:import:poc -- --limit=5
-```
-
-Optional flags:
+Allowed local diagnostics only:
 
 ```bash
-# optional year hint for future network search flow work
-npm run senate:import:poc -- --limit=5 --year=2026
-
-# manual mode: parse a locally downloaded Senate report HTML/text file
-npm run senate:import:poc -- --input-file=tmp/senate-report.html
-
-# manual directory mode: parse all local Senate report .html/.htm files in a folder
-npm run senate:import:poc -- --input-dir="/Users/blakeearly/Downloads/senate-reports" --write
-
-# manual write mode (experimental): writes normalized rows to DB
-npm run senate:import:poc -- --input-file=tmp/senate-report.html --write
+npm run senate:discover -- --roster-only --json
+npm run senate:discover -- --replay-cache --json
+npm run senate:import:poc -- --limit=3 --replay-cache --json
 ```
 
 Notes:
 
-- Senate support is currently **POC-only** and manual DB import remains **experimental**.
-- Default behavior remains **read-only** (no DB writes) unless `--write` is explicitly passed.
-- The POC is **not** wired into the daily pipeline/cron jobs.
-- The importer requires a **locally downloaded Senate eFD PTR HTML report** as input for manual mode.
-- Senate eFD source access constraints/terms must be reviewed before any production ingestion path.
-
-After running a manual `--write` import, run downstream scripts manually:
-
-```bash
-npm run prices:import
-npm run performance:backfill:daily
-npm run politicians:backfill
-npm run signals:recalculate
-```
+- Replay/cache output is **local parser diagnostics only. Not production ingestion.**
+- The Phase 1 POC remains dry-run only and reports `disclosureWritesEnabled: false`; it does not insert Senate disclosure rows.
+- Do **not** run live Senate eFD fetches in production.
+- Any future live fetch path must require all three controls: `SENATE_EFD_ACKNOWLEDGED=true`, `SENATE_EFD_LEGAL_APPROVED=true`, and the explicit `--allow-live-fetch` CLI flag.
+- If any live-fetch control is missing, scripts fail with: “Live Senate eFD fetching is paused pending legal/compliance approval.”
 
 ## House metadata backfill notes
 
