@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import DevIdentitySwitcher from "@/components/dev/DevIdentitySwitcher";
 import AuthNavControls from "@/components/auth/AuthNavControls";
 import AlertsBellLink from "@/components/alerts/AlertsBellLink";
+import GlobalSearch from "@/components/search/GlobalSearch";
 
 const baseNavItems = [
   { href: "/", label: "Home" },
@@ -60,6 +61,9 @@ export default function GlobalNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <div className="hidden md:block">
+            <GlobalSearch />
+          </div>
           <AlertsBellLink />
           <div className="hidden sm:block">
             <AuthNavControls />
@@ -131,6 +135,10 @@ export default function GlobalNav() {
               <span className="sr-only">Close navigation menu</span>
               ×
             </button>
+          </div>
+
+          <div className="mt-4">
+            <GlobalSearch variant="mobile" onNavigate={() => setMobileMenuOpen(false)} />
           </div>
 
           <nav className="mt-4 space-y-1" aria-label="Mobile primary navigation">
