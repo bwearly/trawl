@@ -7,10 +7,12 @@ import SignalStrengthBadge from "@/components/signals/SignalStrengthBadge";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 import { getFilingFreshnessLabel, isRecentlyFiled } from "@/lib/domain/signals/filing-freshness";
 import { getSignalDisplayLabel, getSignalDisplayScore } from "@/lib/domain/scoring/displayScore";
+import { getTickerDisplayParts } from "@/lib/domain/tickers/displayTicker";
 
 type SignalCardProps = {
   signalId: number;
   ticker: string | null;
+  assetName?: string | null;
   score: string;
   performanceScore?: string | null;
   signalStage?: string;
@@ -75,11 +77,6 @@ function getFreshnessStyles(label: string) {
   if (label === "Historical") return "bg-gray-200 text-gray-700 ring-gray-300";
   return "bg-gray-100 text-gray-700 ring-gray-200";
 }
-function getDisplayTicker(rawTicker: string | null | undefined) {
-  const normalized = (rawTicker ?? "").trim();
-  return normalized.length > 0 ? normalized.toUpperCase() : null;
-}
-
 function formatComponentScore(value: string | null | undefined) {
   if (value == null) return null;
   const numeric = Number(value);
@@ -90,6 +87,7 @@ function formatComponentScore(value: string | null | undefined) {
 export default function SignalCard({
   signalId,
   ticker,
+  assetName,
   score,
   signalStatus,
   politicianId,
@@ -118,7 +116,8 @@ export default function SignalCard({
 }: SignalCardProps) {
   const filingTimelinessLabel = getFilingFreshnessLabel(filingLagDays);
   const isFresh = isRecentlyFiled(filingDate);
-  const displayTicker = getDisplayTicker(ticker);
+  const tickerDisplay = getTickerDisplayParts({ ticker, assetName });
+  const displayTicker = tickerDisplay.ticker;
   const freshnessBadgeCopy = isFresh ? "Fresh" : filingTimelinessLabel === "Historical" ? "Historical / Not actionable" : filingTimelinessLabel;
   const alertTier = getSignalAlertTier({
     score,
@@ -171,12 +170,23 @@ export default function SignalCard({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           {displayTicker ? (
-            <Link
-              href={`/tickers/${displayTicker}`}
-              className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-900 transition soft-hover soft-focus hover:bg-gray-200"
-            >
-              {displayTicker}
-            </Link>
+            <div className="flex max-w-full flex-col items-start gap-1">
+              <Link
+                href={`/tickers/${displayTicker}`}
+                className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-900 transition soft-hover soft-focus hover:bg-gray-200"
+              >
+                {displayTicker}
+              </Link>
+              {tickerDisplay.secondary ? (
+                <p className="max-w-xs text-xs leading-4 text-gray-500 sm:max-w-sm">
+                  {tickerDisplay.secondary}
+                </p>
+              ) : null}
+            </div>
+          ) : tickerDisplay.primary ? (
+            <span className="inline-flex max-w-xs rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-700 ring-1 ring-inset ring-gray-200">
+              {tickerDisplay.primary}
+            </span>
           ) : (
             <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
               No ticker

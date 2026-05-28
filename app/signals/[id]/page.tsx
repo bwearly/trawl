@@ -19,6 +19,7 @@ import WatchButton from "@/components/watchlist/WatchButton";
 import { getSignalAlertTier } from "@/lib/domain/alerts/get-signal-alert-tier";
 import { getSignalConfidenceTier } from "@/lib/domain/signals/get-signal-confidence-tier";
 import { getSignalTakeaways } from "@/lib/domain/signals/get-signal-takeaways";
+import { getTickerDisplayParts } from "@/lib/domain/tickers/displayTicker";
 import {
   isTickerWatched,
 } from "@/lib/domain/watchlists/watchlists";
@@ -108,6 +109,7 @@ export default async function SignalDetailPage({
       score: researchSignals.score,
       signalStatus: researchSignals.signalStatus,
       ticker: disclosures.ticker,
+      assetName: disclosures.assetName,
       tradeType: disclosures.tradeType,
       filingLagDays: disclosures.filingLagDays,
       tradeDate: disclosures.tradeDate,
@@ -179,7 +181,11 @@ export default async function SignalDetailPage({
     );
   }
 
-  const normalizedTicker = signal.ticker ?? null;
+  const tickerDisplay = getTickerDisplayParts({
+    ticker: signal.ticker,
+    assetName: signal.assetName,
+  });
+  const normalizedTicker = tickerDisplay.ticker;
 
   const anchorDate = signal.tradeDate || signal.filingDate || new Date();
   const chartStartDate = addDays(anchorDate, -30);
@@ -321,12 +327,23 @@ export default async function SignalDetailPage({
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-3">
               {normalizedTicker ? (
-                <Link
-                  href={`/tickers/${normalizedTicker}`}
-                  className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition soft-hover soft-focus hover:bg-gray-200"
-                >
-                  {normalizedTicker}
-                </Link>
+                <div className="flex max-w-full flex-col items-start gap-1">
+                  <Link
+                    href={`/tickers/${normalizedTicker}`}
+                    className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-2xl font-semibold tracking-tight text-gray-950 transition soft-hover soft-focus hover:bg-gray-200"
+                  >
+                    {normalizedTicker}
+                  </Link>
+                  {tickerDisplay.secondary ? (
+                    <p className="max-w-xl text-sm leading-5 text-gray-500">
+                      {tickerDisplay.secondary}
+                    </p>
+                  ) : null}
+                </div>
+              ) : tickerDisplay.primary ? (
+                <span className="inline-flex max-w-xl rounded-full bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-200">
+                  {tickerDisplay.primary}
+                </span>
               ) : (
                 <span className="inline-flex rounded-full bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
                   Ticker unavailable

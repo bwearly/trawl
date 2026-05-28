@@ -11,6 +11,7 @@ import type {
   SignalFilters as SignalFiltersType,
   SignalRow,
 } from "@/lib/domain/signals/signals";
+import { getTickerDisplayParts } from "@/lib/domain/tickers/displayTicker";
 
 type SignalsFeedClientProps = {
   initialSignals: SignalRow[];
@@ -44,6 +45,7 @@ function toFeedSignal(row: SignalRow): FeedSignal {
   return {
     signalId: row.signalId,
     ticker: row.ticker ?? "NO_TICKER",
+    assetName: row.assetName,
     politician: row.politicianName,
     tradeType: row.tradeType,
     tradeDate,
@@ -151,6 +153,7 @@ export default function SignalsFeedClient({
                   key={`single-${item.signal.signalId}`}
                   signalId={signal.signalId}
                   ticker={signal.ticker === "NO_TICKER" ? null : signal.ticker}
+                  assetName={signal.assetName}
                   score={signal.score}
                   signalStatus={signal.signalStatus}
                   politicianId={signal.politicianId}
@@ -181,6 +184,10 @@ export default function SignalsFeedClient({
             }
 
             const newestSignal = item.cluster.signals[item.cluster.signals.length - 1];
+            const clusterTickerDisplay = getTickerDisplayParts({
+              ticker: item.cluster.ticker,
+              assetName: newestSignal.row.assetName,
+            });
 
             return (
               <article
@@ -207,12 +214,19 @@ export default function SignalsFeedClient({
                     <p className="mt-1 text-sm text-gray-600">{item.summary.subheadline}</p>
                   </div>
 
-                  <Link
-                    href={`/tickers/${item.cluster.ticker}`}
-                    className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
-                  >
-                    {item.cluster.ticker}
-                  </Link>
+                  <div className="flex max-w-full flex-col items-start gap-1 sm:items-end">
+                    <Link
+                      href={`/tickers/${item.cluster.ticker}`}
+                      className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold tracking-wide text-gray-900 transition hover:bg-gray-200"
+                    >
+                      {clusterTickerDisplay.primary ?? item.cluster.ticker}
+                    </Link>
+                    {clusterTickerDisplay.secondary ? (
+                      <p className="max-w-xs text-xs leading-4 text-gray-500 sm:text-right">
+                        {clusterTickerDisplay.secondary}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2.5">

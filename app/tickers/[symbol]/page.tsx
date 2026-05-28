@@ -14,6 +14,7 @@ import {
   getWinRateTone,
   toneToClass,
 } from "@/components/analytics/detail-ui";
+import { getTickerDisplayParts } from "@/lib/domain/tickers/displayTicker";
 
 type PageProps = {
   params: Promise<{
@@ -87,6 +88,10 @@ export default async function TickerDetailPage({ params }: PageProps) {
 
   const verdict = getVerdict(data.stats.avgAlpha30d, data.stats.winRate30d);
   const avgAlpha30d = formatPercent(data.stats.avgAlpha30d);
+  const tickerDisplay = getTickerDisplayParts({
+    ticker: data.ticker,
+    assetName: data.assetName,
+  });
 
   return (
     <main className="min-h-screen bg-gray-50 p-6">
@@ -121,8 +126,13 @@ export default async function TickerDetailPage({ params }: PageProps) {
               </p>
 
               <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-gray-950 sm:text-4xl">
-                {data.ticker}
+                {tickerDisplay.primary ?? data.ticker}
               </h1>
+              {tickerDisplay.secondary ? (
+                <p className="mt-1 text-base leading-6 text-gray-500 sm:text-lg">
+                  {tickerDisplay.secondary}
+                </p>
+              ) : null}
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {initialIsWatching && (
@@ -130,9 +140,6 @@ export default async function TickerDetailPage({ params }: PageProps) {
                     Watching
                   </span>
                 )}
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
-                  {data.assetName}
-                </span>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-200">
                   {data.stats.totalDisclosures} disclosures
                 </span>

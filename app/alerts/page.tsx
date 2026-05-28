@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getPersonalizedUserIdentity } from "@/lib/auth/get-current-user-id";
 import { getAlerts } from "@/lib/domain/alerts/alerts";
 import BackButton from "@/components/navigation/BackButton";
+import { getTickerDisplayParts } from "@/lib/domain/tickers/displayTicker";
 
 export const metadata: Metadata = {
   title: "Alerts | Trawl",
@@ -205,6 +206,19 @@ export default async function AlertsPage() {
                     <div className="mt-3 text-base font-semibold text-gray-950">
                       {alert.title}
                     </div>
+
+                    {(() => {
+                      const tickerDisplay = getTickerDisplayParts({
+                        ticker: alert.ticker,
+                        assetName: alert.assetName,
+                      });
+
+                      return tickerDisplay.secondary ? (
+                        <div className="mt-1 text-xs text-gray-500">
+                          {tickerDisplay.ticker} · {tickerDisplay.secondary}
+                        </div>
+                      ) : null;
+                    })()}
 
                     {alert.message && (
                       <div className="mt-1 text-sm text-gray-600">
