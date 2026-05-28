@@ -111,6 +111,10 @@ export default function SignalFilters({
     setTradeType(defaultValues.tradeType);
     setParty(defaultValues.party);
     setChamber(defaultValues.chamber);
+    lastAppliedTextFilters.current = {
+      ticker: defaultValues.ticker,
+      politician: defaultValues.politician,
+    };
     setTicker(defaultValues.ticker);
     setPolitician(defaultValues.politician);
     setDraftTicker(defaultValues.ticker);
@@ -121,7 +125,30 @@ export default function SignalFilters({
 
   const hasMounted = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastAppliedTextFilters = useRef({
+    ticker: initialFilters.ticker,
+    politician: initialFilters.politician,
+  });
 
+  function applyTickerFilter(value = draftTicker) {
+    const nextTicker = value.trim();
+    setDraftTicker(nextTicker);
+
+    if (lastAppliedTextFilters.current.ticker === nextTicker) return;
+
+    lastAppliedTextFilters.current.ticker = nextTicker;
+    setTicker(nextTicker);
+  }
+
+  function applyPoliticianFilter(value = draftPolitician) {
+    const nextPolitician = value.trim();
+    setDraftPolitician(nextPolitician);
+
+    if (lastAppliedTextFilters.current.politician === nextPolitician) return;
+
+    lastAppliedTextFilters.current.politician = nextPolitician;
+    setPolitician(nextPolitician);
+  }
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -148,7 +175,14 @@ export default function SignalFilters({
           sort,
         });
 
-        const response = await fetch(`/api/signals?${params.toString()}`, {
+        const queryString = params.toString();
+        window.history.replaceState(
+          null,
+          "",
+          queryString ? `/signals?${queryString}` : "/signals"
+        );
+
+        const response = await fetch(`/api/signals?${queryString}`, {
           signal: controller.signal,
         });
 
@@ -188,17 +222,6 @@ export default function SignalFilters({
     onLoadingChange,
   ]);
 
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setTicker(draftTicker.trim());
-      setPolitician(draftPolitician.trim());
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [draftTicker, draftPolitician]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -429,6 +452,13 @@ export default function SignalFilters({
             <input
               value={draftTicker}
               onChange={(event) => setDraftTicker(event.target.value)}
+              onBlur={(event) => applyTickerFilter(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyTickerFilter(event.currentTarget.value);
+                }
+              }}
               disabled={isLoading}
               placeholder="e.g. NVDA"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
@@ -442,6 +472,13 @@ export default function SignalFilters({
             <input
               value={draftPolitician}
               onChange={(event) => setDraftPolitician(event.target.value)}
+              onBlur={(event) => applyPoliticianFilter(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyPoliticianFilter(event.currentTarget.value);
+                }
+              }}
               disabled={isLoading}
               placeholder="e.g. Pelosi"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-gray-100"
