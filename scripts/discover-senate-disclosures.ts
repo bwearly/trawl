@@ -196,6 +196,9 @@ function removeMiddleInitialTokens(tokens: string[]) {
 }
 
 const EXPLICIT_NORMALIZED_NAME_ALIASES = new Map<string, string>([
+  ["A MITCHELL MCCONNELL", "MITCH MCCONNELL"],
+  ["MITCHELL MCCONNELL", "MITCH MCCONNELL"],
+  ["WILLIAM HAGERTY", "BILL HAGERTY"],
   ["BERNARDO MORENO", "BERNIE MORENO"],
   ["MICHAEL ROUNDS", "MIKE ROUNDS"],
   ["M MICHAEL ROUNDS", "MIKE ROUNDS"],
@@ -307,6 +310,14 @@ function splitDisplayNameTokens(value: string) {
     .filter(Boolean);
 }
 
+function isSuffixNameToken(token: string) {
+  return /^(jr|sr|ii|iii|iv)$/i.test(token.replace(/[,.'’]/g, ""));
+}
+
+function withoutSuffixNameTokens<T extends string>(tokens: T[]) {
+  return tokens.filter((token) => !isSuffixNameToken(token));
+}
+
 function trailingRepeatedNameTokens<T extends string>(tokens: T[]) {
   for (let length = Math.floor(tokens.length / 2); length >= 1; length -= 1) {
     const left = tokens.slice(tokens.length - length * 2, tokens.length - length).map((token) => normalizePersonName(token)).join(" ");
@@ -324,8 +335,8 @@ function fullNameFromRepeatedSenatorPattern(prefixBeforeSenator: string) {
   const firstPart = prefixBeforeSenator.slice(commaIndex + 1);
   const firstTokens = splitNameTokens(firstPart);
   const beforeTokens = splitNameTokens(beforeComma);
-  const firstDisplayTokens = splitDisplayNameTokens(firstPart);
-  let beforeDisplayTokens = splitDisplayNameTokens(beforeComma);
+  const firstDisplayTokens = withoutSuffixNameTokens(splitDisplayNameTokens(firstPart));
+  let beforeDisplayTokens = withoutSuffixNameTokens(splitDisplayNameTokens(beforeComma));
   if (firstTokens.length === 0 || beforeTokens.length === 0) return null;
 
   if (firstTokens.every((token, index) => beforeTokens[index] === token)) {
