@@ -115,6 +115,7 @@ export default async function SignalDetailPage({
       tradeDate: disclosures.tradeDate,
       filingDate: disclosures.filingDate,
       amountRangeLabel: disclosures.amountRangeLabel,
+      sourceUrl: disclosures.sourceUrl,
       politicianName: politicians.fullName,
       politicianId: politicians.id,
       chamber: politicians.chamber,
@@ -669,6 +670,17 @@ export default async function SignalDetailPage({
                 >
                   View chart
                 </a>
+
+                {signal.sourceUrl ? (
+                  <a
+                    href={signal.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="cursor-pointer rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition soft-hover soft-focus hover:bg-gray-50"
+                  >
+                    View filing
+                  </a>
+                ) : null}
 
                 <BackButton
                   fallbackHref="/signals"
