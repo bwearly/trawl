@@ -214,3 +214,69 @@ Responsibilities:
 ## Recommendation
 
 Do not build the full Senate importer in this pass. Build a separate Senate pipeline after approval, beginning with metadata discovery and a small transaction extraction proof-of-concept. If the POC confirms that current Senator PTR pages can be parsed consistently from official eFD HTML, feed normalized PTR rows into the existing `disclosures` table using `sourceLabel = 'senate-efd-ptr'`, then run the existing scoring/performance pipeline unchanged.
+
+## Phase 0 implementation notes (May 28, 2026)
+
+Phase 0 is implemented as a dry-run metadata discovery command:
+
+```bash
+npm run senate:discover -- --roster-only
+SENATE_EFD_ACKNOWLEDGED=true npm run senate:discover -- --limit=50 --days=90
+SENATE_EFD_ACKNOWLEDGED=true npm run senate:discover -- --json --limit=50 --days=90
+```
+
+The command intentionally performs no disclosure inserts and does not call the existing House PTR importer. It loads active Senate roster rows from `politicians` where `chamber = 'senate'` and `is_active = true`, then only attempts Senate eFD requests when the operator explicitly sets `SENATE_EFD_ACKNOWLEDGED=true` after reviewing and accepting the public eFD acknowledgement at <https://efdsearch.senate.gov/search/home/>.
+
+### Access and legal posture
+
+- The official public eFD site requires acknowledgement of Ethics in Government Act use restrictions before search access.
+- The script does not silently bypass that acknowledgement. Without `SENATE_EFD_ACKNOWLEDGED=true`, it emits diagnostics and exits with a blocked status before making eFD requests.
+- The script only targets the public eFD acknowledgement page and report metadata search endpoint; it does not attempt CAPTCHA bypass, credentialed access, hidden administrative paths, or transaction-row scraping.
+- Operators must not use reports for prohibited purposes, including credit decisions, fundraising/solicitation, unlawful use, or personalized investment advice.
+
+### Metadata discovery behavior
+
+When acknowledged, the script uses a conservative DataTables metadata query for Senator PTR reports (`report_types=[11]`, `filer_types=[1]`) over a recent submitted-date window. It caches raw home/acknowledgement/search responses under `tmp/senate-disclosures-cache/`, which is ignored by git, and rate-limits requests with a default 1.5 second delay and maximum page size of 25.
+
+Report matching is diagnostics-only:
+
+1. Match by `bioguideId` if the source row exposes one.
+2. Otherwise match by normalized filer name within active Senate roster rows.
+3. Use state as an ambiguity breaker if the source row exposes a state.
+
+The diagnostics include current senators loaded, metadata reports discovered, matched/unmatched counts, report types, discovered filing-date range, sample matched/unmatched records, skipped/failure reasons, cache/rate-limit settings, and whether discovered URLs look like PTR view URLs that could support transaction extraction in a later phase.
+
+### Example output shape
+
+```json
+{
+  "mode": "discovered",
+  "dryRun": true,
+  "source": "official Senate eFD public search",
+  "currentSenatorsLoaded": 100,
+  "metadataReportsDiscovered": 50,
+  "matchedToRoster": 48,
+  "unmatched": 2,
+  "reportTypesFound": { "Periodic Transaction Report": 50 },
+  "dateRangeDiscovered": { "start": "2026-03-01", "end": "2026-05-28" },
+  "transactionExtractionPossible": {
+    "possibleFromDiscoveredReportUrls": true,
+    "possibleCount": 50,
+    "notPossibleCount": 0
+  },
+  "sampleMatchedReports": [],
+  "sampleUnmatchedReports": [],
+  "skippedOrFailureReasons": []
+}
+```
+
+### Phase 0 limitations discovered
+
+- There is still no clearly advertised official bulk CSV/XML/JSON export for Senate financial disclosure PTR metadata.
+- The eFD metadata endpoint is an undocumented web-UI DataTables endpoint rather than a formally documented public API contract; Phase 0 therefore caches raw responses and keeps output diagnostic-only.
+- Local execution requires a configured database URL so the script can validate the active Senate roster before matching.
+- In the current validation container, direct command-line access to `efdsearch.senate.gov` returned a proxy-level `403` to `curl`, so live eFD metadata discovery must be tested from a network allowed to access the official public site.
+
+### Phase 1 recommendation
+
+After Phase 0 metadata matching is reviewed, Phase 1 should fetch a small approved sample of matched PTR view URLs, parse transaction tables into JSON fixtures, and compare parsed owner/ticker/asset/type/amount/date fields against original report pages. Phase 1 should remain dry-run by default and should not insert disclosures until idempotency, amendment handling, source URL coverage, and parser failure diagnostics are approved.
