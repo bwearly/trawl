@@ -8,7 +8,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import BackButton from "@/components/navigation/BackButton";
 type PageProps = {
-  searchParams: Promise<{ chamber?: string | string[]; coverage?: string | string[] }>;
+  searchParams: Promise<{
+    chamber?: string | string[];
+    coverage?: string | string[];
+    q?: string | string[];
+    party?: string | string[];
+    state?: string | string[];
+  }>;
 };
 
 export const metadata: Metadata = {
@@ -68,31 +74,51 @@ function getTimelinessLabel(avgFilingLagDays: number | null) {
 
 export default async function PoliticiansLeaderboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  const searchQuery = (Array.isArray(params.q) ? params.q[0] : params.q ?? "").trim();
   const chamberParam = Array.isArray(params.chamber) ? params.chamber[0] : params.chamber;
   const selectedChamber =
     chamberParam === "house" || chamberParam === "senate" ? chamberParam : "all";
   const coverageParam = Array.isArray(params.coverage) ? params.coverage[0] : params.coverage;
   const selectedCoverage = coverageParam === "all-members" ? "all-members" : "active";
+  const selectedParty = (Array.isArray(params.party) ? params.party[0] : params.party ?? "all").toUpperCase();
+  const selectedState = (Array.isArray(params.state) ? params.state[0] : params.state ?? "all").toUpperCase();
+  const selectedPartyValue = selectedParty === "ALL" ? "all" : selectedParty;
+  const selectedStateValue = selectedState === "ALL" ? "all" : selectedState;
   const rows = await getPoliticianLeaderboard(selectedChamber, selectedCoverage);
+  const filteredRows = rows.filter((row) => {
+    const searchMatch = searchQuery.length === 0 || row.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+    const partyMatch = selectedParty === "ALL" || (row.party ?? "").toUpperCase() === selectedParty;
+    const stateMatch = selectedState === "ALL" || (row.state ?? "").toUpperCase() === selectedState;
+    return searchMatch && partyMatch && stateMatch;
+  });
   const chamberDisclosureCount = await getPoliticianDisclosureCountForChamber(selectedChamber);
+  const availableParties = Array.from(new Set(rows.map((row) => (row.party ?? "").trim()).filter(Boolean))).sort();
+  const availableStates = Array.from(new Set(rows.map((row) => (row.state ?? "").trim()).filter(Boolean))).sort();
+  const modeLabel = selectedCoverage === "active" ? "Disclosure activity leaderboard" : "Congress directory";
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <div>
-            <p className="text-sm font-medium text-gray-500">
-              Active disclosure analytics
-            </p>
+            <p className="text-sm font-medium text-gray-500">{modeLabel}</p>
             <h1 className="text-4xl font-bold tracking-tight text-gray-950">
               Congressional disclosure activity
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Compare recent disclosure activity with historical post-filing outcomes for research prioritization.
+              {selectedCoverage === "active"
+                ? "Compare recent disclosure activity with historical post-filing outcomes for research prioritization."
+                : "Browse the full current Congress roster with disclosure coverage status and trading history context."}
             </p>
-            <p className="mt-2 text-xs text-gray-500">
-              Showing politicians with at least {ACTIVE_LEADERBOARD_MIN_DISCLOSURES} disclosures in the last 12 months.
-            </p>
+            {selectedCoverage === "active" ? (
+              <p className="mt-2 text-xs text-gray-500">
+                Showing politicians with at least {ACTIVE_LEADERBOARD_MIN_DISCLOSURES} disclosures in the last 12 months.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">
+                Some members have no parsed stock-trading disclosures yet and are included for directory completeness.
+              </p>
+            )}
             <p className="mt-2 text-xs text-gray-500">
               Active window uses a {ACTIVE_LEADERBOARD_LOOKBACK_DAYS}-day lookback on filing/trade dates.
             </p>
@@ -117,10 +143,12 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
                 <h2 className="text-xl font-semibold tracking-tight text-gray-950">
-                  Disclosure activity table
+                  {selectedCoverage === "active" ? "Disclosure activity leaderboard" : "Congress directory"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Sorted by model leaderboard score (historical usefulness), not newest filing date.
+                  {selectedCoverage === "active"
+                    ? "Sorted by model leaderboard score (historical usefulness), not newest filing date."
+                    : "Active traders stay ranked above zero-disclosure members, then rows are sorted by historical leaderboard context."}
                 </p>
               </div>
 
@@ -131,7 +159,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                 <Link href="/politicians?chamber=house" className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">House</Link>
                 <Link href="/politicians?chamber=senate" className="soft-hover soft-focus inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Senate</Link>
               </div>
-              {rows.length} politician{rows.length === 1 ? "" : "s"}
+              {filteredRows.length} politician{filteredRows.length === 1 ? "" : "s"}
               <div className="mt-2">
                 <span className="mr-2">Coverage:</span>
                 <Link href={`/politicians${selectedChamber === "all" ? "" : `?chamber=${selectedChamber}`}`} className="soft-hover soft-focus mr-2 inline-flex rounded-full px-2 py-1 underline decoration-gray-300 underline-offset-4 transition hover:text-gray-900">Members with disclosures</Link>
@@ -139,6 +167,40 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
               </div>
             </div>
           </div>
+          <form action="/politicians" className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="lg:col-span-2">
+              <label htmlFor="q" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Search name</label>
+              <input id="q" name="q" defaultValue={searchQuery} placeholder="e.g. Nancy Pelosi" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" />
+            </div>
+            <div>
+              <label htmlFor="chamber" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Chamber</label>
+              <select id="chamber" name="chamber" defaultValue={selectedChamber} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
+                <option value="all">All Congress</option><option value="house">House</option><option value="senate">Senate</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="party" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Party</label>
+              <select id="party" name="party" defaultValue={selectedPartyValue} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
+                <option value="all">All parties</option>{availableParties.map((party) => <option key={party} value={party.toUpperCase()}>{party}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="state" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">State</label>
+              <select id="state" name="state" defaultValue={selectedStateValue} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
+                <option value="all">All states</option>{availableStates.map((state) => <option key={state} value={state.toUpperCase()}>{state}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="coverage" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Coverage</label>
+              <select id="coverage" name="coverage" defaultValue={selectedCoverage} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900">
+                <option value="active">Members with disclosures</option><option value="all-members">All members</option>
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white">Apply filters</button>
+              <Link href="/politicians" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700">Reset</Link>
+            </div>
+          </form>
 
           <div className="mt-6 overflow-x-auto rounded-xl border border-gray-100 shadow-sm transition duration-300 hover:shadow-md">
             <table className="min-w-full text-sm">
@@ -158,7 +220,7 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
               </thead>
 
               <tbody>
-                {rows.map((row, index) => (
+                {filteredRows.map((row, index) => (
                   <tr
                     key={row.id}
                     className="group border-b border-gray-100 transition duration-200 hover:bg-gray-50/80 last:border-b-0"
@@ -186,9 +248,9 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                     <td className="px-4 py-4">
                       <div className="font-semibold text-gray-900">
                         {row.totalDisclosures}
-                      {row.totalDisclosures === 0 && (
-                        <div className="mt-1 text-xs text-gray-500">No parsed trading disclosures yet.</div>
-                      )}
+                      </div>
+                      <div className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.totalDisclosures > 0 ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-700"}`}>
+                        {row.totalDisclosures > 0 ? "Has parsed disclosures" : "No parsed stock-trading disclosures yet"}
                       </div>
                       <div className="mt-1 text-xs text-gray-500">
                         Purchases: {row.purchaseCount} · Sales: {row.saleCount}
@@ -235,16 +297,18 @@ export default async function PoliticiansLeaderboardPage({ searchParams }: PageP
                   </tr>
                 ))}
 
-                {rows.length === 0 && (
+                {filteredRows.length === 0 && (
                   <tr>
                     <td
                       colSpan={10}
                       className="px-4 py-10 text-center text-sm text-gray-500"
                     >
                       <p>
-                        {chamberDisclosureCount > 0
-                          ? `Disclosure activity exists${selectedChamber === "all" ? "" : ` for ${selectedChamber === "house" ? "House" : "Senate"}`}, but no rows currently satisfy the active table threshold.`
-                          : `No politician stats are available yet${selectedChamber === "all" ? "." : ` for ${selectedChamber === "house" ? "House" : "Senate"}.`}`}
+                        {rows.length > 0
+                          ? "No members match the current filters. Try broadening the name, chamber, party, state, or coverage filters."
+                          : chamberDisclosureCount > 0
+                            ? `Disclosure activity exists${selectedChamber === "all" ? "" : ` for ${selectedChamber === "house" ? "House" : "Senate"}`}, but no rows currently satisfy the active leaderboard threshold.`
+                            : `No parsed stock-trading disclosure stats are available yet${selectedChamber === "all" ? "." : ` for ${selectedChamber === "house" ? "House" : "Senate"}.`}`}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm font-medium">
                         <Link
