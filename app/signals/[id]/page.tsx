@@ -350,13 +350,22 @@ export default async function SignalDetailPage({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <BackButton
             fallbackHref="/signals"
             className="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-900"
           >
             ← Back
           </BackButton>
+
+          {normalizedTicker ? (
+            <WatchButton
+              itemType="ticker"
+              ticker={normalizedTicker}
+              size="sm"
+              initialIsWatching={initialIsWatchingTicker}
+            />
+          ) : null}
         </div>
 
         <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-start md:justify-between">
@@ -442,16 +451,6 @@ export default async function SignalDetailPage({
               <p className="mt-1 text-xs text-gray-500">
                 {displayLabel} · Calibrated for research triage, not investment advice.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {normalizedTicker ? (
-                <WatchButton
-                  itemType="ticker"
-                  ticker={normalizedTicker}
-                  size="sm"
-                  initialIsWatching={initialIsWatchingTicker}
-                />
-              ) : null}
             </div>
           </div>
         </div>
